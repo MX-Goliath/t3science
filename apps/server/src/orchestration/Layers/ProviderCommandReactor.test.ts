@@ -9,6 +9,7 @@ import {
   ProviderSession,
   ProviderDriverKind,
   ProviderInstanceId,
+  PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import {
@@ -51,6 +52,7 @@ import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQu
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import {
+  buildPortableContinuationInput,
   providerErrorLabel,
   providerErrorLabelFromInstanceHint,
   ProviderCommandReactorLive,
@@ -58,6 +60,7 @@ import {
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import { PortableConversationContext } from "../Services/PortableConversationContext.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
@@ -140,6 +143,65 @@ describe("ProviderCommandReactor", () => {
 
     it("uses the unknown driver kind when the resolved driver is not registered locally", () => {
       expect(providerErrorLabel("third_party_driver")).toBe("third_party_driver");
+    });
+  });
+
+  describe("portable continuation context", () => {
+    const message = (id: string, role: "user" | "assistant", text: string) => ({
+      id: MessageId.make(id),
+      role,
+      text,
+      turnId: null,
+      streaming: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    it("seeds a new provider session with prior messages but keeps the current request separate", () => {
+      const input = buildPortableContinuationInput({
+        messages: [
+          message("user-old", "user", "Implement the project cache"),
+          message("assistant-old", "assistant", "The cache implementation is ready"),
+          message("user-current", "user", "Continue with tests"),
+        ],
+        currentMessageId: "user-current",
+        currentInput: "Continue with tests",
+      });
+
+      expect(input).toContain("[user]\nImplement the project cache");
+      expect(input).toContain("[assistant]\nThe cache implementation is ready");
+      expect(input.match(/Continue with tests/g)).toHaveLength(1);
+      expect(input).toContain("<current_user_message>\nContinue with tests");
+      expect(input).toContain("use the current project root");
+    });
+
+    it("keeps the newest available history within the provider input limit", () => {
+      const newestTail = "NEWEST-CONTEXT-TAIL";
+      const input = buildPortableContinuationInput({
+        messages: [
+          message("assistant-long", "assistant", `${"x".repeat(130_000)}${newestTail}`),
+          message("user-current", "user", "go"),
+        ],
+        currentMessageId: "user-current",
+        currentInput: "go",
+      });
+
+      expect(input.length).toBeLessThanOrEqual(PROVIDER_SEND_TURN_MAX_INPUT_CHARS);
+      expect(input).toContain("[Earlier part of this message omitted]");
+      expect(input).toContain(newestTail);
+    });
+
+    it("keeps an oversized current request valid while preserving its newest text", () => {
+      const currentTail = "CURRENT-REQUEST-TAIL";
+      const input = buildPortableContinuationInput({
+        messages: [message("user-current", "user", "unused")],
+        currentMessageId: "user-current",
+        currentInput: `${"y".repeat(PROVIDER_SEND_TURN_MAX_INPUT_CHARS)}${currentTail}`,
+      });
+
+      expect(input.length).toBeLessThanOrEqual(PROVIDER_SEND_TURN_MAX_INPUT_CHARS);
+      expect(input).toContain("[Beginning omitted to fit the provider input limit]");
+      expect(input).toContain(currentTail);
     });
   });
 
@@ -388,6 +450,13 @@ describe("ProviderCommandReactor", () => {
       }),
     ).pipe(Layer.provide(orchestrationLayer));
     const layer = ProviderCommandReactorLive.pipe(
+      Layer.provideMerge(
+        Layer.succeed(PortableConversationContext, {
+          isPending: () => Effect.succeed(false),
+          markPending: () => Effect.void,
+          markRestored: () => Effect.void,
+        }),
+      ),
       Layer.provideMerge(reactorOrchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(Layer.succeed(ProviderService, service)),

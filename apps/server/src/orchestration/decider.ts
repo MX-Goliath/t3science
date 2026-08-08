@@ -378,6 +378,76 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.portable.import": {
+      yield* requireProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+      const existingThread = readModel.threads.find((thread) => thread.id === command.thread.id);
+      if (existingThread !== undefined && existingThread.projectId !== command.projectId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.thread.id}' already belongs to another project.`,
+        });
+      }
+
+      const importedThread = {
+        ...command.thread,
+        projectId: command.projectId,
+        branch: null,
+        worktreePath: null,
+        session: null,
+        latestTurn:
+          command.thread.latestTurn?.state === "running"
+            ? {
+                ...command.thread.latestTurn,
+                state: "interrupted" as const,
+                completedAt: command.createdAt,
+              }
+            : command.thread.latestTurn,
+        messages: command.thread.messages.map((message) => ({
+          ...message,
+          streaming: false,
+        })),
+      };
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: importedThread.id,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.portable-imported",
+        payload: {
+          projectId: command.projectId,
+          thread: importedThread,
+        },
+      };
+    }
+
+    case "thread.portable-context.restore": {
+      yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.portable-context-restored",
+        payload: {
+          threadId: command.threadId,
+          restoredAt: command.createdAt,
+        },
+      };
+    }
+
     case "thread.delete": {
       yield* requireThread({
         readModel,

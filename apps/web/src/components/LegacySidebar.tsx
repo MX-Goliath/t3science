@@ -22,6 +22,7 @@ import {
   ThreadWorktreeIndicator,
 } from "./ThreadStatusIndicators";
 import { ProjectFavicon } from "./ProjectFavicon";
+import { ProjectConversationStorageControl } from "./ProjectConversationStorageControl";
 import { useAtomValue } from "@effect/atom-react";
 import { autoAnimate } from "@formkit/auto-animate";
 import React, { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
@@ -43,6 +44,7 @@ import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import {
   type ContextMenuItem,
+  type EnvironmentId,
   ProjectId,
   type ScopedThreadRef,
   type ResolvedKeybindingsConfig,
@@ -1051,6 +1053,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
 
 interface SidebarProjectItemProps {
   project: SidebarProjectSnapshot;
+  desktopLocalEnvironmentIds: ReadonlySet<EnvironmentId>;
   isThreadListExpanded: boolean;
   activeRouteThreadKey: string | null;
   newThreadShortcutLabel: string | null;
@@ -1071,6 +1074,7 @@ interface SidebarProjectItemProps {
 const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjectItemProps) {
   const {
     project,
+    desktopLocalEnvironmentIds,
     isThreadListExpanded,
     activeRouteThreadKey,
     newThreadShortcutLabel,
@@ -1203,6 +1207,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const [projectGroupingSelection, setProjectGroupingSelection] = useState<
     SidebarProjectGroupingMode | "inherit"
   >("inherit");
+  const [projectConversationStorageTarget, setProjectConversationStorageTarget] =
+    useState<SidebarProjectGroupMember | null>(null);
   const renamingCommittedRef = useRef(false);
   const renamingInputRef = useRef<HTMLInputElement | null>(null);
   const confirmArchiveButtonRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -1231,6 +1237,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     }
     return counts;
   }, [memberProjectByScopedKey, project.memberProjects, projectThreads]);
+  const portableConversationMembers = useMemo(
+    () =>
+      isElectron
+        ? project.memberProjects.filter((member) =>
+            desktopLocalEnvironmentIds.has(member.environmentId),
+          )
+        : [],
+    [desktopLocalEnvironmentIds, project.memberProjects],
+  );
 
   const { projectStatus, visibleProjectThreads, orderedProjectThreadKeys } = useMemo(() => {
     const lastVisitedAtByThreadKey = new Map(
@@ -1583,7 +1598,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
         const actionHandlers = new Map<string, () => Promise<void> | void>();
         const makeLeaf = (
-          action: "rename" | "grouping" | "copy-path" | "delete",
+          action: "rename" | "grouping" | "portable-conversations" | "copy-path" | "delete",
           member: SidebarProjectGroupMember,
           options?: {
             destructive?: boolean;
@@ -1598,6 +1613,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 return;
               case "grouping":
                 openProjectGroupingDialog(member);
+                return;
+              case "portable-conversations":
+                setProjectConversationStorageTarget(member);
                 return;
               case "copy-path":
                 copyPathToClipboard(member.workspaceRoot, { path: member.workspaceRoot });
@@ -1616,15 +1634,17 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         };
 
         const buildTargetedItem = (
-          action: "rename" | "grouping" | "copy-path" | "delete",
+          action: "rename" | "grouping" | "portable-conversations" | "copy-path" | "delete",
           label: string,
           options?: {
             destructive?: boolean;
             isDisabled?: (member: SidebarProjectGroupMember) => boolean;
+            members?: readonly SidebarProjectGroupMember[];
           },
         ): ContextMenuItem<string> => {
-          if (project.memberProjects.length === 1) {
-            const singleMember = project.memberProjects[0]!;
+          const targetMembers = options?.members ?? project.memberProjects;
+          if (targetMembers.length === 1) {
+            const singleMember = targetMembers[0]!;
             return {
               ...makeLeaf(action, singleMember, {
                 ...(options?.destructive ? { destructive: true } : {}),
@@ -1639,7 +1659,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             id: `${action}:submenu`,
             label,
             ...(action === "delete" ? { icon: "trash" } : {}),
-            children: project.memberProjects.map((member) =>
+            children: targetMembers.map((member) =>
               makeLeaf(action, member, {
                 ...(options?.destructive ? { destructive: true } : {}),
                 ...(options?.isDisabled?.(member) ? { disabled: true } : {}),
@@ -1652,6 +1672,13 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           [
             buildTargetedItem("rename", "Rename"),
             buildTargetedItem("grouping", "Group into..."),
+            ...(portableConversationMembers.length > 0
+              ? [
+                  buildTargetedItem("portable-conversations", "Portable conversations…", {
+                    members: portableConversationMembers,
+                  }),
+                ]
+              : []),
             buildTargetedItem("copy-path", "Copy Path"),
             buildTargetedItem("delete", "Remove", {
               destructive: true,
@@ -1675,6 +1702,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       handleRemoveProject,
       openProjectGroupingDialog,
       openProjectRenameDialog,
+      portableConversationMembers,
       project.groupedProjectCount,
       project.memberProjects,
       suppressProjectClickForContextMenuRef,
@@ -2471,6 +2499,32 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           </DialogFooter>
         </DialogPopup>
       </Dialog>
+
+      <Dialog
+        open={projectConversationStorageTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setProjectConversationStorageTarget(null);
+        }}
+      >
+        <DialogPopup className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Portable conversations</DialogTitle>
+            <DialogDescription>
+              {projectConversationStorageTarget
+                ? `Control project-local conversation storage for ${projectConversationStorageTarget.workspaceRoot}.`
+                : "Control project-local conversation storage."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            {projectConversationStorageTarget ? (
+              <ProjectConversationStorageControl member={projectConversationStorageTarget} />
+            ) : null}
+          </DialogPanel>
+          <DialogFooter>
+            <Button onClick={() => setProjectConversationStorageTarget(null)}>Close</Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </>
   );
 });
@@ -2742,6 +2796,7 @@ interface SidebarProjectsContentProps {
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
   deleteThread: ReturnType<typeof useThreadActions>["deleteThread"];
   sortedProjects: readonly SidebarProjectSnapshot[];
+  desktopLocalEnvironmentIds: ReadonlySet<EnvironmentId>;
   expandedThreadListsByProject: ReadonlySet<string>;
   activeRouteProjectKey: string | null;
   routeThreadKey: string | null;
@@ -2782,6 +2837,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     archiveThread,
     deleteThread,
     sortedProjects,
+    desktopLocalEnvironmentIds,
     expandedThreadListsByProject,
     activeRouteProjectKey,
     routeThreadKey,
@@ -2921,6 +2977,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                     {(dragHandleProps) => (
                       <SidebarProjectItem
                         project={project}
+                        desktopLocalEnvironmentIds={desktopLocalEnvironmentIds}
                         isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
                         activeRouteThreadKey={
                           activeRouteProjectKey === project.projectKey ? routeThreadKey : null
@@ -2953,6 +3010,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               <SidebarProjectListRow
                 key={project.projectKey}
                 project={project}
+                desktopLocalEnvironmentIds={desktopLocalEnvironmentIds}
                 isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
                 activeRouteThreadKey={
                   activeRouteProjectKey === project.projectKey ? routeThreadKey : null
@@ -3045,10 +3103,14 @@ export default function LegacySidebar() {
     () =>
       new Set(
         environments
-          .filter((environment) => isDesktopLocalConnectionTarget(environment.entry.target))
+          .filter(
+            (environment) =>
+              environment.environmentId === primaryEnvironmentId ||
+              isDesktopLocalConnectionTarget(environment.entry.target),
+          )
           .map((environment) => environment.environmentId),
       ),
-    [environments],
+    [environments, primaryEnvironmentId],
   );
   const orderedProjects = useMemo(() => {
     return orderItemsByPreferredIds({
@@ -3606,6 +3668,7 @@ export default function LegacySidebar() {
         archiveThread={archiveThread}
         deleteThread={deleteThread}
         sortedProjects={sortedProjects}
+        desktopLocalEnvironmentIds={desktopLocalEnvironmentIds}
         expandedThreadListsByProject={expandedThreadListsByProject}
         activeRouteProjectKey={activeRouteProjectKey}
         routeThreadKey={routeThreadKey}

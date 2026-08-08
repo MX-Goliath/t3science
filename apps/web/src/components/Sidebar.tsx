@@ -89,6 +89,7 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { isMacPlatform } from "~/lib/utils";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { readLocalApi } from "../localApi";
+import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import {
   deriveProjectGroupingOverrideKey,
   getProjectOrderKey,
@@ -183,6 +184,7 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { useComposerDraftStore } from "../composerDraftStore";
+import { ProjectConversationStorageControl } from "./ProjectConversationStorageControl";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -1472,6 +1474,19 @@ export default function Sidebar() {
         environments.map((environment) => [environment.environmentId, environment.label] as const),
       ),
     [environments],
+  );
+  const desktopLocalEnvironmentIds = useMemo(
+    () =>
+      new Set(
+        environments
+          .filter(
+            (environment) =>
+              environment.environmentId === primaryEnvironmentId ||
+              isDesktopLocalConnectionTarget(environment.entry.target),
+          )
+          .map((environment) => environment.environmentId),
+      ),
+    [environments, primaryEnvironmentId],
   );
   const orderedProjects = useMemo(
     () =>
@@ -3636,6 +3651,9 @@ export default function Sidebar() {
                       </Select>
                     </label>
                   </div>
+                  {isElectron && desktopLocalEnvironmentIds.has(member.environmentId) ? (
+                    <ProjectConversationStorageControl member={member} />
+                  ) : null}
                   {projectActionsTarget.memberProjects.length > 1 ? (
                     <div className="flex justify-end">
                       <Button

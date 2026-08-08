@@ -90,6 +90,12 @@ import {
   ProjectWriteFileResult,
 } from "./project.ts";
 import {
+  ProjectConversationStorageError,
+  ProjectConversationStorageGetInput,
+  ProjectConversationStorageSetInput,
+  ProjectConversationStorageState,
+} from "./projectConversationStorage.ts";
+import {
   TerminalAttachInput,
   TerminalAttachStreamEvent,
   TerminalClearInput,
@@ -175,6 +181,8 @@ export const WS_METHODS = {
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+  projectsGetConversationStorage: "projects.getConversationStorage",
+  projectsSetConversationStorage: "projects.setConversationStorage",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -469,6 +477,24 @@ export const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   success: ProjectWriteFileResult,
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
 });
+
+export const WsProjectsGetConversationStorageRpc = Rpc.make(
+  WS_METHODS.projectsGetConversationStorage,
+  {
+    payload: ProjectConversationStorageGetInput,
+    success: ProjectConversationStorageState,
+    error: Schema.Union([ProjectConversationStorageError, EnvironmentAuthorizationError]),
+  },
+);
+
+export const WsProjectsSetConversationStorageRpc = Rpc.make(
+  WS_METHODS.projectsSetConversationStorage,
+  {
+    payload: ProjectConversationStorageSetInput,
+    success: ProjectConversationStorageState,
+    error: Schema.Union([ProjectConversationStorageError, EnvironmentAuthorizationError]),
+  },
+);
 
 export const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   payload: LaunchEditorInput,
@@ -833,6 +859,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsSearchContentsRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
+  WsProjectsGetConversationStorageRpc,
+  WsProjectsSetConversationStorageRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
   WsAssetsCreateUrlRpc,

@@ -72,6 +72,12 @@ export function createProjectEnvironmentAtoms<R, E>(
       staleTimeMs: 30_000,
       idleTtlMs: 5 * 60_000,
     }),
+    conversationStorage: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:conversation-storage",
+      tag: WS_METHODS.projectsGetConversationStorage,
+      staleTimeMs: 5_000,
+      idleTtlMs: 60_000,
+    }),
     optimisticFile: (target: OptimisticProjectFileTarget) =>
       optimisticFileFamily(optimisticProjectFileKey(target)),
     create: createEnvironmentCommand(runtime, {
@@ -101,6 +107,12 @@ export function createProjectEnvironmentAtoms<R, E>(
         key: ({ environmentId, input }) =>
           JSON.stringify([environmentId, input.cwd, input.relativePath]),
       },
+    }),
+    setConversationStorage: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:set-conversation-storage",
+      tag: WS_METHODS.projectsSetConversationStorage,
+      scheduler: projectScheduler,
+      concurrency: projectConcurrency,
     }),
   };
 }

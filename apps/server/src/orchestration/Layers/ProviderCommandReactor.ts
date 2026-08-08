@@ -3,7 +3,9 @@ import {
   CommandId,
   EventId,
   type ModelSelection,
+  type OrchestrationMessage,
   type OrchestrationEvent,
+  PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
@@ -34,6 +36,7 @@ import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import { PortableConversationContext } from "../Services/PortableConversationContext.ts";
 import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
@@ -97,6 +100,68 @@ const MAX_THREAD_TITLE_CONTEXT_CHARS = 8_000;
 const MAX_FIRST_USER_TITLE_CONTEXT_CHARS = 2_000;
 const THREAD_TITLE_CONTEXT_TRUNCATION_MARKER = "[Earlier content truncated]\n\n";
 const FIRST_USER_CONTEXT_TRUNCATION_MARKER = "\n[First user message truncated]";
+const PORTABLE_CONTEXT_RESERVE_CHARS = 2_000;
+const PORTABLE_CONTEXT_HEADER = [
+  "<t3_portable_conversation_context>",
+  "This conversation was imported from another desktop device.",
+  "Treat the transcript below as prior conversation context. Continue the same task, but use the current project root and do not rely on absolute paths from the previous device.",
+].join("\n");
+const PORTABLE_CONTEXT_FOOTER = "</t3_portable_conversation_context>";
+
+export function buildPortableContinuationInput(input: {
+  readonly messages: ReadonlyArray<OrchestrationMessage>;
+  readonly currentMessageId: string;
+  readonly currentInput: string | undefined;
+}): string {
+  const rawCurrentInput = input.currentInput?.trim() ?? "";
+  const currentInputWrapperChars =
+    "<current_user_message>\n\n</current_user_message>".length + PORTABLE_CONTEXT_RESERVE_CHARS;
+  const maxCurrentInputChars = Math.max(
+    0,
+    PROVIDER_SEND_TURN_MAX_INPUT_CHARS -
+      PORTABLE_CONTEXT_HEADER.length -
+      PORTABLE_CONTEXT_FOOTER.length -
+      currentInputWrapperChars,
+  );
+  const currentInputOmissionMarker = "[Beginning omitted to fit the provider input limit]\n";
+  const currentInput =
+    rawCurrentInput.length <= maxCurrentInputChars
+      ? rawCurrentInput
+      : `${currentInputOmissionMarker}${rawCurrentInput.slice(
+          -(maxCurrentInputChars - currentInputOmissionMarker.length),
+        )}`;
+  const fixed = `${PORTABLE_CONTEXT_HEADER}\n\n[Earlier messages omitted when needed to fit the provider input limit]\n\n${PORTABLE_CONTEXT_FOOTER}\n\n<current_user_message>\n${currentInput}\n</current_user_message>`;
+  const budget = Math.max(
+    0,
+    PROVIDER_SEND_TURN_MAX_INPUT_CHARS - fixed.length - PORTABLE_CONTEXT_RESERVE_CHARS,
+  );
+  const sections: string[] = [];
+  let used = 0;
+
+  for (const message of input.messages.toReversed()) {
+    if (message.id === input.currentMessageId) continue;
+    const attachments = (message.attachments ?? []).map((entry) => entry.name).join(", ");
+    const body = [
+      message.text.trim(),
+      ...(attachments.length > 0 ? [`[Attachments: ${attachments}]`] : []),
+    ]
+      .filter((part) => part.length > 0)
+      .join("\n");
+    if (body.length === 0) continue;
+    const section = `[${message.role}]\n${body}`;
+    if (used + section.length + 2 > budget) {
+      if (sections.length === 0 && budget > 32) {
+        const marker = "[Earlier part of this message omitted]\n";
+        sections.unshift(`${marker}${section.slice(-(budget - marker.length))}`);
+      }
+      break;
+    }
+    sections.unshift(section);
+    used += section.length + 2;
+  }
+
+  return `${PORTABLE_CONTEXT_HEADER}\n\n${sections.join("\n\n")}\n\n${PORTABLE_CONTEXT_FOOTER}\n\n<current_user_message>\n${currentInput}\n</current_user_message>`;
+}
 
 type ThreadTitleMessage = {
   readonly role: "user" | "assistant" | "system";
@@ -314,6 +379,7 @@ const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const orchestrationEngine = yield* OrchestrationEngineService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
+  const portableConversationContext = yield* PortableConversationContext;
   const providerService = yield* ProviderService;
   const providerRegistry = yield* ProviderRegistry;
   const gitWorkflow = yield* GitWorkflowService;
@@ -734,11 +800,13 @@ const make = Effect.gen(function* () {
 
   const buildSendTurnRequestForThread = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
+    readonly messageId: string;
     readonly messageText: string;
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
     readonly createdAt: string;
+    readonly portableContextPending: boolean;
   }) {
     const thread = yield* resolveThread(input.threadId);
     if (!thread) {
@@ -753,7 +821,14 @@ const make = Effect.gen(function* () {
     if (input.modelSelection !== undefined) {
       threadModelSelections.set(input.threadId, input.modelSelection);
     }
-    const normalizedInput = toNonEmptyProviderInput(input.messageText);
+    const normalizedCurrentInput = toNonEmptyProviderInput(input.messageText);
+    const normalizedInput = input.portableContextPending
+      ? buildPortableContinuationInput({
+          messages: thread.messages,
+          currentMessageId: input.messageId,
+          currentInput: normalizedCurrentInput,
+        })
+      : normalizedCurrentInput;
     const normalizedAttachments = input.attachments ?? [];
     const activeSession = yield* providerService
       .listSessions()
@@ -1161,8 +1236,12 @@ const make = Effect.gen(function* () {
         ),
       );
 
+    const portableContextPending = yield* portableConversationContext.isPending(
+      event.payload.threadId,
+    );
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
+      messageId: message.id,
       messageText: message.text,
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.modelSelection !== undefined
@@ -1170,6 +1249,7 @@ const make = Effect.gen(function* () {
         : {}),
       interactionMode: event.payload.interactionMode,
       createdAt: event.payload.createdAt,
+      portableContextPending,
     }).pipe(
       Effect.map(Option.some),
       Effect.catchCause((cause) => handleTurnStartFailure(cause).pipe(Effect.as(Option.none()))),
@@ -1179,9 +1259,23 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+    yield* providerService.sendTurn(sendTurnRequest.value).pipe(
+      Effect.tap(() =>
+        portableContextPending
+          ? Effect.gen(function* () {
+              yield* orchestrationEngine.dispatch({
+                type: "thread.portable-context.restore",
+                commandId: yield* serverCommandId("portable-context-restored"),
+                threadId: event.payload.threadId,
+                createdAt: event.payload.createdAt,
+              });
+              yield* portableConversationContext.markRestored(event.payload.threadId);
+            })
+          : Effect.void,
+      ),
+      Effect.catchCause(recoverTurnStartFailure),
+      Effect.forkScoped,
+    );
   });
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (

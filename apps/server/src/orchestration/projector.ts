@@ -315,6 +315,22 @@ export function projectEvent(
         };
       });
 
+    case "thread.portable-imported":
+      return decodeForEvent(OrchestrationThread, event.payload.thread, event.type, "thread").pipe(
+        Effect.map((thread) => {
+          const existing = nextBase.threads.find((entry) => entry.id === thread.id);
+          return {
+            ...nextBase,
+            threads: existing
+              ? nextBase.threads.map((entry) => (entry.id === thread.id ? thread : entry))
+              : [...nextBase.threads, thread],
+          };
+        }),
+      );
+
+    case "thread.portable-context-restored":
+      return Effect.succeed(nextBase);
+
     case "thread.deleted":
       return decodeForEvent(ThreadDeletedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => ({

@@ -68,6 +68,11 @@ function commandToAggregateRef(command: OrchestrationCommand): {
         aggregateKind: "project",
         aggregateId: command.projectId,
       };
+    case "thread.portable.import":
+      return {
+        aggregateKind: "thread",
+        aggregateId: command.thread.id,
+      };
     default:
       return {
         aggregateKind: "thread",
