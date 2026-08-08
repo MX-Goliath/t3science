@@ -94,6 +94,8 @@ import * as SourceControlProviderRegistry from "./sourceControl/SourceControlPro
 import * as SourceControlRateLimit from "./sourceControl/SourceControlRateLimit.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
+import { ProjectConversationStorage } from "./project/ProjectConversationStorage.ts";
+import { ProjectConversationStorageLive } from "./project/ProjectConversationStorageLive.ts";
 import { ObservabilityLive } from "./observability/Layers/Observability.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
@@ -525,6 +527,23 @@ const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
   Layer.provide(NetService.layer),
 );
 
+const ProjectConversationStorageStartLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const storage = yield* ProjectConversationStorage;
+    yield* forkParked(storage.start());
+  }),
+);
+
+const ProjectConversationStorageRuntimeLive = Layer.mergeAll(
+  ProjectConversationStorageLive,
+  ProjectConversationStorageStartLive.pipe(Layer.provide(ProjectConversationStorageLive)),
+);
+
+const RuntimeDependenciesWithProjectConversationStorageLive = Layer.mergeAll(
+  RuntimeDependenciesLive,
+  ProjectConversationStorageRuntimeLive.pipe(Layer.provide(RuntimeDependenciesLive)),
+);
+
 const commandReadinessLayer = HttpRouter.middleware(
   (httpEffect) =>
     Effect.flatMap(ServerRuntimeStartup.ServerRuntimeStartup, (startup) =>
@@ -746,7 +765,10 @@ export const makeServerLayer = Layer.unwrap(
         ],
         { concurrency: "unbounded" },
       ).pipe(Effect.asVoid),
-    }).pipe(Layer.provideMerge(RuntimeDependenciesLive), Layer.provide(launcherLayer));
+    }).pipe(
+      Layer.provideMerge(RuntimeDependenciesWithProjectConversationStorageLive),
+      Layer.provide(launcherLayer),
+    );
 
     const routesLayer = HttpRouter.serve(makeRoutesLayer.pipe(Layer.provide(launcherLayer)), {
       disableLogger: !config.logWebSocketEvents,

@@ -622,6 +622,40 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       "applyThreadsProjection",
     )(function* (event, attachmentSideEffects) {
       switch (event.type) {
+        case "thread.portable-imported": {
+          const thread = event.payload.thread;
+          yield* projectionThreadRepository.upsert({
+            threadId: thread.id,
+            projectId: event.payload.projectId,
+            title: thread.title,
+            modelSelection: thread.modelSelection,
+            runtimeMode: thread.runtimeMode,
+            interactionMode: thread.interactionMode,
+            branch: null,
+            worktreePath: null,
+            linkedPullRequest: null,
+            latestTurnId: thread.latestTurn?.turnId ?? null,
+            createdAt: thread.createdAt,
+            updatedAt: thread.updatedAt,
+            archivedAt: thread.archivedAt,
+            settledOverride: thread.settledOverride,
+            settledAt: thread.settledAt,
+            unsettledAt: null,
+            snoozedUntil: thread.snoozedUntil ?? null,
+            snoozedAt: thread.snoozedAt ?? null,
+            pinnedAt: thread.pinnedAt ?? null,
+            pinOrderKey: thread.pinOrderKey ?? null,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
+            latestUserMessageAt: null,
+            pendingApprovalCount: 0,
+            pendingUserInputCount: 0,
+            hasActionableProposedPlan: 0,
+            deletedAt: thread.deletedAt,
+          });
+          yield* refreshThreadShellSummary(thread.id);
+          return;
+        }
         case "thread.created":
           yield* projectionThreadRepository.upsert({
             threadId: event.payload.threadId,
@@ -1019,6 +1053,29 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       "applyThreadMessagesProjection",
     )(function* (event, attachmentSideEffects) {
       switch (event.type) {
+        case "thread.portable-imported":
+          yield* projectionThreadMessageRepository.deleteByThreadId({
+            threadId: event.payload.thread.id,
+          });
+          yield* Effect.forEach(
+            event.payload.thread.messages,
+            (message) =>
+              projectionThreadMessageRepository.upsert({
+                messageId: message.id,
+                threadId: event.payload.thread.id,
+                turnId: message.turnId,
+                role: message.role,
+                text: message.text,
+                ...(message.attachments !== undefined
+                  ? { attachments: [...message.attachments] }
+                  : {}),
+                isStreaming: false,
+                createdAt: message.createdAt,
+                updatedAt: message.updatedAt,
+              }),
+            { concurrency: 1, discard: true },
+          );
+          return;
         // A draft retry re-creates a soft-deleted thread id. Every projector
         // drops its own rows for the old incarnation here so replay from any
         // per-projector cursor rebuilds the new thread without stale history.
@@ -1120,6 +1177,26 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       "applyThreadProposedPlansProjection",
     )(function* (event, _attachmentSideEffects) {
       switch (event.type) {
+        case "thread.portable-imported":
+          yield* projectionThreadProposedPlanRepository.deleteByThreadId({
+            threadId: event.payload.thread.id,
+          });
+          yield* Effect.forEach(
+            event.payload.thread.proposedPlans,
+            (plan) =>
+              projectionThreadProposedPlanRepository.upsert({
+                planId: plan.id,
+                threadId: event.payload.thread.id,
+                turnId: plan.turnId,
+                planMarkdown: plan.planMarkdown,
+                implementedAt: plan.implementedAt,
+                implementationThreadId: plan.implementationThreadId,
+                createdAt: plan.createdAt,
+                updatedAt: plan.updatedAt,
+              }),
+            { concurrency: 1, discard: true },
+          );
+          return;
         case "thread.created":
           yield* projectionThreadProposedPlanRepository.deleteByThreadId({
             threadId: event.payload.threadId,
@@ -1177,6 +1254,27 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       "applyThreadActivitiesProjection",
     )(function* (event, _attachmentSideEffects) {
       switch (event.type) {
+        case "thread.portable-imported":
+          yield* projectionThreadActivityRepository.deleteByThreadId({
+            threadId: event.payload.thread.id,
+          });
+          yield* Effect.forEach(
+            event.payload.thread.activities,
+            (activity) =>
+              projectionThreadActivityRepository.upsert({
+                activityId: activity.id,
+                threadId: event.payload.thread.id,
+                turnId: activity.turnId,
+                tone: activity.tone,
+                kind: activity.kind,
+                summary: activity.summary,
+                payload: activity.payload,
+                ...(activity.sequence !== undefined ? { sequence: activity.sequence } : {}),
+                createdAt: activity.createdAt,
+              }),
+            { concurrency: 1, discard: true },
+          );
+          return;
         case "thread.created":
           yield* projectionThreadActivityRepository.deleteByThreadId({
             threadId: event.payload.threadId,
@@ -1234,6 +1332,12 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const applyThreadSessionsProjection: ProjectorDefinition["apply"] = Effect.fn(
       "applyThreadSessionsProjection",
     )(function* (event, _attachmentSideEffects) {
+      if (event.type === "thread.portable-imported") {
+        yield* projectionThreadSessionRepository.deleteByThreadId({
+          threadId: event.payload.thread.id,
+        });
+        return;
+      }
       if (event.type === "thread.created") {
         yield* projectionThreadSessionRepository.deleteByThreadId({
           threadId: event.payload.threadId,

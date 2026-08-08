@@ -1164,6 +1164,21 @@ const ThreadHistoryImportCommand = Schema.Struct({
   ).check(Schema.isNonEmpty()),
 });
 
+const ThreadPortableImportCommand = Schema.Struct({
+  type: Schema.Literal("thread.portable.import"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  thread: OrchestrationThread,
+  createdAt: IsoDateTime,
+});
+
+const ThreadPortableContextRestoreCommand = Schema.Struct({
+  type: Schema.Literal("thread.portable-context.restore"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
 const ThreadProposedPlanUpsertCommand = Schema.Struct({
   type: Schema.Literal("thread.proposed-plan.upsert"),
   commandId: CommandId,
@@ -1216,6 +1231,8 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
   ThreadHistoryImportCommand,
+  ThreadPortableImportCommand,
+  ThreadPortableContextRestoreCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
@@ -1260,6 +1277,8 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.proposed-plan-upserted",
   "thread.turn-diff-completed",
   "thread.activity-appended",
+  "thread.portable-imported",
+  "thread.portable-context-restored",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
@@ -1510,6 +1529,16 @@ export const OrchestrationClientOrigin = Schema.Struct({
 });
 export type OrchestrationClientOrigin = typeof OrchestrationClientOrigin.Type;
 
+export const ThreadPortableImportedPayload = Schema.Struct({
+  projectId: ProjectId,
+  thread: OrchestrationThread,
+});
+
+export const ThreadPortableContextRestoredPayload = Schema.Struct({
+  threadId: ThreadId,
+  restoredAt: IsoDateTime,
+});
+
 export const OrchestrationEventMetadata = Schema.Struct({
   providerTurnId: Schema.optional(TrimmedNonEmptyString),
   providerItemId: Schema.optional(ProviderItemId),
@@ -1678,6 +1707,16 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.activity-appended"),
     payload: ThreadActivityAppendedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.portable-imported"),
+    payload: ThreadPortableImportedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.portable-context-restored"),
+    payload: ThreadPortableContextRestoredPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;

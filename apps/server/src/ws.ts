@@ -125,6 +125,7 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
+import * as ProjectConversationStorage from "./project/ProjectConversationStorage.ts";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 import { importRecentAgentThreads } from "./project/AgentSessionImporter.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
@@ -570,6 +571,8 @@ const makeWsRpcLayer = (
         return true;
       });
       const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
+      const projectConversationStorage =
+        yield* ProjectConversationStorage.ProjectConversationStorage;
       const agentSessionScanner = yield* AgentSessionScanner.AgentSessionScanner;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
@@ -2329,6 +2332,18 @@ const makeWsRpcLayer = (
                   }),
               ),
             ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.projectsGetConversationStorage]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsGetConversationStorage,
+            projectConversationStorage.getState(input.projectId),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.projectsSetConversationStorage]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsSetConversationStorage,
+            projectConversationStorage.setEnabled(input),
             { "rpc.aggregate": "workspace" },
           ),
         [WS_METHODS.shellOpenInEditor]: (input) =>
