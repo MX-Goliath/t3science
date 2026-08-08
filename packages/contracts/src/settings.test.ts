@@ -172,6 +172,14 @@ describe("ServerSettings worktree defaults", () => {
     expect(decodeServerSettings({}).newWorktreesStartFromOrigin).toBe(true);
   });
 
+  it("hydrates Qwen Code settings with the native CLI default", () => {
+    const settings = decodeServerSettings({});
+
+    expect(settings.providers.qwenCode.enabled).toBe(true);
+    expect(settings.providers.qwenCode.binaryPath).toBe("qwen");
+    expect(settings.providers.qwenCode.customModels).toEqual([]);
+  });
+
   it("accepts start-from-origin updates", () => {
     expect(
       decodeServerSettingsPatch({ newWorktreesStartFromOrigin: false }).newWorktreesStartFromOrigin,
