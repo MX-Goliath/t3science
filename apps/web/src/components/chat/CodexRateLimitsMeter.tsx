@@ -69,8 +69,12 @@ function CodexRateLimit(props: {
         <span className="font-medium text-foreground">{remainingPercent}%</span>
       </TooltipTrigger>
       <TooltipPopup side="top">
-        {props.accessibleLabel}: {remainingPercent}% remaining
-        {resetTime ? ` · Resets ${resetTime}` : ""}
+        <span className="flex flex-col gap-0.5">
+          <span>
+            {props.accessibleLabel}: {remainingPercent}% remaining
+          </span>
+          {resetTime ? <span className="text-secondary-label">Resets {resetTime}</span> : null}
+        </span>
       </TooltipPopup>
     </Tooltip>
   );
