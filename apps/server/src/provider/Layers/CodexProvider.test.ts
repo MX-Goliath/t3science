@@ -4,7 +4,60 @@ import {
   applyPreferredCodexDefaultModel,
   isLegacyCodexModel,
   mapCodexModelCapabilities,
+  normalizeCodexRateLimits,
 } from "./CodexProvider.ts";
+
+it("normalizes Codex short and weekly limits as remaining percentages", () => {
+  const limits = normalizeCodexRateLimits({
+    rateLimits: {
+      primary: { usedPercent: 32, windowDurationMins: 300, resetsAt: 1_786_000_000 },
+      secondary: { usedPercent: 81, windowDurationMins: 10_080, resetsAt: 1_786_500_000 },
+    },
+  });
+
+  assert.deepStrictEqual(limits, {
+    fiveHour: {
+      remainingPercent: 68,
+      resetsAt: 1_786_000_000,
+      windowDurationMinutes: 300,
+    },
+    weekly: {
+      remainingPercent: 19,
+      resetsAt: 1_786_500_000,
+      windowDurationMinutes: 10_080,
+    },
+  });
+});
+
+it("keeps the weekly limit when Codex omits the temporary short window", () => {
+  const limits = normalizeCodexRateLimits({
+    rateLimits: {
+      primary: { usedPercent: 24, windowDurationMins: 10_080 },
+    },
+  });
+
+  assert.deepStrictEqual(limits, {
+    weekly: { remainingPercent: 76, windowDurationMinutes: 10_080 },
+  });
+});
+
+it("prefers the Codex bucket from multi-limit snapshots", () => {
+  const limits = normalizeCodexRateLimits({
+    rateLimits: {
+      primary: { usedPercent: 99, windowDurationMins: 300 },
+    },
+    rateLimitsByLimitId: {
+      codex: {
+        limitId: "codex",
+        secondary: { usedPercent: 40, windowDurationMins: 10_080 },
+      },
+    },
+  });
+
+  assert.deepStrictEqual(limits, {
+    weekly: { remainingPercent: 60, windowDurationMinutes: 10_080 },
+  });
+});
 
 it("keeps only the GPT-5.6 Codex family out of legacy models", () => {
   assert.deepStrictEqual(

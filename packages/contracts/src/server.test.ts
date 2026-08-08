@@ -47,6 +47,27 @@ describe("ServerProvider", () => {
     expect(parsed.updateState).toBeUndefined();
   });
 
+  it("decodes optional provider rate-limit windows", () => {
+    const parsed = decodeServerProvider({
+      ...baseProviderSnapshot,
+      rateLimits: {
+        weekly: {
+          remainingPercent: 72,
+          resetsAt: 1_786_000_000,
+          windowDurationMinutes: 10_080,
+        },
+      },
+    });
+
+    expect(parsed.rateLimits).toEqual({
+      weekly: {
+        remainingPercent: 72,
+        resetsAt: 1_786_000_000,
+        windowDurationMinutes: 10_080,
+      },
+    });
+  });
+
   it("defaults one-click update support when decoding older advisory snapshots", () => {
     const parsed = decodeServerProvider({
       instanceId: "codex",

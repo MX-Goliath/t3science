@@ -16,6 +16,7 @@ import * as CodexErrors from "effect-codex-app-server/errors";
 import type {
   CodexSettings,
   ServerProvider,
+  ServerProviderRateLimits,
   ServerProviderState,
   ModelCapabilities,
   ProviderOptionDescriptor,
@@ -45,9 +46,78 @@ const CODEX_PRESENTATION = {
 
 export interface CodexAppServerProviderSnapshot {
   readonly account: CodexSchema.V2GetAccountResponse;
+  readonly rateLimits?: CodexSchema.V2GetAccountRateLimitsResponse;
   readonly version: string | undefined;
   readonly models: ReadonlyArray<ServerProviderModel>;
   readonly skills: ReadonlyArray<ServerProviderSkill>;
+}
+
+const FIVE_HOUR_WINDOW_MINUTES = 5 * 60;
+const WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
+
+type CodexRateLimitSnapshot = CodexSchema.V2GetAccountRateLimitsResponse["rateLimits"];
+type CodexRateLimitWindow = NonNullable<CodexRateLimitSnapshot["primary"]>;
+
+function mapCodexRateLimitWindow(
+  window: CodexRateLimitWindow,
+): ServerProviderRateLimits["fiveHour"] {
+  return {
+    remainingPercent: Math.max(0, Math.min(100, 100 - window.usedPercent)),
+    ...(typeof window.resetsAt === "number" && window.resetsAt >= 0
+      ? { resetsAt: window.resetsAt }
+      : {}),
+    ...(typeof window.windowDurationMins === "number" && window.windowDurationMins > 0
+      ? { windowDurationMinutes: window.windowDurationMins }
+      : {}),
+  };
+}
+
+function selectCodexRateLimitSnapshot(
+  response: CodexSchema.V2GetAccountRateLimitsResponse,
+): CodexRateLimitSnapshot {
+  const snapshots = response.rateLimitsByLimitId;
+  if (snapshots) {
+    const codexSnapshot =
+      snapshots.codex ?? Object.values(snapshots).find((snapshot) => snapshot.limitId === "codex");
+    if (codexSnapshot) {
+      return codexSnapshot;
+    }
+  }
+  return response.rateLimits;
+}
+
+export function normalizeCodexRateLimits(
+  response: CodexSchema.V2GetAccountRateLimitsResponse | undefined,
+): ServerProviderRateLimits | undefined {
+  if (!response) return undefined;
+
+  const snapshot = selectCodexRateLimitSnapshot(response);
+  let fiveHour: ServerProviderRateLimits["fiveHour"];
+  let weekly: ServerProviderRateLimits["weekly"];
+
+  for (const [position, window] of [
+    ["primary", snapshot.primary],
+    ["secondary", snapshot.secondary],
+  ] as const) {
+    if (!window) continue;
+    const duration = window.windowDurationMins;
+    if (duration === FIVE_HOUR_WINDOW_MINUTES) {
+      fiveHour = mapCodexRateLimitWindow(window);
+    } else if (duration === WEEKLY_WINDOW_MINUTES) {
+      weekly = mapCodexRateLimitWindow(window);
+    } else if (duration == null) {
+      // Older Codex versions omitted window durations but consistently used
+      // primary for the short window and secondary for the weekly window.
+      if (position === "primary") fiveHour = mapCodexRateLimitWindow(window);
+      else weekly = mapCodexRateLimitWindow(window);
+    }
+  }
+
+  if (!fiveHour && !weekly) return undefined;
+  return {
+    ...(fiveHour ? { fiveHour } : {}),
+    ...(weekly ? { weekly } : {}),
+  };
 }
 
 const REASONING_EFFORT_LABELS: Readonly<Record<string, string>> = {
@@ -395,18 +465,24 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     } satisfies CodexAppServerProviderSnapshot;
   }
 
-  const [skillsResponse, models] = yield* Effect.all(
+  const [skillsResponse, models, rateLimits] = yield* Effect.all(
     [
       client.request("skills/list", {
         cwds: [input.cwd],
       }),
       requestAllCodexModels(client),
+      accountResponse.account?.type === "chatgpt"
+        ? client
+            .request("account/rateLimits/read", undefined)
+            .pipe(Effect.orElseSucceed(() => undefined))
+        : Effect.void,
     ],
     { concurrency: "unbounded" },
   );
 
   return {
     account: accountResponse,
+    ...(rateLimits !== undefined ? { rateLimits } : {}),
     version,
     models: applyPreferredCodexDefaultModel(
       appendCustomCodexModels(models, input.customModels ?? []),
@@ -594,21 +670,25 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
 
   const snapshot = probeResult.success.value;
   const accountStatus = accountProbeStatus(snapshot.account);
+  const rateLimits = normalizeCodexRateLimits(snapshot.rateLimits);
 
-  return buildServerProvider({
-    presentation: CODEX_PRESENTATION,
-    enabled: codexSettings.enabled,
-    checkedAt,
-    models: snapshot.models,
-    skills: snapshot.skills,
-    probe: {
-      installed: true,
-      version: snapshot.version ?? null,
-      status: accountStatus.status,
-      auth: accountStatus.auth,
-      ...(accountStatus.message ? { message: accountStatus.message } : {}),
-    },
-  });
+  return {
+    ...buildServerProvider({
+      presentation: CODEX_PRESENTATION,
+      enabled: codexSettings.enabled,
+      checkedAt,
+      models: snapshot.models,
+      skills: snapshot.skills,
+      probe: {
+        installed: true,
+        version: snapshot.version ?? null,
+        status: accountStatus.status,
+        auth: accountStatus.auth,
+        ...(accountStatus.message ? { message: accountStatus.message } : {}),
+      },
+    }),
+    ...(rateLimits ? { rateLimits } : {}),
+  };
 });
 
 // NOTE: the singleton `CodexProviderLive` Layer has been removed as part of

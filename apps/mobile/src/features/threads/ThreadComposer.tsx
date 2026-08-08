@@ -70,6 +70,8 @@ import {
 } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
+import { CodexRateLimitsInline } from "./CodexRateLimitsInline";
+import { useCodexRateLimits } from "./useCodexRateLimits";
 
 /**
  * Height of the collapsed composer (pill + vertical padding, excluding safe-area inset).
@@ -333,6 +335,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       ) ?? null
     );
   }, [props.serverConfig, props.selectedThread.modelSelection.instanceId]);
+  const codexRateLimits = useCodexRateLimits({
+    environmentId: props.environmentId,
+    thread: props.selectedThread,
+    provider: selectedProviderStatus,
+  });
 
   // ── Trigger detection ────────────────────────────────────
   const [composerSelection, setComposerSelection] = useState(() => ({
@@ -883,6 +890,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     label={configurationLabel}
                   />
                 </ControlPillMenu>
+                {codexRateLimits ? <CodexRateLimitsInline rateLimits={codexRateLimits} /> : null}
                 {showStopAction ? (
                   <ComposerToolbarButton
                     accessibilityLabel="Stop"

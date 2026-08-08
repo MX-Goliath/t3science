@@ -1,5 +1,11 @@
 # Codex
 
+When Codex reports subscription usage limits, the composer shows the remaining
+5-hour and weekly percentages beside the model controls. The ring is green above
+50%, orange from 20% through 50%, and red below 20%. If Codex does not report a
+5-hour window, only the weekly limit is shown. Limits refresh when you open a
+thread and after an agent response finishes.
+
 This guide is for people who want to use more than one Codex account in T3 Code. For Claude, see
 [Claude](./providers-claude.md). For first-time setup, see [Install T3 Code](./install.md).
 

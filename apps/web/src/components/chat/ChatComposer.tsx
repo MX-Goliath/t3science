@@ -102,6 +102,8 @@ import {
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
+import { CodexRateLimitsMeter } from "./CodexRateLimitsMeter";
+import { useCodexRateLimits } from "./useCodexRateLimits";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
@@ -845,6 +847,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () => selectedProviderEntry?.snapshot ?? null,
     [selectedProviderEntry],
   );
+  const codexRateLimits = useCodexRateLimits({
+    environmentId,
+    instanceId: selectedInstanceId,
+    provider: selectedProvider,
+    chatKey:
+      routeKind === "server"
+        ? String(routeThreadRef.threadId)
+        : `draft:${String(draftId ?? routeThreadRef.threadId)}`,
+    phase,
+    initialRateLimits: selectedProviderStatus?.rateLimits,
+  });
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
     [selectedProviderEntry],
@@ -3172,6 +3185,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     />
                   </>
                 )}
+
+                {codexRateLimits ? (
+                  <>
+                    <Separator orientation="vertical" className="mx-0.5 h-4" />
+                    <CodexRateLimitsMeter rateLimits={codexRateLimits} />
+                  </>
+                ) : null}
               </div>
 
               {/* Right side: send / stop button */}
