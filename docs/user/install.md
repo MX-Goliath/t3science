@@ -76,6 +76,7 @@ computer.
 | OpenCode    | Install [OpenCode](https://opencode.ai), then run `opencode auth login`.                     |
 | Pi          | Install [Pi](https://pi.dev), then run `pi` to configure a model.                            |
 | Antigravity | Install and sign in with Google from T3 Code's provider settings.                            |
+| Qwen Code   | Install [Qwen Code](https://github.com/QwenLM/qwen-code), run `qwen`, then `/auth`.          |
 
 Provider CLIs must be on the server's `PATH`. If T3 Code cannot find one, set its
 **Binary path** in provider settings, especially when using a version manager.
@@ -88,6 +89,10 @@ installer owns the CLI (its own update command, Homebrew, or a global npm, pnpm,
 bun, or Vite+ install) and runs that installer. Otherwise update the CLI the same
 way you installed it. Homebrew installs compare against the version Homebrew
 offers, which can trail the npm release by a few hours.
+
+Qwen Code uses its native ACP mode. Install it with
+`npm install -g @qwen-code/qwen-code@latest`, run `qwen`, and use `/auth` once before selecting it
+in T3 Code. Authentication and custom model-provider settings remain owned by Qwen Code.
 
 Add another provider instance for a separate account or configuration. Each
 instance can have its own environment variables, such as API keys or a custom
