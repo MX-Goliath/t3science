@@ -123,6 +123,47 @@ const mergeProviderModels = (
     : mergedModels;
 };
 
+/**
+ * Rate limits come from a live probe (Codex `account/rateLimits/read`, the
+ * Claude plan-usage probe). That probe is the first thing to go missing while
+ * the CLI is mid-update, when the app-server refuses to spawn, or when the
+ * usage endpoint alone fails — leaving a snapshot with no windows at all and
+ * blanking the composer meters. Carry the last known windows forward unless
+ * the new snapshot is authoritative about there being none: the instance is
+ * disabled, the account logged out, or a successful probe reports a different
+ * account than the one the cached windows belong to.
+ */
+export const shouldRetainPreviousProviderRateLimits = (
+  previousProvider: ServerProvider,
+  nextProvider: ServerProvider,
+): boolean => {
+  if (!nextProvider.enabled || nextProvider.auth.status === "unauthenticated") {
+    return false;
+  }
+  if (nextProvider.auth.status === "unknown") {
+    // The probe could not establish account state — treat it as "no news"
+    // rather than "no limits".
+    return true;
+  }
+  return (
+    previousProvider.auth.type === nextProvider.auth.type &&
+    previousProvider.auth.email === nextProvider.auth.email
+  );
+};
+
+const mergeProviderRateLimits = (
+  previousProvider: ServerProvider,
+  nextProvider: ServerProvider,
+): Pick<ServerProvider, "rateLimits"> => {
+  if (nextProvider.rateLimits) {
+    return { rateLimits: nextProvider.rateLimits };
+  }
+  return previousProvider.rateLimits &&
+    shouldRetainPreviousProviderRateLimits(previousProvider, nextProvider)
+    ? { rateLimits: previousProvider.rateLimits }
+    : {};
+};
+
 export const mergeProviderSnapshot = (
   previousProvider: ServerProvider | undefined,
   nextProvider: ServerProvider,
@@ -131,6 +172,7 @@ export const mergeProviderSnapshot = (
     ? nextProvider
     : {
         ...nextProvider,
+        ...mergeProviderRateLimits(previousProvider, nextProvider),
         models: mergeProviderModels(nextProvider, previousProvider.models, nextProvider.models),
       };
 

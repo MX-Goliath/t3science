@@ -182,6 +182,40 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
     );
   });
 
+  it("hydrates cached rate limits until the first probe of the run reports fresh ones", () => {
+    const cachedRateLimits = {
+      fiveHour: { remainingPercent: 72, resetsAt: 1_775_000_000 },
+      weekly: { remainingPercent: 91 },
+    } as const;
+    const cachedCodex = makeProvider(CODEX_DRIVER, {
+      checkedAt: "2026-08-09T12:00:00.000Z",
+      rateLimits: cachedRateLimits,
+    });
+    const pendingCodex = makeProvider(CODEX_DRIVER, {
+      installed: false,
+      status: "warning",
+      auth: { status: "unknown" },
+      message: "Codex provider status has not been checked in this session yet.",
+    });
+
+    assert.deepStrictEqual(
+      hydrateCachedProvider({
+        cachedProvider: cachedCodex,
+        fallbackProvider: pendingCodex,
+      }).rateLimits,
+      cachedRateLimits,
+    );
+
+    const freshRateLimits = { fiveHour: { remainingPercent: 12 } } as const;
+    assert.deepStrictEqual(
+      hydrateCachedProvider({
+        cachedProvider: cachedCodex,
+        fallbackProvider: makeProvider(CODEX_DRIVER, { rateLimits: freshRateLimits }),
+      }).rateLimits,
+      freshRateLimits,
+    );
+  });
+
   it("ignores stale cached enabled state when the provider is now disabled", () => {
     const cachedCodex = makeProvider(CODEX_DRIVER, {
       checkedAt: "2026-04-10T12:00:00.000Z",

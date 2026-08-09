@@ -57,8 +57,17 @@ export const hydrateCachedProvider = (input: {
   }
 
   const { message: _fallbackMessage, ...fallbackWithoutMessage } = input.fallbackProvider;
+  // The fallback here is the pending pre-probe snapshot, which never carries
+  // rate limits. Keep the last persisted windows on screen until the first
+  // probe of this run reports fresh ones (or fails, in which case the
+  // registry merge keeps carrying these forward).
+  const cachedRateLimits =
+    !input.fallbackProvider.rateLimits && input.cachedProvider.rateLimits
+      ? { rateLimits: input.cachedProvider.rateLimits }
+      : {};
   const hydratedProvider: ServerProvider = {
     ...fallbackWithoutMessage,
+    ...cachedRateLimits,
     models: mergeProviderModels(input.fallbackProvider.models, input.cachedProvider.models),
     installed: input.cachedProvider.installed,
     version: input.cachedProvider.version,

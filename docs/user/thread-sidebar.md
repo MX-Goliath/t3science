@@ -1,5 +1,11 @@
 # Organizing threads
 
+Use **General chats** for questions that do not belong to a project. The section appears between
+Web Chat and Projects in both the default and legacy web/desktop sidebars. Use its compose button
+to start a chat, its heading to collapse or expand the section, and **Show more** when the section
+contains more chats than your visible-thread limit. General chats use an isolated T3 workspace and
+do not appear in project lists or project settings.
+
 Pin a thread from its context menu to keep it above your active work. In the default sidebar,
 pinned threads are shown in one shared section independently of their project, including when you
 connect to more than one environment. In the legacy sidebar, each project's pinned threads stay

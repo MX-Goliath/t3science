@@ -246,8 +246,8 @@ import {
 import { vcsEnvironment } from "../state/vcs";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
+  useAllProjects,
   useProject,
-  useProjects,
   useThread,
   useThreadRefs,
   useThreadShell,
@@ -1717,7 +1717,7 @@ function ChatViewContent(props: ChatViewProps) {
 
   // Compute the list of environments this logical project spans, used to
   // drive the environment picker in BranchToolbar.
-  const allProjects = useProjects();
+  const allProjects = useAllProjects();
   const primaryEnvironmentId = primaryEnvironment?.environmentId ?? null;
   useEffect(() => {
     if (!clientSettingsHydrated || !activeThreadRef || !activeProject) return;

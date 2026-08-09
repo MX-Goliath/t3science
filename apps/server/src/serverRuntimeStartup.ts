@@ -2,6 +2,7 @@ import {
   CommandId,
   DEFAULT_MODEL,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  GENERAL_CHATS_PROJECT_ID,
   type ModelSelection,
   ProjectId,
   ProviderInstanceId,
@@ -14,6 +15,7 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -166,6 +168,35 @@ export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
 export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
   instanceId: ProviderInstanceId.make("codex"),
   model: DEFAULT_MODEL,
+});
+
+export const ensureGeneralChatsProject = Effect.gen(function* () {
+  const serverConfig = yield* ServerConfig.ServerConfig;
+  const projectionReadModelQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+
+  const existingProject =
+    yield* projectionReadModelQuery.getProjectShellById(GENERAL_CHATS_PROJECT_ID);
+  if (Option.isSome(existingProject)) {
+    return;
+  }
+
+  const workspaceRoot = path.join(serverConfig.stateDir, "general-chats");
+  yield* fileSystem.makeDirectory(workspaceRoot, { recursive: true });
+  const createdAt = DateTime.formatIso(yield* DateTime.now);
+  const crypto = yield* Crypto.Crypto;
+  const commandId = CommandId.make(yield* crypto.randomUUIDv4);
+  yield* orchestrationEngine.dispatch({
+    type: "project.create",
+    commandId,
+    projectId: GENERAL_CHATS_PROJECT_ID,
+    title: "General chats",
+    workspaceRoot,
+    defaultModelSelection: null,
+    createdAt,
+  });
 });
 
 export const resolveWelcomeBase = Effect.gen(function* () {
@@ -352,6 +383,18 @@ export const make = (options?: StartupOptions) =>
           yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
           yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
         }),
+      );
+
+      yield* runStartupPhase(
+        "general-chats.ensure",
+        ensureGeneralChatsProject.pipe(
+          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.catch((cause) =>
+            Effect.logWarning("failed to prepare general chats", {
+              cause,
+            }),
+          ),
+        ),
       );
 
       const welcomeBase = yield* resolveWelcomeBase;

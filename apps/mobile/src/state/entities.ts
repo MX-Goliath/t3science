@@ -9,7 +9,9 @@ import type {
   ScopedThreadRef,
   ServerConfig,
 } from "@t3tools/contracts";
+import { isGeneralChatsProjectId } from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
+import { useMemo } from "react";
 
 import { environmentProjects } from "./projects";
 import { environmentServerConfigsAtom, serverEnvironment } from "./server";
@@ -26,11 +28,19 @@ const EMPTY_SERVER_CONFIG_ATOM = Atom.make<ServerConfig | null>(null).pipe(
 );
 
 export function useProjects(): ReadonlyArray<EnvironmentProject> {
-  return useAtomValue(environmentProjects.projectsAtom);
+  const projects = useAtomValue(environmentProjects.projectsAtom);
+  return useMemo(
+    () => projects.filter((project) => !isGeneralChatsProjectId(project.id)),
+    [projects],
+  );
 }
 
 export function useThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
-  return useAtomValue(environmentThreadShells.threadShellsAtom);
+  const threads = useAtomValue(environmentThreadShells.threadShellsAtom);
+  return useMemo(
+    () => threads.filter((thread) => !isGeneralChatsProjectId(thread.projectId)),
+    [threads],
+  );
 }
 
 export function useProject(ref: ScopedProjectRef | null): EnvironmentProject | null {

@@ -7,6 +7,7 @@ import {
   FolderPlusIcon,
   Globe2Icon,
   LoaderIcon,
+  MessageSquareIcon,
   PinIcon,
   SearchIcon,
   SquarePenIcon,
@@ -84,6 +85,7 @@ import {
   readEnvironmentSupportsPinning,
   readThreadShell,
   useProject,
+  useGeneralChatsProjects,
   useProjects,
   useThreadShells,
   useThreadShellsForProjectRefs,
@@ -209,6 +211,7 @@ import {
   type SidebarProjectGroupMember,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
+import { buildGeneralChatsProjectSnapshot, GENERAL_CHATS_PROJECT_KEY } from "../generalChats";
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
   created_at: "Created at",
@@ -1062,6 +1065,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
 
 interface SidebarProjectItemProps {
   project: SidebarProjectSnapshot;
+  variant?: "project" | "general";
   desktopLocalEnvironmentIds: ReadonlySet<EnvironmentId>;
   isThreadListExpanded: boolean;
   activeRouteThreadKey: string | null;
@@ -1085,6 +1089,7 @@ interface SidebarProjectItemProps {
 const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjectItemProps) {
   const {
     project,
+    variant = "project",
     desktopLocalEnvironmentIds,
     isThreadListExpanded,
     activeRouteThreadKey,
@@ -1104,6 +1109,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     isManualProjectSorting,
     dragHandleProps,
   } = props;
+  const isGeneralChats = variant === "general";
   const threadSortOrder = useClientSettings<SidebarThreadSortOrder>(
     (settings) => settings.sidebarThreadSortOrder,
   );
@@ -1603,6 +1609,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
   const handleProjectButtonContextMenu = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (isGeneralChats) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       suppressProjectClickForContextMenuRef.current = true;
       void (async () => {
@@ -1719,6 +1729,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       project.groupedProjectCount,
       project.memberProjects,
       suppressProjectClickForContextMenuRef,
+      isGeneralChats,
     ],
   );
 
@@ -2151,7 +2162,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         thread.worktreePath ?? threadProject?.workspaceRoot ?? project.workspaceRoot ?? null;
       const clicked = await api.contextMenu.show(
         [
-          ...(thread.branch
+          ...(!isGeneralChats && thread.branch
             ? [{ id: "new-thread-on-branch", label: `New thread on ${thread.branch}` }]
             : []),
           ...(readEnvironmentSupportsPinning(thread.environmentId)
@@ -2163,7 +2174,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             : []),
           { id: "rename", label: "Rename thread" },
           { id: "mark-unread", label: "Mark unread" },
-          { id: "copy-path", label: "Copy Path" },
+          ...(!isGeneralChats ? [{ id: "copy-path", label: "Copy Path" }] : []),
           { id: "copy-thread-id", label: "Copy Thread ID" },
           { id: "delete", label: "Delete", destructive: true, icon: "trash" },
         ],
@@ -2266,6 +2277,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       copyThreadIdToClipboard,
       deleteThread,
       handleNewThread,
+      isGeneralChats,
       markThreadUnread,
       memberProjectByScopedKey,
       pinThread,
@@ -2279,12 +2291,20 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     <>
       <div className="group/project-header relative">
         <SidebarMenuButton
-          ref={isManualProjectSorting ? dragHandleProps?.setActivatorNodeRef : undefined}
+          ref={
+            isManualProjectSorting && !isGeneralChats
+              ? dragHandleProps?.setActivatorNodeRef
+              : undefined
+          }
           className={`pr-8 group-hover/project-header:bg-sidebar-row-hover group-hover/project-header:text-sidebar-foreground max-sm:pr-14 ${
-            isManualProjectSorting ? "cursor-grab active:cursor-grabbing" : ""
+            isManualProjectSorting && !isGeneralChats ? "cursor-grab active:cursor-grabbing" : ""
           }`}
-          {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.attributes : {})}
-          {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.listeners : {})}
+          {...(isManualProjectSorting && !isGeneralChats && dragHandleProps
+            ? dragHandleProps.attributes
+            : {})}
+          {...(isManualProjectSorting && !isGeneralChats && dragHandleProps
+            ? dragHandleProps.listeners
+            : {})}
           onPointerDownCapture={handleProjectButtonPointerDownCapture}
           onClick={handleProjectButtonClick}
           onKeyDown={handleProjectButtonKeyDown}
@@ -2318,16 +2338,20 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               }`}
             />
           )}
-          <ProjectFavicon
-            environmentId={project.environmentId}
-            cwd={project.workspaceRoot}
-            faviconPath={project.faviconPath}
-          />
+          {isGeneralChats ? (
+            <MessageSquareIcon className="size-4 shrink-0 text-icon-muted" />
+          ) : (
+            <ProjectFavicon
+              environmentId={project.environmentId}
+              cwd={project.workspaceRoot}
+              faviconPath={project.faviconPath}
+            />
+          )}
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <span className="truncate text-sm font-medium text-sidebar-foreground/90">
               {project.displayName}
             </span>
-            {project.groupedProjectCount > 1 ? (
+            {!isGeneralChats && project.groupedProjectCount > 1 ? (
               <span className="shrink-0 text-secondary-label text-[10px]">
                 {project.groupedProjectCount} projects
               </span>
@@ -2337,7 +2361,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         {/* Environment badge – visible by default, crossfades with the
             "new thread" button on hover using the same pointer-events +
             opacity pattern as the thread row archive/timestamp swap. */}
-        {project.environmentPresence === "remote-only" && (
+        {!isGeneralChats && project.environmentPresence === "remote-only" && (
           <Tooltip>
             <TooltipTrigger
               render={
@@ -2370,7 +2394,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               <div className="pointer-events-none absolute top-[calc(50%+1px)] right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100">
                 <button
                   type="button"
-                  aria-label={`Create new thread in ${project.displayName}`}
+                  aria-label={
+                    isGeneralChats
+                      ? "Create new general chat"
+                      : `Create new thread in ${project.displayName}`
+                  }
                   data-testid="new-thread-button"
                   className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
                   onClick={handleCreateThreadClick}
@@ -2839,6 +2867,7 @@ interface SidebarProjectsContentProps {
   pinThread: ReturnType<typeof useThreadActions>["pinThread"];
   unpinThread: ReturnType<typeof useThreadActions>["unpinThread"];
   sortedProjects: readonly SidebarProjectSnapshot[];
+  generalChatsProject: SidebarProjectSnapshot | null;
   desktopLocalEnvironmentIds: ReadonlySet<EnvironmentId>;
   expandedThreadListsByProject: ReadonlySet<string>;
   activeRouteProjectKey: string | null;
@@ -2882,6 +2911,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     pinThread,
     unpinThread,
     sortedProjects,
+    generalChatsProject,
     desktopLocalEnvironmentIds,
     expandedThreadListsByProject,
     activeRouteProjectKey,
@@ -2973,6 +3003,38 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         </SidebarGroup>
       ) : null}
       <LocalSecondaryStatus />
+      {generalChatsProject ? (
+        <SidebarGroup className="px-2 pt-2 pb-0" data-testid="general-chats-section">
+          <SidebarMenu>
+            <SidebarProjectListRow
+              variant="general"
+              project={generalChatsProject}
+              desktopLocalEnvironmentIds={desktopLocalEnvironmentIds}
+              isThreadListExpanded={expandedThreadListsByProject.has(
+                generalChatsProject.projectKey,
+              )}
+              activeRouteThreadKey={
+                activeRouteProjectKey === generalChatsProject.projectKey ? routeThreadKey : null
+              }
+              newThreadShortcutLabel={null}
+              handleNewThread={handleNewThread}
+              archiveThread={archiveThread}
+              deleteThread={deleteThread}
+              pinThread={pinThread}
+              unpinThread={unpinThread}
+              threadJumpLabelByKey={threadJumpLabelByKey}
+              attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
+              expandThreadListForProject={expandThreadListForProject}
+              collapseThreadListForProject={collapseThreadListForProject}
+              dragInProgressRef={dragInProgressRef}
+              suppressProjectClickAfterDragRef={suppressProjectClickAfterDragRef}
+              suppressProjectClickForContextMenuRef={suppressProjectClickForContextMenuRef}
+              isManualProjectSorting={false}
+              dragHandleProps={null}
+            />
+          </SidebarMenu>
+        </SidebarGroup>
+      ) : null}
       <SidebarGroup className="px-2 py-2">
         <div className="mb-1 flex items-center justify-between pl-2 pr-1.5">
           <span className="text-xs font-medium text-sidebar-muted-foreground/80">Projects</span>
@@ -3093,6 +3155,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
 
 export default function LegacySidebar() {
   const projects = useProjects();
+  const generalChatsProjects = useGeneralChatsProjects();
   const sidebarThreads = useThreadShells();
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
   const projectOrder = useUiStateStore((store) => store.projectOrder);
@@ -3162,6 +3225,16 @@ export default function LegacySidebar() {
       ),
     [environments, primaryEnvironmentId],
   );
+  const generalChatsProject = useMemo(
+    () =>
+      buildGeneralChatsProjectSnapshot({
+        projects: generalChatsProjects,
+        primaryEnvironmentId,
+        resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
+        isDesktopLocalEnvironment: (environmentId) => desktopLocalEnvironmentIds.has(environmentId),
+      }),
+    [desktopLocalEnvironmentIds, environmentLabelById, generalChatsProjects, primaryEnvironmentId],
+  );
   const orderedProjects = useMemo(() => {
     return orderItemsByPreferredIds({
       items: projects,
@@ -3212,8 +3285,13 @@ export default function LegacySidebar() {
   ]);
 
   const sidebarProjectByKey = useMemo(
-    () => new Map(sidebarProjects.map((project) => [project.projectKey, project] as const)),
-    [sidebarProjects],
+    () =>
+      new Map(
+        [...(generalChatsProject ? [generalChatsProject] : []), ...sidebarProjects].map(
+          (project) => [project.projectKey, project] as const,
+        ),
+      ),
+    [generalChatsProject, sidebarProjects],
   );
   const sidebarThreadByKey = useMemo(
     () =>
@@ -3233,18 +3311,33 @@ export default function LegacySidebar() {
     }
     const activeThread = sidebarThreadByKey.get(routeThreadKey);
     if (!activeThread) return null;
+    if (activeThread.projectId === generalChatsProject?.id) {
+      return GENERAL_CHATS_PROJECT_KEY;
+    }
     const physicalKey =
       projectPhysicalKeyByScopedRef.get(
         scopedProjectKey(scopeProjectRef(activeThread.environmentId, activeThread.projectId)),
       ) ?? scopedProjectKey(scopeProjectRef(activeThread.environmentId, activeThread.projectId));
     return physicalToLogicalKey.get(physicalKey) ?? physicalKey;
-  }, [routeThreadKey, sidebarThreadByKey, physicalToLogicalKey, projectPhysicalKeyByScopedRef]);
+  }, [
+    generalChatsProject?.id,
+    routeThreadKey,
+    sidebarThreadByKey,
+    physicalToLogicalKey,
+    projectPhysicalKeyByScopedRef,
+  ]);
 
   // Group threads by logical project key so all threads from grouped projects
   // are displayed together.
   const threadsByProjectKey = useMemo(() => {
     const next = new Map<string, SidebarThreadSummary[]>();
     for (const thread of sidebarThreads) {
+      if (thread.projectId === generalChatsProject?.id) {
+        const existing = next.get(GENERAL_CHATS_PROJECT_KEY);
+        if (existing) existing.push(thread);
+        else next.set(GENERAL_CHATS_PROJECT_KEY, [thread]);
+        continue;
+      }
       const physicalKey =
         projectPhysicalKeyByScopedRef.get(
           scopedProjectKey(scopeProjectRef(thread.environmentId, thread.projectId)),
@@ -3258,7 +3351,12 @@ export default function LegacySidebar() {
       }
     }
     return next;
-  }, [sidebarThreads, physicalToLogicalKey, projectPhysicalKeyByScopedRef]);
+  }, [
+    generalChatsProject?.id,
+    sidebarThreads,
+    physicalToLogicalKey,
+    projectPhysicalKeyByScopedRef,
+  ]);
   const getCurrentSidebarShortcutContext = useCallback(
     () => ({
       terminalFocus: isTerminalFocused(),
@@ -3402,9 +3500,13 @@ export default function LegacySidebar() {
     visibleThreads,
   ]);
   const isManualProjectSorting = sidebarProjectSortOrder === "manual";
+  const displayedSidebarProjects = useMemo(
+    () => (generalChatsProject ? [generalChatsProject, ...sortedProjects] : sortedProjects),
+    [generalChatsProject, sortedProjects],
+  );
   const visibleSidebarThreadKeys = useMemo(
     () =>
-      sortedProjects.flatMap((project) => {
+      displayedSidebarProjects.flatMap((project) => {
         const projectThreads = sortProjectThreadsWithPins(
           (threadsByProjectKey.get(project.projectKey) ?? []).filter(
             (thread) => thread.archivedAt === null,
@@ -3445,7 +3547,7 @@ export default function LegacySidebar() {
       expandedThreadListsByProject,
       projectExpandedById,
       routeThreadKey,
-      sortedProjects,
+      displayedSidebarProjects,
       threadsByProjectKey,
     ],
   );
@@ -3720,6 +3822,7 @@ export default function LegacySidebar() {
         pinThread={pinThread}
         unpinThread={unpinThread}
         sortedProjects={sortedProjects}
+        generalChatsProject={generalChatsProject}
         desktopLocalEnvironmentIds={desktopLocalEnvironmentIds}
         expandedThreadListsByProject={expandedThreadListsByProject}
         activeRouteProjectKey={activeRouteProjectKey}

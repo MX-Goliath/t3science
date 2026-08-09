@@ -829,6 +829,117 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         ]);
       });
 
+      it("keeps the last known rate limits when a refresh reports none", () => {
+        const previousProvider = {
+          instanceId: ProviderInstanceId.make("codex"),
+          driver: ProviderDriverKind.make("codex"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated", type: "chatgpt", email: "user@example.com" },
+          checkedAt: "2026-08-09T00:00:00.000Z",
+          version: "1.0.0",
+          rateLimits: {
+            fiveHour: { remainingPercent: 63, resetsAt: 1_775_000_000 },
+            weekly: { remainingPercent: 88 },
+          },
+          models: [],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+        const { rateLimits: knownRateLimits, ...providerWithoutRateLimits } = previousProvider;
+
+        // Probe failed outright (Codex CLI mid-update, app-server refused to
+        // spawn): the snapshot knows nothing, so the meters stay put.
+        const failedProvider = {
+          ...providerWithoutRateLimits,
+          status: "error",
+          auth: { status: "unknown" },
+          checkedAt: "2026-08-09T00:01:00.000Z",
+          message: "Codex app-server provider probe failed.",
+        } satisfies ServerProvider;
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, failedProvider).rateLimits,
+          knownRateLimits,
+        );
+
+        // Account probe succeeded for the same account but the rate-limit
+        // request alone failed.
+        const missingRateLimitsProvider = {
+          ...providerWithoutRateLimits,
+          checkedAt: "2026-08-09T00:02:00.000Z",
+        } satisfies ServerProvider;
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, missingRateLimitsProvider).rateLimits,
+          knownRateLimits,
+        );
+
+        // A refresh that does report limits always wins.
+        const refreshedProvider = {
+          ...previousProvider,
+          checkedAt: "2026-08-09T00:03:00.000Z",
+          rateLimits: { fiveHour: { remainingPercent: 41 } },
+        } satisfies ServerProvider;
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, refreshedProvider).rateLimits,
+          refreshedProvider.rateLimits,
+        );
+      });
+
+      it("drops cached rate limits once the account or instance is gone", () => {
+        const previousProvider = {
+          instanceId: ProviderInstanceId.make("codex"),
+          driver: ProviderDriverKind.make("codex"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated", type: "chatgpt", email: "user@example.com" },
+          checkedAt: "2026-08-09T00:00:00.000Z",
+          version: "1.0.0",
+          rateLimits: { fiveHour: { remainingPercent: 63 } },
+          models: [],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+        const { rateLimits: _knownRateLimits, ...providerWithoutRateLimits } = previousProvider;
+
+        const loggedOutProvider = {
+          ...providerWithoutRateLimits,
+          status: "error",
+          auth: { status: "unauthenticated" },
+          checkedAt: "2026-08-09T00:01:00.000Z",
+          message: "Codex CLI is not authenticated. Run `codex login` and try again.",
+        } satisfies ServerProvider;
+        assert.strictEqual(
+          mergeProviderSnapshot(previousProvider, loggedOutProvider).rateLimits,
+          undefined,
+        );
+
+        const disabledProvider = {
+          ...providerWithoutRateLimits,
+          status: "warning",
+          enabled: false,
+          installed: false,
+          auth: { status: "unknown" },
+          checkedAt: "2026-08-09T00:02:00.000Z",
+          message: "Codex is disabled in T3 Code settings.",
+        } satisfies ServerProvider;
+        assert.strictEqual(
+          mergeProviderSnapshot(previousProvider, disabledProvider).rateLimits,
+          undefined,
+        );
+
+        const otherAccountProvider = {
+          ...providerWithoutRateLimits,
+          auth: { status: "authenticated", type: "chatgpt", email: "other@example.com" },
+          checkedAt: "2026-08-09T00:03:00.000Z",
+        } satisfies ServerProvider;
+        assert.strictEqual(
+          mergeProviderSnapshot(previousProvider, otherAccountProvider).rateLimits,
+          undefined,
+        );
+      });
+
       it.effect("does not run provider probes during layer construction", () =>
         Effect.gen(function* () {
           const codexDriver = ProviderDriverKind.make("codex");

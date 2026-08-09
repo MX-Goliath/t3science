@@ -56,6 +56,17 @@ export const ThreadId = makeEntityId("ThreadId");
 export type ThreadId = typeof ThreadId.Type;
 export const ProjectId = makeEntityId("ProjectId");
 export type ProjectId = typeof ProjectId.Type;
+/**
+ * Reserved per-environment container for conversations that are not attached
+ * to a user project. It remains a ProjectId internally because provider
+ * runtimes require an isolated cwd, but clients must present its threads as
+ * top-level general chats rather than as a project.
+ */
+export const GENERAL_CHATS_PROJECT_ID = ProjectId.make("t3-general-chats");
+
+export function isGeneralChatsProjectId(projectId: ProjectId): boolean {
+  return projectId === GENERAL_CHATS_PROJECT_ID;
+}
 export const EnvironmentId = makeEntityId("EnvironmentId");
 export type EnvironmentId = typeof EnvironmentId.Type;
 export const CommandId = makeEntityId("CommandId");

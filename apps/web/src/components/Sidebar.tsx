@@ -29,12 +29,14 @@ import {
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
+import { isGeneralChatsProjectId } from "@t3tools/contracts";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   CircleAlertIcon,
   CircleCheckIcon,
   CircleDashedIcon,
@@ -92,7 +94,11 @@ import {
   buildSidebarProjectSnapshots,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
-import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
+import {
+  legacyProjectCwdPreferenceKey,
+  resolveProjectExpanded,
+  useUiStateStore,
+} from "../uiStateStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
@@ -102,7 +108,7 @@ import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
-import { useProjects, useThreadShells } from "../state/entities";
+import { useGeneralChatsProjects, useProjects, useThreadShells } from "../state/entities";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
@@ -121,6 +127,7 @@ import {
   buildBulkTitleRegenerationContextMenuItem,
   formatWorkingDurationLabel,
   firstValidTimestampMs,
+  getVisibleThreadsForProject,
   hasUnseenCompletion,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
@@ -132,6 +139,7 @@ import {
   resolveWorkingStartedAt,
   sortLogicalProjectsForSidebar,
   sortPinnedThreadsForSidebar,
+  sortProjectThreadsWithPins,
   sortSettledThreadsForSidebar,
   sortThreadsForSidebar,
 } from "./Sidebar.logic";
@@ -177,6 +185,7 @@ import {
   type DraftSessionState,
 } from "../composerDraftStore";
 import { WebChatSidebarItem } from "./web-chat/WebChatSidebarItem";
+import { GENERAL_CHATS_PROJECT_KEY } from "../generalChats";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -575,6 +584,9 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     // unmapped, so the mapping only knows about the latest per project.
     for (const [draftKey, session] of Object.entries(draftThreadsByThreadKey)) {
       if (session.promotedTo != null) {
+        continue;
+      }
+      if (isGeneralChatsProjectId(session.projectId)) {
         continue;
       }
       if (
@@ -1574,6 +1586,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 
 export default function Sidebar() {
   const projects = useProjects();
+  const generalChatsProjects = useGeneralChatsProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
   const router = useRouter();
@@ -1582,6 +1595,8 @@ export default function Sidebar() {
   const autoSettleAfterDays = useClientSettings((s) => s.sidebarAutoSettleAfterDays);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
+  const sidebarThreadSortOrder = useClientSettings((s) => s.sidebarThreadSortOrder);
+  const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
@@ -1642,6 +1657,18 @@ export default function Sidebar() {
   );
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const generalChatsProject = useMemo(
+    () =>
+      generalChatsProjects.find((project) => project.environmentId === primaryEnvironmentId) ??
+      generalChatsProjects[0] ??
+      null,
+    [generalChatsProjects, primaryEnvironmentId],
+  );
+  const generalChatsExpanded = useUiStateStore((state) =>
+    resolveProjectExpanded(state.projectExpandedById, [GENERAL_CHATS_PROJECT_KEY]),
+  );
+  const setProjectExpanded = useUiStateStore((state) => state.setProjectExpanded);
+  const [generalThreadListExpanded, setGeneralThreadListExpanded] = useState(false);
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
@@ -1824,6 +1851,9 @@ export default function Sidebar() {
       if (session.promotedTo != null) {
         continue;
       }
+      if (isGeneralChatsProjectId(session.projectId)) {
+        continue;
+      }
       if (!composerDraftHasUserContent(store.draftsByThreadKey[draftKey])) {
         continue;
       }
@@ -1870,6 +1900,9 @@ export default function Sidebar() {
     activeThreads,
     snoozedThreads,
     settledThreads,
+    generalThreads,
+    generalSettledThreadKeys,
+    generalSnoozedThreadKeys,
     snoozeNow,
   } = useMemo(() => {
     const now = `${nowMinute}:00.000Z`;
@@ -1882,14 +1915,22 @@ export default function Sidebar() {
     const visible = threads.filter(
       (thread) =>
         thread.archivedAt === null &&
+        !isGeneralChatsProjectId(thread.projectId) &&
         (scopedProjectKeys === null ||
           scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
+    );
+    const visibleGeneral = threads.filter(
+      (thread) => thread.archivedAt === null && isGeneralChatsProjectId(thread.projectId),
     );
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const snoozed: EnvironmentThreadShell[] = [];
     const settled: EnvironmentThreadShell[] = [];
-    for (const thread of visible) {
+    const generalSettledKeys = new Set<string>();
+    const generalSnoozedKeys = new Set<string>();
+    const classifyThread = (
+      thread: EnvironmentThreadShell,
+    ): "pinned" | "active" | "snoozed" | "settled" => {
       // Threads on servers without the settlement capability (old server,
       // or descriptor not loaded yet) never classify as settled: the user
       // could neither un-settle nor pin them, so auto-settling them would
@@ -1907,21 +1948,33 @@ export default function Sidebar() {
       // this is also the snooze-beats-auto-settle rule: the wake time is a
       // stronger statement about when the thread matters again.)
       if (supportsSnooze && effectiveSnoozed(thread, { now: preciseNow })) {
-        snoozed.push(thread);
+        return "snoozed";
         // A pin otherwise overrides the lifecycle: pinned threads never
         // auto-settle out of sight. (The decider clears settled state on
         // pin and the pin on settle, so pin-vs-settled conflicts only
         // arise from stale or raced writes.)
       } else if (thread.pinnedAt != null) {
-        pinned.push(thread);
+        return "pinned";
       } else if (
         supportsSettlement &&
         effectiveSettled(thread, { now, autoSettleAfterDays, changeRequestState })
       ) {
-        settled.push(thread);
-      } else {
-        active.push(thread);
+        return "settled";
       }
+      return "active";
+    };
+    for (const thread of visible) {
+      const section = classifyThread(thread);
+      if (section === "pinned") pinned.push(thread);
+      else if (section === "snoozed") snoozed.push(thread);
+      else if (section === "settled") settled.push(thread);
+      else active.push(thread);
+    }
+    for (const thread of visibleGeneral) {
+      const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+      const section = classifyThread(thread);
+      if (section === "snoozed") generalSnoozedKeys.add(threadKey);
+      if (section === "settled") generalSettledKeys.add(threadKey);
     }
     // One shared rule on every platform (see sortPinnedThreadsByOrderKey):
     // user-arranged keys first, keyless threads in creation order below.
@@ -1947,6 +2000,9 @@ export default function Sidebar() {
           firstValidTimestampMs(right.snoozedUntil ?? null),
       ),
       settledThreads: sortSettledThreadsForSidebar(settled),
+      generalThreads: sortProjectThreadsWithPins(visibleGeneral, sidebarThreadSortOrder),
+      generalSettledThreadKeys: generalSettledKeys,
+      generalSnoozedThreadKeys: generalSnoozedKeys,
       snoozeNow: preciseNow,
     };
   }, [
@@ -1955,6 +2011,7 @@ export default function Sidebar() {
     nowMinute,
     scopedProjectKeys,
     serverConfigs,
+    sidebarThreadSortOrder,
     snoozeWakeTick,
     threads,
   ]);
@@ -1964,8 +2021,14 @@ export default function Sidebar() {
   const [activeSearchResultIndex, setActiveSearchResultIndex] = useState(0);
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
   const searchableThreads = useMemo(
-    () => [...pinnedThreads, ...activeThreads, ...snoozedThreads, ...settledThreads],
-    [activeThreads, pinnedThreads, settledThreads, snoozedThreads],
+    () => [
+      ...generalThreads,
+      ...pinnedThreads,
+      ...activeThreads,
+      ...snoozedThreads,
+      ...settledThreads,
+    ],
+    [activeThreads, generalThreads, pinnedThreads, settledThreads, snoozedThreads],
   );
   const threadSearchResults = useMemo(
     () => searchSidebarThreadsByTitle(searchableThreads, threadSearchQuery),
@@ -2068,9 +2131,51 @@ export default function Sidebar() {
     return routeThread === undefined ? [] : [routeThread];
   }, [routeThreadKey, snoozedShelfExpanded, snoozedThreads]);
 
+  const activeGeneralThread = useMemo(
+    () =>
+      routeThreadKey === null
+        ? null
+        : (generalThreads.find(
+            (thread) =>
+              scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
+          ) ?? null),
+    [generalThreads, routeThreadKey],
+  );
+  const generalThreadPreview = useMemo(
+    () =>
+      getVisibleThreadsForProject({
+        threads: generalThreads,
+        activeThreadId: activeGeneralThread?.id,
+        isThreadListExpanded: generalThreadListExpanded,
+        previewLimit: sidebarThreadPreviewCount,
+      }),
+    [activeGeneralThread?.id, generalThreadListExpanded, generalThreads, sidebarThreadPreviewCount],
+  );
+  const renderedGeneralThreads = useMemo(
+    () =>
+      generalChatsExpanded
+        ? generalThreadPreview.visibleThreads
+        : activeGeneralThread
+          ? [activeGeneralThread]
+          : [],
+    [activeGeneralThread, generalChatsExpanded, generalThreadPreview.visibleThreads],
+  );
+
   const orderedThreads = useMemo(
-    () => [...pinnedThreads, ...activeThreads, ...visibleSnoozedThreads, ...renderedSettledThreads],
-    [pinnedThreads, activeThreads, visibleSnoozedThreads, renderedSettledThreads],
+    () => [
+      ...renderedGeneralThreads,
+      ...pinnedThreads,
+      ...activeThreads,
+      ...visibleSnoozedThreads,
+      ...renderedSettledThreads,
+    ],
+    [
+      renderedGeneralThreads,
+      pinnedThreads,
+      activeThreads,
+      visibleSnoozedThreads,
+      renderedSettledThreads,
+    ],
   );
   const orderedThreadKeys = useMemo(
     () =>
@@ -2106,23 +2211,25 @@ export default function Sidebar() {
   handleNewThreadRef.current = newThreadContext.handleNewThread;
   const settledThreadKeys = useMemo(
     () =>
-      new Set(
-        settledThreads.map((thread) =>
+      new Set([
+        ...settledThreads.map((thread) =>
           scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
         ),
-      ),
-    [settledThreads],
+        ...generalSettledThreadKeys,
+      ]),
+    [generalSettledThreadKeys, settledThreads],
   );
   const settledThreadKeysRef = useRef(settledThreadKeys);
   settledThreadKeysRef.current = settledThreadKeys;
   const snoozedThreadKeys = useMemo(
     () =>
-      new Set(
-        snoozedThreads.map((thread) =>
+      new Set([
+        ...snoozedThreads.map((thread) =>
           scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
         ),
-      ),
-    [snoozedThreads],
+        ...generalSnoozedThreadKeys,
+      ]),
+    [generalSnoozedThreadKeys, snoozedThreads],
   );
   const snoozedThreadKeysRef = useRef(snoozedThreadKeys);
   snoozedThreadKeysRef.current = snoozedThreadKeys;
@@ -3152,6 +3259,19 @@ export default function Sidebar() {
     openCommandPalette({ open: "new-thread-in" });
   }, [isMobile, newThreadContext, projectGroups.length, setOpenMobile]);
 
+  const handleNewGeneralChatClick = useCallback(() => {
+    if (!generalChatsProject) return;
+    if (isMobile) setOpenMobile(false);
+    void newThreadContext.handleNewThread({
+      environmentId: generalChatsProject.environmentId,
+      projectId: generalChatsProject.id,
+    });
+  }, [generalChatsProject, isMobile, newThreadContext.handleNewThread, setOpenMobile]);
+  const toggleGeneralChats = useCallback(
+    () => setProjectExpanded(GENERAL_CHATS_PROJECT_KEY, !generalChatsExpanded),
+    [generalChatsExpanded, setProjectExpanded],
+  );
+
   // The button mirrors chat.new: in multi-project setups both route through
   // the command palette's "New thread in..." picker, and in single-project
   // setups both create immediately. chat.newLocal always creates directly, so
@@ -3159,6 +3279,81 @@ export default function Sidebar() {
   const newThreadShortcutLabel =
     shortcutLabelForCommand(keybindings, "chat.new") ??
     shortcutLabelForCommand(keybindings, "chat.newLocal");
+  const renderThreadRow = (
+    thread: EnvironmentThreadShell,
+    section: "pinned" | "active" | "snoozed" | "settled",
+    sortable?: SortablePinnedRowBag,
+  ) => {
+    const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+    const isGeneralChat = isGeneralChatsProjectId(thread.projectId);
+    const isCard = section === "active" || section === "pinned";
+    const rowVariant = isCard ? "card" : "slim";
+    return (
+      <SidebarThreadRow
+        key={`${threadKey}:${rowVariant}`}
+        thread={thread}
+        variant={rowVariant}
+        variantAction={
+          section === "snoozed" ? "unsnooze" : section === "settled" ? "unsettle" : "settle"
+        }
+        settlementSupported={
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement ===
+          true
+        }
+        snoozeSupported={
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true
+        }
+        pinningSupported={
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinning === true
+        }
+        isPinned={section === "pinned"}
+        sortable={sortable}
+        snoozeWakeLabelText={
+          section === "snoozed" && thread.snoozedUntil != null
+            ? snoozeWakeLabel(thread.snoozedUntil, { now: new Date().toISOString() })
+            : null
+        }
+        wokeAt={threadWokeAt(thread, { now: snoozeNow })}
+        isActive={routeThreadKey === threadKey}
+        jumpLabel={showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null}
+        currentEnvironmentId={primaryEnvironmentId}
+        environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
+        projectCwd={
+          isGeneralChat
+            ? null
+            : (projectCwdByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null)
+        }
+        projectFaviconPath={
+          isGeneralChat
+            ? null
+            : (projectFaviconPathByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null)
+        }
+        projectTitle={
+          isGeneralChat
+            ? "General chats"
+            : (projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null)
+        }
+        providerEntryByInstanceId={providerEntryByInstanceId}
+        timestampFormat={timestampFormat}
+        onThreadClick={handleThreadClick}
+        onThreadActivate={navigateToThread}
+        onStartRename={startThreadRename}
+        onRenameTitleChange={setRenamingTitle}
+        onCommitRename={commitThreadRename}
+        onCancelRename={cancelThreadRename}
+        isRenaming={renamingThreadKey === threadKey}
+        renamingTitle={renamingThreadKey === threadKey ? renamingTitle : ""}
+        onContextMenu={handleThreadContextMenu}
+        onSettle={attemptSettle}
+        onUnsettle={attemptUnsettle}
+        onSnooze={attemptSnooze}
+        onUnsnooze={attemptUnsnooze}
+        onUnpin={attemptUnpin}
+        onAcknowledgeWoke={acknowledgeWoke}
+        onChangeRequestState={handleChangeRequestState}
+      />
+    );
+  };
   return (
     <>
       <SidebarChromeHeader isElectron={isElectron} />
@@ -3246,6 +3441,79 @@ export default function Sidebar() {
             <SidebarMenu>
               <WebChatSidebarItem />
             </SidebarMenu>
+            {generalChatsProject ? (
+              <div data-testid="general-chats-section" className="min-w-0">
+                <div className="group/general-chats flex min-w-0 items-center gap-1">
+                  <button
+                    type="button"
+                    aria-expanded={generalChatsExpanded}
+                    onClick={toggleGeneralChats}
+                    className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm font-medium text-sidebar-foreground hover:bg-sidebar-row-hover"
+                  >
+                    <ChevronRightIcon
+                      className={cn(
+                        "size-3.5 shrink-0 text-icon-muted transition-transform",
+                        generalChatsExpanded && "rotate-90",
+                      )}
+                    />
+                    <MessageSquareIcon className="size-4 shrink-0 text-icon-muted" />
+                    <span className="min-w-0 flex-1 truncate">General chats</span>
+                  </button>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <SidebarMenuButton
+                          size="icon"
+                          type="button"
+                          className="relative shrink-0 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+                          onClick={handleNewGeneralChatClick}
+                          aria-label="Create new general chat"
+                        />
+                      }
+                    >
+                      <SquarePenIcon />
+                    </TooltipTrigger>
+                    <TooltipPopup side="right">New general chat</TooltipPopup>
+                  </Tooltip>
+                </div>
+                {renderedGeneralThreads.length > 0 ? (
+                  <TooltipProvider delay={150} closeDelay={0} timeout={400}>
+                    <ul
+                      role="list"
+                      aria-label="General chats"
+                      className="mt-0.5 flex max-h-[40vh] flex-col gap-px overflow-y-auto pl-3"
+                    >
+                      {renderedGeneralThreads.map((thread) => {
+                        const threadKey = scopedThreadKey(
+                          scopeThreadRef(thread.environmentId, thread.id),
+                        );
+                        const section = generalSnoozedThreadKeys.has(threadKey)
+                          ? "snoozed"
+                          : generalSettledThreadKeys.has(threadKey)
+                            ? "settled"
+                            : thread.pinnedAt != null
+                              ? "pinned"
+                              : "active";
+                        return renderThreadRow(thread, section);
+                      })}
+                    </ul>
+                  </TooltipProvider>
+                ) : generalChatsExpanded ? (
+                  <p className="px-7 py-1.5 text-xs text-sidebar-muted-foreground/70">
+                    No chats yet
+                  </p>
+                ) : null}
+                {generalChatsExpanded && generalThreadPreview.hasHiddenThreads ? (
+                  <button
+                    type="button"
+                    onClick={() => setGeneralThreadListExpanded((expanded) => !expanded)}
+                    className="ml-3 flex h-8 w-[calc(100%-0.75rem)] cursor-pointer items-center rounded-md px-2 text-left text-xs text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                  >
+                    {generalThreadListExpanded ? "Show less" : "Show more"}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {projectGroups.length > 0 ? (
               <div className="flex items-center gap-1">
                 <Menu open={projectScopeMenuOpen} onOpenChange={setProjectScopeMenuOpen}>
@@ -3370,7 +3638,10 @@ export default function Sidebar() {
                         key={threadKey}
                         thread={thread}
                         projectCwd={
-                          projectCwdByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
+                          isGeneralChatsProjectId(thread.projectId)
+                            ? null
+                            : (projectCwdByKey.get(`${thread.environmentId}:${thread.projectId}`) ??
+                              null)
                         }
                         projectFaviconPath={
                           projectFaviconPathByKey.get(
@@ -3378,9 +3649,11 @@ export default function Sidebar() {
                           ) ?? null
                         }
                         projectTitle={
-                          projectDisplayNameByKey.get(
-                            `${thread.environmentId}:${thread.projectId}`,
-                          ) ?? null
+                          isGeneralChatsProjectId(thread.projectId)
+                            ? "General chats"
+                            : (projectDisplayNameByKey.get(
+                                `${thread.environmentId}:${thread.projectId}`,
+                              ) ?? null)
                         }
                         environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
                         providerEntryByInstanceId={providerEntryByInstanceId}
@@ -3412,105 +3685,6 @@ export default function Sidebar() {
             >
               <ul ref={attachListAutoAnimateRef} role="list" className="flex flex-col gap-px">
                 {(() => {
-                  const renderThreadRow = (
-                    thread: EnvironmentThreadShell,
-                    section: "pinned" | "active" | "snoozed" | "settled",
-                    sortable?: SortablePinnedRowBag,
-                  ) => {
-                    const threadKey = scopedThreadKey(
-                      scopeThreadRef(thread.environmentId, thread.id),
-                    );
-                    // Settled and snoozed are the ONLY things that collapse a
-                    // row: every other thread is a full card. Density comes
-                    // from users (or the auto rules) actually parking work,
-                    // not from the sidebar second-guessing what still matters.
-                    const isCard = section === "active" || section === "pinned";
-                    const rowVariant = isCard ? "card" : "slim";
-                    return (
-                      <SidebarThreadRow
-                        // Keyed per variant on purpose: when a thread settles,
-                        // the card fades out in place and the slim row fades
-                        // in at its settled position instead of one element
-                        // FLIP-sliding through every row in between (rows here
-                        // are translucent, so a crossing row reads as text
-                        // painted over text).
-                        key={`${threadKey}:${rowVariant}`}
-                        thread={thread}
-                        variant={rowVariant}
-                        // Snoozed rows wake; settled rows un-settle (explicit
-                        // settles clear the override, auto-settled rows get
-                        // pinned active); cards settle.
-                        variantAction={
-                          section === "snoozed"
-                            ? "unsnooze"
-                            : section === "settled"
-                              ? "unsettle"
-                              : "settle"
-                        }
-                        settlementSupported={
-                          serverConfigs.get(thread.environmentId)?.environment.capabilities
-                            .threadSettlement === true
-                        }
-                        snoozeSupported={
-                          serverConfigs.get(thread.environmentId)?.environment.capabilities
-                            .threadSnooze === true
-                        }
-                        pinningSupported={
-                          serverConfigs.get(thread.environmentId)?.environment.capabilities
-                            .threadPinning === true
-                        }
-                        isPinned={section === "pinned"}
-                        sortable={sortable}
-                        snoozeWakeLabelText={
-                          section === "snoozed" && thread.snoozedUntil != null
-                            ? snoozeWakeLabel(thread.snoozedUntil, {
-                                now: new Date().toISOString(),
-                              })
-                            : null
-                        }
-                        // All sections: a woken thread can classify straight
-                        // into the settled tail (PR merged while snoozed), and
-                        // the wake signal must survive the trip. Still-snoozed
-                        // rows resolve to null on their own.
-                        wokeAt={threadWokeAt(thread, { now: snoozeNow })}
-                        isActive={routeThreadKey === threadKey}
-                        jumpLabel={showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null}
-                        currentEnvironmentId={primaryEnvironmentId}
-                        environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
-                        projectCwd={
-                          projectCwdByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
-                        }
-                        projectFaviconPath={
-                          projectFaviconPathByKey.get(
-                            `${thread.environmentId}:${thread.projectId}`,
-                          ) ?? null
-                        }
-                        projectTitle={
-                          projectDisplayNameByKey.get(
-                            `${thread.environmentId}:${thread.projectId}`,
-                          ) ?? null
-                        }
-                        providerEntryByInstanceId={providerEntryByInstanceId}
-                        timestampFormat={timestampFormat}
-                        onThreadClick={handleThreadClick}
-                        onThreadActivate={navigateToThread}
-                        onStartRename={startThreadRename}
-                        onRenameTitleChange={setRenamingTitle}
-                        onCommitRename={commitThreadRename}
-                        onCancelRename={cancelThreadRename}
-                        isRenaming={renamingThreadKey === threadKey}
-                        renamingTitle={renamingThreadKey === threadKey ? renamingTitle : ""}
-                        onContextMenu={handleThreadContextMenu}
-                        onSettle={attemptSettle}
-                        onUnsettle={attemptUnsettle}
-                        onSnooze={attemptSnooze}
-                        onUnsnooze={attemptUnsnooze}
-                        onUnpin={attemptUnpin}
-                        onAcknowledgeWoke={acknowledgeWoke}
-                        onChangeRequestState={handleChangeRequestState}
-                      />
-                    );
-                  };
                   // Draft block above everything, then the pinned block:
                   // full cards above the inbox, closed by a thin divider (the
                   // pin glyphs carry the meaning, so no header text). Both

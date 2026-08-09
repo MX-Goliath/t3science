@@ -1,9 +1,16 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  DEFAULT_MODEL,
+  GENERAL_CHATS_PROJECT_ID,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
@@ -22,6 +29,64 @@ it("uses the canonical Codex default for auto-bootstrapped model selection", () 
     model: DEFAULT_MODEL,
   });
 });
+
+it.effect("creates the isolated general chats container", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const stateDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-general-chats-" });
+      const dispatchCalls = yield* Ref.make<
+        ReadonlyArray<{ type: string; projectId: string; workspaceRoot: string }>
+      >([]);
+
+      yield* ServerRuntimeStartup.ensureGeneralChatsProject.pipe(
+        Effect.provideService(ServerConfig.ServerConfig, { stateDir } as never),
+        Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+          getCommandReadModel: () => Effect.die("unused"),
+          getSnapshot: () => Effect.die("unused"),
+          getShellSnapshot: () => Effect.die("unused"),
+          getArchivedShellSnapshot: () => Effect.die("unused"),
+          getSnapshotSequence: () => Effect.die("unused"),
+          getCounts: () => Effect.die("unused"),
+          getActiveProjectByWorkspaceRoot: () => Effect.die("unused"),
+          getProjectShellById: () => Effect.succeed(Option.none()),
+          getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
+          getThreadCheckpointContext: () => Effect.die("unused"),
+          getFullThreadDiffContext: () => Effect.die("unused"),
+          getThreadShellById: () => Effect.die("unused"),
+          getThreadDetailById: () => Effect.die("unused"),
+          getThreadDetailSnapshot: () => Effect.die("unused"),
+          searchThreads: () => Effect.die("unused"),
+        }),
+        Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
+          readEvents: () => Stream.empty,
+          dispatch: (command) =>
+            command.type === "project.create"
+              ? Ref.update(dispatchCalls, (calls) => [
+                  ...calls,
+                  {
+                    type: command.type,
+                    projectId: command.projectId,
+                    workspaceRoot: command.workspaceRoot,
+                  },
+                ]).pipe(Effect.as({ sequence: 1 }))
+              : Effect.die(`unexpected command: ${command.type}`),
+          streamDomainEvents: Stream.empty,
+          latestSequence: Effect.succeed(0),
+        } satisfies OrchestrationEngine.OrchestrationEngineService["Service"]),
+      );
+
+      assert.deepStrictEqual(yield* Ref.get(dispatchCalls), [
+        {
+          type: "project.create",
+          projectId: GENERAL_CHATS_PROJECT_ID,
+          workspaceRoot: `${stateDir}/general-chats`,
+        },
+      ]);
+      assert.isTrue(yield* fileSystem.exists(`${stateDir}/general-chats`));
+    }),
+  ).pipe(Effect.provide(NodeServices.layer)),
+);
 
 it.effect("enqueueCommand waits for readiness and then drains queued work", () =>
   Effect.scoped(
