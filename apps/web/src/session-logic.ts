@@ -52,12 +52,6 @@ export const PROVIDER_OPTIONS: Array<{
     available: true,
     pickerSidebarBadge: "new",
   },
-  {
-    value: ProviderDriverKind.make("qwenCode"),
-    label: "Qwen Code",
-    available: true,
-    pickerSidebarBadge: "new",
-  },
 ];
 
 export type WorkLogToolLifecycleStatus =
