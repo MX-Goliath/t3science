@@ -44,6 +44,7 @@ import {
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
+  Globe2Icon,
   EllipsisIcon,
   MessageSquareIcon,
   PinIcon,
@@ -1598,6 +1599,7 @@ export default function Sidebar() {
   const sidebarThreadSortOrder = useClientSettings((s) => s.sidebarThreadSortOrder);
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
+  const generalChatsEnabled = useClientSettings((s) => s.generalChatsEnabled);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
     settleThread,
@@ -1657,13 +1659,14 @@ export default function Sidebar() {
   );
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const generalChatsProject = useMemo(
-    () =>
+  const generalChatsProject = useMemo(() => {
+    if (!generalChatsEnabled) return null;
+    return (
       generalChatsProjects.find((project) => project.environmentId === primaryEnvironmentId) ??
       generalChatsProjects[0] ??
-      null,
-    [generalChatsProjects, primaryEnvironmentId],
-  );
+      null
+    );
+  }, [generalChatsEnabled, generalChatsProjects, primaryEnvironmentId]);
   const generalChatsExpanded = useUiStateStore((state) =>
     resolveProjectExpanded(state.projectExpandedById, [GENERAL_CHATS_PROJECT_KEY]),
   );
@@ -1919,9 +1922,11 @@ export default function Sidebar() {
         (scopedProjectKeys === null ||
           scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
     );
-    const visibleGeneral = threads.filter(
-      (thread) => thread.archivedAt === null && isGeneralChatsProjectId(thread.projectId),
-    );
+    const visibleGeneral = generalChatsEnabled
+      ? threads.filter(
+          (thread) => thread.archivedAt === null && isGeneralChatsProjectId(thread.projectId),
+        )
+      : [];
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const snoozed: EnvironmentThreadShell[] = [];
@@ -2008,6 +2013,7 @@ export default function Sidebar() {
   }, [
     autoSettleAfterDays,
     changeRequestStateByKey,
+    generalChatsEnabled,
     nowMinute,
     scopedProjectKeys,
     serverConfigs,
@@ -3456,7 +3462,7 @@ export default function Sidebar() {
                         generalChatsExpanded && "rotate-90",
                       )}
                     />
-                    <MessageSquareIcon className="size-4 shrink-0 text-icon-muted" />
+                    <Globe2Icon className="size-4 shrink-0 text-icon-muted" />
                     <span className="min-w-0 flex-1 truncate">General chats</span>
                   </button>
                   <Tooltip>

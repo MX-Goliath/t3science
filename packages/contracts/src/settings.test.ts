@@ -92,6 +92,12 @@ describe("ClientSettings sidebar", () => {
     );
   });
 
+  it("defaults general chats off and preserves an explicit opt-in", () => {
+    expect(decodeClientSettings({}).generalChatsEnabled).toBe(false);
+    expect(decodeClientSettings({ generalChatsEnabled: true }).generalChatsEnabled).toBe(true);
+    expect(decodeClientSettingsPatch({ generalChatsEnabled: true }).generalChatsEnabled).toBe(true);
+  });
+
   it("allows auto-settle by inactivity to be disabled", () => {
     expect(
       decodeClientSettings({ sidebarAutoSettleAfterDays: null }).sidebarAutoSettleAfterDays,

@@ -7,7 +7,6 @@ import {
   FolderPlusIcon,
   Globe2Icon,
   LoaderIcon,
-  MessageSquareIcon,
   PinIcon,
   SearchIcon,
   SquarePenIcon,
@@ -2339,7 +2338,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             />
           )}
           {isGeneralChats ? (
-            <MessageSquareIcon className="size-4 shrink-0 text-icon-muted" />
+            <Globe2Icon className="size-4 shrink-0 text-icon-muted" />
           ) : (
             <ProjectFavicon
               environmentId={project.environmentId}
@@ -3165,6 +3164,7 @@ export default function LegacySidebar() {
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
+  const generalChatsEnabled = useClientSettings((s) => s.generalChatsEnabled);
   const updateSettings = useUpdateClientSettings();
   const handleNewThread = useNewThreadHandler();
   const { archiveThread, deleteThread, pinThread, unpinThread } = useThreadActions();
@@ -3225,16 +3225,21 @@ export default function LegacySidebar() {
       ),
     [environments, primaryEnvironmentId],
   );
-  const generalChatsProject = useMemo(
-    () =>
-      buildGeneralChatsProjectSnapshot({
-        projects: generalChatsProjects,
-        primaryEnvironmentId,
-        resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
-        isDesktopLocalEnvironment: (environmentId) => desktopLocalEnvironmentIds.has(environmentId),
-      }),
-    [desktopLocalEnvironmentIds, environmentLabelById, generalChatsProjects, primaryEnvironmentId],
-  );
+  const generalChatsProject = useMemo(() => {
+    if (!generalChatsEnabled) return null;
+    return buildGeneralChatsProjectSnapshot({
+      projects: generalChatsProjects,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
+      isDesktopLocalEnvironment: (environmentId) => desktopLocalEnvironmentIds.has(environmentId),
+    });
+  }, [
+    desktopLocalEnvironmentIds,
+    environmentLabelById,
+    generalChatsEnabled,
+    generalChatsProjects,
+    primaryEnvironmentId,
+  ]);
   const orderedProjects = useMemo(() => {
     return orderItemsByPreferredIds({
       items: projects,

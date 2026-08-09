@@ -520,6 +520,9 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Delete confirmation"]
         : []),
       ...(settings.webChatEnabled !== DEFAULT_UNIFIED_SETTINGS.webChatEnabled ? ["Web chat"] : []),
+      ...(settings.generalChatsEnabled !== DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled
+        ? ["General chats"]
+        : []),
       ...(settings.webChatProvider !== DEFAULT_UNIFIED_SETTINGS.webChatProvider
         ? ["Web chat provider"]
         : []),
@@ -544,6 +547,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.fontSizePrompt,
       settings.fontSizeTerminal,
       settings.glassOpacity,
+      settings.generalChatsEnabled,
       settings.enableLegacyTokenStreaming,
       settings.enableProviderUpdateChecks,
       settings.sidebarAutoSettleAfterDays,
@@ -640,6 +644,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
       webChatEnabled: DEFAULT_UNIFIED_SETTINGS.webChatEnabled,
+      generalChatsEnabled: DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled,
       webChatProvider: DEFAULT_UNIFIED_SETTINGS.webChatProvider,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
@@ -1811,6 +1816,32 @@ export function GeneralSettingsPanel() {
                 ))}
               </SelectPopup>
             </Select>
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("general-chats")}
+          description="Show a collapsible list of project-independent conversations between Web chat and Projects in the sidebar."
+          resetAction={
+            settings.generalChatsEnabled !== DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled ? (
+              <SettingResetButton
+                label="general chats"
+                onClick={() =>
+                  updateSettings({
+                    generalChatsEnabled: DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.generalChatsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ generalChatsEnabled: Boolean(checked) })
+              }
+              aria-label="General chats"
+            />
           }
         />
 

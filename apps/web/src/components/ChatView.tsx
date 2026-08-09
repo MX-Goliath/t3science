@@ -16,6 +16,7 @@ import {
   type ThreadId,
   type TurnId,
   type KeybindingCommand,
+  isGeneralChatsProjectId,
   OrchestrationThreadActivity,
   ProviderInteractionMode,
   ProviderDriverKind,
@@ -1515,6 +1516,7 @@ function ChatViewContent(props: ChatViewProps) {
   const canCheckoutPullRequestIntoThread = isLocalDraftThread;
   const activeThreadId = activeThread?.id ?? null;
   const activeThreadEnvironmentId = activeThread?.environmentId ?? null;
+  const isGeneralChat = activeThread ? isGeneralChatsProjectId(activeThread.projectId) : false;
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: activeThread?.environmentId ?? null,
     threadId: activeThreadId,
@@ -1595,7 +1597,7 @@ function ChatViewContent(props: ChatViewProps) {
     [activeKnownTerminalIds, panelTerminalIds],
   );
   const previewPanelOpen = activeRightPanelKind === "preview" && isPreviewSupportedInRuntime();
-  const rightPanelOpen = rightPanelState.isOpen;
+  const rightPanelOpen = !isGeneralChat && rightPanelState.isOpen;
   const canMaximizeRightPanel = rightPanelOpen && !shouldUseRightPanelSheet;
   const rightPanelMaximized =
     canMaximizeRightPanel && maximizedRightPanelThreadKey === routeThreadKey;
@@ -2646,11 +2648,13 @@ function ChatViewContent(props: ChatViewProps) {
     terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
   // Default true while loading to avoid toolbar flicker.
   const isGitRepo = gitStatusQuery.data?.isRepo ?? true;
-  const showComposerContextStrip = shouldShowComposerContextStrip({
-    hasActiveProject: activeProject !== null,
-    isGitRepo,
-    showEnvironmentIndicator: showComposerEnvironmentIndicator,
-  });
+  const showComposerContextStrip =
+    !isGeneralChat &&
+    shouldShowComposerContextStrip({
+      hasActiveProject: activeProject !== null,
+      isGitRepo,
+      showEnvironmentIndicator: showComposerEnvironmentIndicator,
+    });
   const initialDiffPanelGitScope =
     gitStatusQuery.data?.hasWorkingTreeChanges === true ? "unstaged" : "branch";
   const diffPanelGitStatusResolutionKey = gitStatusQuery.data ? "resolved" : "pending";
@@ -2784,7 +2788,7 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThreadRef, storeSetTerminalOpen],
   );
   const toggleTerminalVisibility = useCallback(() => {
-    if (!activeThreadRef) return;
+    if (!activeThreadRef || isGeneralChat) return;
     const nextOpen = !terminalUiState.terminalOpen;
     if (nextOpen && terminalUiState.terminalIds.length === 0) {
       if (!activeThreadId || !activeProject) {
@@ -2820,6 +2824,7 @@ function ChatViewContent(props: ChatViewProps) {
     allocatableActiveTerminalIds,
     environmentId,
     gitCwd,
+    isGeneralChat,
     openTerminal,
     setTerminalOpen,
     storeEnsureTerminal,
@@ -6014,7 +6019,7 @@ function ChatViewContent(props: ChatViewProps) {
     return <NoActiveThreadState />;
   }
 
-  const panelToggleControls = (
+  const panelToggleControls = isGeneralChat ? null : (
     <PanelLayoutControls
       terminalAvailable={activeProject !== null}
       terminalOpen={terminalUiState.terminalOpen}
@@ -6123,7 +6128,7 @@ function ChatViewContent(props: ChatViewProps) {
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      {rightPanelOpen && !shouldUseRightPanelSheet ? panelLayoutControls : null}
+      {!isGeneralChat && rightPanelOpen && !shouldUseRightPanelSheet ? panelLayoutControls : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
@@ -6147,7 +6152,7 @@ function ChatViewContent(props: ChatViewProps) {
             COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
           )}
         >
-          {!rightPanelOpen ? panelLayoutControls : null}
+          {!isGeneralChat && !rightPanelOpen ? panelLayoutControls : null}
           <ChatHeader
             activeThreadEnvironmentId={activeThread.environmentId}
             activeThreadId={activeThread.id}
@@ -6155,11 +6160,11 @@ function ChatViewContent(props: ChatViewProps) {
             activeThreadTitle={activeThread.title}
             isServerThread={isServerThread}
             changeRequestState={activeThreadPr?.state ?? null}
-            activeProjectName={activeProject?.title}
-            activeProjectCwd={activeProject?.workspaceRoot ?? null}
-            activeProjectFaviconPath={activeProject?.faviconPath ?? null}
-            openInCwd={gitCwd}
-            activeProjectScripts={activeProject?.scripts}
+            activeProjectName={isGeneralChat ? undefined : activeProject?.title}
+            activeProjectCwd={isGeneralChat ? null : (activeProject?.workspaceRoot ?? null)}
+            activeProjectFaviconPath={isGeneralChat ? null : (activeProject?.faviconPath ?? null)}
+            openInCwd={isGeneralChat ? null : gitCwd}
+            activeProjectScripts={isGeneralChat ? undefined : activeProject?.scripts}
             activeProjectDefaultModelSelection={actionDefaultModelSelection}
             actionModelPicker={actionModelPicker}
             preferredScriptId={
@@ -6283,8 +6288,9 @@ function ChatViewContent(props: ChatViewProps) {
                         }
                       >
                         <DraftHeroHeadline
-                          activeProjectRef={activeProjectRef}
-                          activeProjectTitle={activeProject?.title ?? null}
+                          activeProjectRef={isGeneralChat ? null : activeProjectRef}
+                          activeProjectTitle={isGeneralChat ? null : (activeProject?.title ?? null)}
+                          isGeneralChat={isGeneralChat}
                         />
                       </div>
                       <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
@@ -6354,8 +6360,8 @@ function ChatViewContent(props: ChatViewProps) {
                             resolvedTheme={resolvedTheme}
                             settings={settings}
                             keybindings={keybindings}
-                            terminalOpen={Boolean(terminalUiState.terminalOpen)}
-                            gitCwd={gitCwd}
+                            terminalOpen={!isGeneralChat && Boolean(terminalUiState.terminalOpen)}
+                            gitCwd={isGeneralChat ? null : gitCwd}
                             promptRef={promptRef}
                             composerImagesRef={composerImagesRef}
                             composerTerminalContextsRef={composerTerminalContextsRef}
@@ -6433,7 +6439,7 @@ function ChatViewContent(props: ChatViewProps) {
               </div>
             </div>
 
-            {activeThreadRef && activePreviewMiniPlayer ? (
+            {!isGeneralChat && activeThreadRef && activePreviewMiniPlayer ? (
               <ThreadPreviewMiniPlayer
                 key={`${activeThreadKey}:${activePreviewMiniPlayer.tabId}`}
                 threadRef={activeThreadRef}
@@ -6498,7 +6504,9 @@ function ChatViewContent(props: ChatViewProps) {
             key={mountedThreadKey}
             threadRef={mountedThreadRef}
             threadId={mountedThreadRef.threadId}
-            visible={mountedThreadKey === activeThreadKey && terminalUiState.terminalOpen}
+            visible={
+              !isGeneralChat && mountedThreadKey === activeThreadKey && terminalUiState.terminalOpen
+            }
             launchContext={
               mountedThreadKey === activeThreadKey ? (activeTerminalLaunchContext ?? null) : null
             }
@@ -6513,7 +6521,7 @@ function ChatViewContent(props: ChatViewProps) {
         ))}
       </div>
 
-      {!shouldUseRightPanelSheet && rightPanelOpen && activeThreadRef ? (
+      {!isGeneralChat && !shouldUseRightPanelSheet && rightPanelOpen && activeThreadRef ? (
         <RightPanelTabs
           mode="inline"
           maximized={rightPanelMaximized}
@@ -6541,7 +6549,7 @@ function ChatViewContent(props: ChatViewProps) {
           {rightPanelContent}
         </RightPanelTabs>
       ) : null}
-      {shouldUseRightPanelSheet && rightPanelOpen && activeThreadRef ? (
+      {!isGeneralChat && shouldUseRightPanelSheet && rightPanelOpen && activeThreadRef ? (
         <RightPanelSheet open onClose={closePreviewPanel}>
           <RightPanelTabs
             mode="sheet"

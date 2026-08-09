@@ -106,6 +106,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
+    id: "general-chats",
+    title: "General chats",
+    to: "/settings/general",
+  },
+  {
     id: "project-grouping",
     title: "Project grouping",
     to: "/settings/general",
