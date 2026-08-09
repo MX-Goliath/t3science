@@ -9,6 +9,7 @@ This project is a fork of [T3 Code](https://github.com/pingdotgg/t3code) that ad
 - Added the ability to pin chats within projects in the legacy sidebar.
 - Added an opt-in web interface for using ChatGPT, Claude, and Grok without consuming Codex limits, making it possible to run tasks such as Deep Research separately. By default, downloaded files are saved to the most recently opened project directory, with a save-location dialog opening inside that project folder for more convenient document export.
 - Added the ability to define custom AI prompts in Actions for frequently repeated tasks.
+- Added global chat menu for general questions not connected to any project
 
 # T3 Code
 

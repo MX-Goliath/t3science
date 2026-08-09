@@ -24,11 +24,12 @@ import {
 } from "@t3tools/client-runtime/state/thread-settled";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
+  parseScopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ScopedThreadRef } from "@t3tools/contracts";
 import { isGeneralChatsProjectId } from "@t3tools/contracts";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
@@ -53,6 +54,7 @@ import {
   ServerIcon,
   SquarePenIcon,
   TerminalIcon,
+  TimerIcon,
   Undo2Icon,
   XIcon,
 } from "lucide-react";
@@ -68,6 +70,7 @@ import {
   type ReactNode,
 } from "react";
 import { useParams, useRouter } from "@tanstack/react-router";
+import { useShallow } from "zustand/react/shallow";
 
 import {
   isAtomCommandInterrupted,
@@ -88,6 +91,7 @@ import { isTerminalFocused } from "../lib/terminalFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { isMacPlatform } from "~/lib/utils";
+import { isScheduledSendOverdue } from "../scheduledSend";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { readLocalApi } from "../localApi";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
@@ -183,7 +187,6 @@ import {
   DraftId,
   useComposerDraftStore,
   type ComposerThreadDraftState,
-  type DraftSessionState,
 } from "../composerDraftStore";
 import { WebChatSidebarItem } from "./web-chat/WebChatSidebarItem";
 import { GENERAL_CHATS_PROJECT_KEY } from "../generalChats";
@@ -438,17 +441,16 @@ function SortablePinnedThreadRow(props: {
 // SidebarDraftBlock); memoized so per-keystroke block re-renders skip it
 // entirely.
 const SidebarDraftRow = memo(function SidebarDraftRow(props: {
-  draftId: DraftId;
-  session: DraftSessionState;
+  environmentId: EnvironmentId;
   composer: ComposerThreadDraftState;
   projectTitle: string | null;
   projectCwd: string | null;
   projectFaviconPath: string | null;
   isActive: boolean;
-  onNavigate: (draftId: DraftId) => void;
-  onDiscard: (draftId: DraftId) => void;
+  onNavigate: () => void;
+  onDiscard: () => void;
 }) {
-  const { composer, draftId, onDiscard, onNavigate, session } = props;
+  const { composer, onDiscard, onNavigate } = props;
   const promptPreview = composer.prompt.trim().split("\n", 1)[0] ?? "";
   // images mirrors persistedAttachments once rehydration finishes; before
   // that only the persisted list is populated, hence max not sum.
@@ -461,8 +463,12 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   const preview =
     promptPreview.length > 0
       ? promptPreview
-      : `${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}`;
-  const handleActivate = useCallback(() => onNavigate(draftId), [draftId, onNavigate]);
+      : attachmentCount > 0
+        ? `${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}`
+        : "Scheduled message";
+  const scheduledSend = composer.scheduledSend;
+  const scheduledSendOverdue = isScheduledSendOverdue(scheduledSend);
+  const handleActivate = useCallback(() => onNavigate(), [onNavigate]);
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
       // Keys targeting the nested discard button belong to the button:
@@ -471,18 +477,18 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
       if ((event.target as HTMLElement).closest("button")) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        onNavigate(draftId);
+        onNavigate();
       }
     },
-    [draftId, onNavigate],
+    [onNavigate],
   );
   const handleDiscard = useCallback(
     (event: ReactMouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      onDiscard(draftId);
+      onDiscard();
     },
-    [draftId, onDiscard],
+    [onDiscard],
   );
   return (
     <li className="list-none py-0.5">
@@ -494,19 +500,35 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
           "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left text-sidebar-foreground outline-none select-none",
           props.isActive
             ? "bg-sidebar-row-active"
-            : "bg-amber-400/[0.04] hover:bg-amber-400/[0.08]",
+            : scheduledSendOverdue
+              ? "bg-red-400/[0.06] hover:bg-red-400/[0.1]"
+              : scheduledSend
+                ? "bg-sky-400/[0.06] hover:bg-sky-400/[0.11]"
+                : "bg-amber-400/[0.04] hover:bg-amber-400/[0.08]",
         )}
         onClick={handleActivate}
         onKeyDown={handleKeyDown}
       >
         <div className="relative z-10 px-[var(--sidebar-row-content-inset)] py-[var(--sidebar-content-inset)]">
           <div className="flex h-5 min-w-0 items-center gap-1.5">
-            <SquarePenIcon
-              aria-hidden
-              className="size-3 shrink-0 text-amber-600 dark:text-amber-300/80"
-            />
+            {scheduledSend ? (
+              <TimerIcon
+                aria-hidden
+                className={cn(
+                  "size-3 shrink-0",
+                  scheduledSendOverdue
+                    ? "text-red-600 dark:text-red-300"
+                    : "text-sky-600 dark:text-sky-300",
+                )}
+              />
+            ) : (
+              <SquarePenIcon
+                aria-hidden
+                className="size-3 shrink-0 text-amber-600 dark:text-amber-300/80"
+              />
+            )}
             <ProjectFavicon
-              environmentId={session.environmentId}
+              environmentId={props.environmentId}
               cwd={props.projectCwd ?? ""}
               faviconPath={props.projectFaviconPath}
               className="size-4 shrink-0"
@@ -517,8 +539,8 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
             <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
               <button
                 type="button"
-                aria-label="Discard draft"
-                title="Discard draft"
+                aria-label={scheduledSend ? "Cancel scheduled send" : "Discard draft"}
+                title={scheduledSend ? "Cancel scheduled send" : "Discard draft"}
                 onClick={handleDiscard}
                 className="pointer-events-none inline-flex cursor-pointer items-center rounded-md bg-transparent px-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100"
               >
@@ -534,8 +556,11 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
 });
 
 interface SidebarDraftRowData {
-  draftId: DraftId;
-  session: DraftSessionState;
+  key: string;
+  target: { kind: "draft"; draftId: DraftId } | { kind: "thread"; threadRef: ScopedThreadRef };
+  environmentId: EnvironmentId;
+  projectId: ProjectId;
+  createdAt: string;
   composer: ComposerThreadDraftState;
 }
 
@@ -549,11 +574,15 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   projectFaviconPathByKey: ReadonlyMap<string, string | null | undefined>;
   scopedProjectKeys: ReadonlySet<string> | null;
   routeDraftId: string | null;
+  routeThreadKey: string | null;
+  serverThreads: ReadonlyArray<EnvironmentThreadShell>;
   onNavigateToDraft: (draftId: DraftId) => void;
+  onNavigateToThread: (threadRef: ScopedThreadRef) => void;
 }) {
   const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
   const draftsByThreadKey = useComposerDraftStore((store) => store.draftsByThreadKey);
   const clearDraftThread = useComposerDraftStore((store) => store.clearDraftThread);
+  const setScheduledSend = useComposerDraftStore((store) => store.setScheduledSend);
   // The open draft's row is FROZEN at the moment the draft became the route:
   // it stays visible (like a thread row) but never repaints while the user
   // types. A draft that was never navigated away from has no snapshot to
@@ -573,13 +602,26 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
       const composer = store.getComposerDraft(draftId);
       row =
         session && session.promotedTo == null && composer && composerDraftHasUserContent(composer)
-          ? { draftId, session, composer }
+          ? {
+              key: `draft:${draftId}`,
+              target: { kind: "draft", draftId },
+              environmentId: session.environmentId,
+              projectId: session.projectId,
+              createdAt: session.createdAt,
+              composer,
+            }
           : null;
     }
     setFrozenActive({ routeDraftId: props.routeDraftId, row });
   }
   const drafts = useMemo(() => {
     const rows: SidebarDraftRowData[] = [];
+    const serverThreadByKey = new Map(
+      props.serverThreads.map(
+        (thread) =>
+          [scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)), thread] as const,
+      ),
+    );
     // Every non-promoted session with content gets a row, mapped or not:
     // new-thread surfaces mint fresh drafts and leave invested ones behind
     // unmapped, so the mapping only knows about the latest per project.
@@ -597,6 +639,19 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
         continue;
       }
       if (draftKey === props.routeDraftId) {
+        const liveComposer = draftsByThreadKey[draftKey];
+        if (liveComposer?.scheduledSend) {
+          const draftId = DraftId.make(draftKey);
+          rows.push({
+            key: `draft:${draftId}`,
+            target: { kind: "draft", draftId },
+            environmentId: session.environmentId,
+            projectId: session.projectId,
+            createdAt: session.createdAt,
+            composer: liveComposer,
+          });
+          continue;
+        }
         // Open draft: render the frozen entry snapshot, or nothing for a
         // draft that has never been left. Gated on the LIVE session above so
         // send/discard still removes the row immediately.
@@ -609,9 +664,37 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
       if (!composer || !composerDraftHasUserContent(composer)) {
         continue;
       }
-      rows.push({ draftId: DraftId.make(draftKey), session, composer });
+      const draftId = DraftId.make(draftKey);
+      rows.push({
+        key: `draft:${draftId}`,
+        target: { kind: "draft", draftId },
+        environmentId: session.environmentId,
+        projectId: session.projectId,
+        createdAt: session.createdAt,
+        composer,
+      });
     }
-    rows.sort((left, right) => right.session.createdAt.localeCompare(left.session.createdAt));
+    for (const [threadKey, composer] of Object.entries(draftsByThreadKey)) {
+      if (!composer.scheduledSend) continue;
+      const threadRef = parseScopedThreadKey(threadKey);
+      const thread = threadRef ? serverThreadByKey.get(threadKey) : null;
+      if (!threadRef || !thread || isGeneralChatsProjectId(thread.projectId)) continue;
+      if (
+        props.scopedProjectKeys !== null &&
+        !props.scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)
+      ) {
+        continue;
+      }
+      rows.push({
+        key: `thread:${threadKey}`,
+        target: { kind: "thread", threadRef },
+        environmentId: thread.environmentId,
+        projectId: thread.projectId,
+        createdAt: composer.scheduledSend.scheduledAt,
+        composer,
+      });
+    }
+    rows.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     return rows;
   }, [
     draftThreadsByThreadKey,
@@ -619,35 +702,51 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     frozenActive,
     props.routeDraftId,
     props.scopedProjectKeys,
+    props.serverThreads,
   ]);
   const handleDiscard = useCallback(
-    (draftId: DraftId) => {
+    (target: SidebarDraftRowData["target"]) => {
+      if (target.kind === "thread") {
+        setScheduledSend(target.threadRef, null);
+        return;
+      }
+      if (useComposerDraftStore.getState().getComposerDraft(target.draftId)?.scheduledSend) {
+        setScheduledSend(target.draftId, null);
+        return;
+      }
       // The /draft/$draftId route redirects home on its own when the draft
       // it renders disappears, so discarding the open draft needs no
       // special-casing here.
-      clearDraftThread(draftId);
+      clearDraftThread(target.draftId);
     },
-    [clearDraftThread],
+    [clearDraftThread, setScheduledSend],
   );
   if (drafts.length === 0) {
     return null;
   }
   return (
     <>
-      {drafts.map(({ composer, draftId, session }) => {
-        const projectKey = `${session.environmentId}:${session.projectId}`;
+      {drafts.map(({ composer, environmentId, key, projectId, target }) => {
+        const projectKey = `${environmentId}:${projectId}`;
         return (
           <SidebarDraftRow
-            key={draftId}
-            draftId={draftId}
-            session={session}
+            key={key}
+            environmentId={environmentId}
             composer={composer}
             projectTitle={props.projectDisplayNameByKey.get(projectKey) ?? null}
             projectCwd={props.projectCwdByKey.get(projectKey) ?? null}
             projectFaviconPath={props.projectFaviconPathByKey.get(projectKey) ?? null}
-            isActive={draftId === props.routeDraftId}
-            onNavigate={props.onNavigateToDraft}
-            onDiscard={handleDiscard}
+            isActive={
+              target.kind === "draft"
+                ? target.draftId === props.routeDraftId
+                : scopedThreadKey(target.threadRef) === props.routeThreadKey
+            }
+            onNavigate={() =>
+              target.kind === "draft"
+                ? props.onNavigateToDraft(target.draftId)
+                : props.onNavigateToThread(target.threadRef)
+            }
+            onDiscard={() => handleDiscard(target)}
           />
         );
       })}
@@ -741,6 +840,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     [thread.environmentId, thread.id],
   );
   const threadKey = scopedThreadKey(threadRef);
+  const scheduledSend = useComposerDraftStore(
+    (store) => store.getComposerDraft(threadRef)?.scheduledSend ?? null,
+  );
+  const scheduledSendOverdue = isScheduledSendOverdue(scheduledSend);
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
@@ -800,8 +903,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Status hues follow the system-wide convention set by sidebar v1 and the
   // mobile Live Activity/widgets (amber approval, indigo input, sky working)
   // so a thread reads the same color everywhere it surfaces.
-  const topStatus =
-    status === "working"
+  const topStatus = scheduledSend
+    ? {
+        label: scheduledSendOverdue ? "Overdue" : "Scheduled",
+        icon: "scheduled" as const,
+        className: scheduledSendOverdue
+          ? "text-red-700 dark:text-red-300"
+          : "text-sky-600 dark:text-sky-300",
+      }
+    : status === "working"
       ? {
           label: "Working",
           icon: "working" as const,
@@ -1040,6 +1150,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       !props.isActive &&
       !isSelected &&
       "opacity-70 transition-opacity hover:opacity-100",
+    !props.isActive &&
+      !isSelected &&
+      scheduledSend &&
+      (scheduledSendOverdue
+        ? "bg-red-400/[0.06] hover:bg-red-400/[0.1]"
+        : "bg-sky-400/[0.06] hover:bg-sky-400/[0.11]"),
   );
 
   const title = isRenaming ? (
@@ -1368,6 +1484,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
                         ) : topStatus.icon === "done" ? (
                           <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
+                        ) : topStatus.icon === "scheduled" ? (
+                          <TimerIcon aria-hidden className="size-4 shrink-0" />
                         ) : null}
                         {/* The label alone is the live region: a role="status"
                             wrapper around the ticking duration would make
@@ -1870,6 +1988,20 @@ export default function Sidebar() {
     }
     return count;
   });
+  const scheduledServerThreadKeys = useComposerDraftStore(
+    useShallow((store) =>
+      Object.entries(store.draftsByThreadKey)
+        .filter(
+          ([threadKey, draft]) => draft.scheduledSend !== null && parseScopedThreadKey(threadKey),
+        )
+        .map(([threadKey]) => threadKey)
+        .sort(),
+    ),
+  );
+  const scheduledServerThreadKeySet = useMemo(
+    () => new Set(scheduledServerThreadKeys),
+    [scheduledServerThreadKeys],
+  );
   // Scope flips drop the selection: rows selected under the old scope may be
   // hidden now, and bulk actions must never count or touch invisible rows.
   useEffect(() => {
@@ -1898,6 +2030,7 @@ export default function Sidebar() {
   // archive keeps its original "remove from sidebar" meaning.
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const {
+    scheduledThreads,
     pinnedThreads,
     reorderablePinnedKeys,
     activeThreads,
@@ -1928,6 +2061,7 @@ export default function Sidebar() {
         )
       : [];
     const pinned: EnvironmentThreadShell[] = [];
+    const scheduled: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const snoozed: EnvironmentThreadShell[] = [];
     const settled: EnvironmentThreadShell[] = [];
@@ -1969,6 +2103,11 @@ export default function Sidebar() {
       return "active";
     };
     for (const thread of visible) {
+      const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+      if (scheduledServerThreadKeySet.has(threadKey)) {
+        scheduled.push(thread);
+        continue;
+      }
       const section = classifyThread(thread);
       if (section === "pinned") pinned.push(thread);
       else if (section === "snoozed") snoozed.push(thread);
@@ -1987,6 +2126,7 @@ export default function Sidebar() {
     // sort, or mixed-version fleets would render different pinned orders on
     // web and mobile from the same data.
     return {
+      scheduledThreads: sortThreadsForSidebar(scheduled),
       pinnedThreads: sortPinnedThreadsForSidebar(pinned),
       reorderablePinnedKeys: new Set(
         pinned
@@ -2016,6 +2156,7 @@ export default function Sidebar() {
     generalChatsEnabled,
     nowMinute,
     scopedProjectKeys,
+    scheduledServerThreadKeySet,
     serverConfigs,
     sidebarThreadSortOrder,
     snoozeWakeTick,
@@ -2029,12 +2170,20 @@ export default function Sidebar() {
   const searchableThreads = useMemo(
     () => [
       ...generalThreads,
+      ...scheduledThreads,
       ...pinnedThreads,
       ...activeThreads,
       ...snoozedThreads,
       ...settledThreads,
     ],
-    [activeThreads, generalThreads, pinnedThreads, settledThreads, snoozedThreads],
+    [
+      activeThreads,
+      generalThreads,
+      pinnedThreads,
+      scheduledThreads,
+      settledThreads,
+      snoozedThreads,
+    ],
   );
   const threadSearchResults = useMemo(
     () => searchSidebarThreadsByTitle(searchableThreads, threadSearchQuery),
@@ -3706,7 +3855,10 @@ export default function Sidebar() {
                       projectFaviconPathByKey={projectFaviconPathByKey}
                       scopedProjectKeys={scopedProjectKeys}
                       routeDraftId={routeDraftIdForRows}
+                      routeThreadKey={routeThreadKey}
+                      serverThreads={threads}
                       onNavigateToDraft={navigateToDraft}
+                      onNavigateToThread={navigateToThread}
                     />,
                     <DndContext
                       key="pinned-dnd"

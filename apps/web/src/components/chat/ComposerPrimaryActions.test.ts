@@ -150,6 +150,37 @@ describe("formatPendingPrimaryActionLabel", () => {
   });
 });
 
+describe("scheduled send action", () => {
+  it("replaces the send arrow with an overdue timer state", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ComposerPrimaryActions, {
+        compact: true,
+        pendingAction: null,
+        isRunning: false,
+        showPlanFollowUpPrompt: false,
+        promptHasText: true,
+        isSendBusy: false,
+        sendDisabledReason: null,
+        isConnecting: false,
+        isEnvironmentUnavailable: false,
+        isPreparingWorktree: false,
+        hasSendableContent: true,
+        onPreviousPendingQuestion: () => {},
+        onInterrupt: () => {},
+        onImplementPlanInNewThread: () => {},
+        scheduledSend: true,
+        scheduledSendOverdue: true,
+        scheduledSendLabel: "Scheduled send overdue",
+        onScheduledSendClick: () => {},
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Scheduled send overdue"');
+    expect(markup).toContain("bg-destructive");
+    expect(markup).not.toContain("M7 11.5V2.5");
+  });
+});
+
 describe("ComposerPrimaryActions", () => {
   it("offers Stop generation while a running turn is waiting for user input", () => {
     expect(renderPendingActions(true)).toContain('aria-label="Stop generation"');

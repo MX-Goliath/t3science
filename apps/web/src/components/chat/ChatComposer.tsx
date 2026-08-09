@@ -30,6 +30,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -202,6 +203,7 @@ import {
   LockOpenIcon,
   PenLineIcon,
   SparklesIcon,
+  TimerIcon,
   XIcon,
 } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
@@ -228,6 +230,13 @@ import { formatProviderSkillDisplayName } from "../../providerSkillPresentation"
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
+import { readLocalApi } from "../../localApi";
+import {
+  isScheduledSendOverdue,
+  resolveRateLimitSchedule,
+  type ScheduledSendState,
+} from "../../scheduledSend";
+import { ScheduleSendDialog } from "./ScheduleSendDialog";
 
 const runtimeModeConfig: Record<
   RuntimeMode,
@@ -412,6 +421,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  scheduledSend: ScheduledSendState | null;
+  scheduledSendOverdue: boolean;
+  scheduledSendLabel: string | null;
+  onScheduledSendClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onSendContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <>
@@ -440,6 +454,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
         onImplementPlanInNewThread={props.onImplementPlanInNewThread}
+        scheduledSend={props.scheduledSend !== null}
+        scheduledSendOverdue={props.scheduledSendOverdue}
+        scheduledSendLabel={props.scheduledSendLabel}
+        onScheduledSendClick={props.onScheduledSendClick}
+        onSendContextMenu={props.onSendContextMenu}
       />
     </>
   );
@@ -448,6 +467,22 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 // --------------------------------------------------------------------------
 // Handle exposed to ChatView
 // --------------------------------------------------------------------------
+
+export interface ComposerSendContext {
+  prompt: string;
+  images: ComposerImageAttachment[];
+  terminalContexts: TerminalContextDraft[];
+  elementContexts: ElementContextDraft[];
+  previewAnnotations: PreviewAnnotationPayload[];
+  reviewComments: ReviewCommentContext[];
+  selectedPromptEffort: string | null;
+  selectedModelOptionsForDispatch: unknown;
+  selectedModelSelection: ModelSelection;
+  providerAvailable: boolean;
+  selectedProvider: ProviderDriverKind;
+  selectedModel: string;
+  selectedProviderModels: ReadonlyArray<ServerProvider["models"][number]>;
+}
 
 export interface ChatComposerHandle {
   focusAtEnd: () => void;
@@ -471,21 +506,7 @@ export interface ChatComposerHandle {
   /** Insert a terminal context from the terminal drawer. */
   addTerminalContext: (selection: TerminalContextSelection) => void;
   /** Get the current prompt/effort/model state for use in send. */
-  getSendContext: () => {
-    prompt: string;
-    images: ComposerImageAttachment[];
-    terminalContexts: TerminalContextDraft[];
-    elementContexts: ElementContextDraft[];
-    previewAnnotations: PreviewAnnotationPayload[];
-    reviewComments: ReviewCommentContext[];
-    selectedPromptEffort: string | null;
-    selectedModelOptionsForDispatch: unknown;
-    selectedModelSelection: ModelSelection;
-    providerAvailable: boolean;
-    selectedProvider: ProviderDriverKind;
-    selectedModel: string;
-    selectedProviderModels: ReadonlyArray<ServerProvider["models"][number]>;
-  };
+  getSendContext: () => ComposerSendContext;
 }
 
 // --------------------------------------------------------------------------
@@ -571,6 +592,8 @@ export interface ChatComposerProps {
   onSend: (e?: { preventDefault: () => void }) => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  onScheduleSend: (scheduledSend: ScheduledSendState, sendContext: ComposerSendContext) => void;
+  onCancelScheduledSend: () => void;
   onRespondToApproval: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -653,6 +676,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onSend,
     onInterrupt,
     onImplementPlanInNewThread,
+    onScheduleSend,
+    onCancelScheduledSend,
     onRespondToApproval,
     onSelectActivePendingUserInputOption,
     onAdvanceActivePendingUserInput,
@@ -680,6 +705,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerElementContexts = composerDraft.elementContexts;
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
   const composerReviewComments = composerDraft.reviewComments;
+  const scheduledSend = composerDraft.scheduledSend;
   const nonPersistedComposerImageIds = composerDraft.nonPersistedImageIds;
 
   const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
@@ -704,6 +730,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const removeComposerDraftReviewComment = useComposerDraftStore(
     (store) => store.removeReviewComment,
   );
+  const setComposerScheduledSend = useComposerDraftStore((store) => store.setScheduledSend);
   const clearComposerDraftPersistedAttachments = useComposerDraftStore(
     (store) => store.clearPersistedAttachments,
   );
@@ -859,6 +886,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     enabled: shouldShowProviderRateLimits(settings, selectedInstanceId),
     initialRateLimits: selectedProviderStatus?.rateLimits,
   });
+  const rateLimitSchedule = useMemo(
+    () => resolveRateLimitSchedule(providerRateLimits ?? selectedProviderStatus?.rateLimits),
+    [providerRateLimits, selectedProviderStatus?.rateLimits],
+  );
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
     [selectedProviderEntry],
@@ -963,6 +994,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [composerMenuAnchor, setComposerMenuAnchor] = useState<HTMLDivElement | null>(null);
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [stashPulse, setStashPulse] = useState<{ key: number; active: boolean }>({
     key: 0,
     active: false,
@@ -1023,6 +1055,39 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       composerReviewComments.length,
       composerTerminalContexts,
       prompt,
+    ],
+  );
+
+  const readCurrentSendContext = useCallback(
+    (): ComposerSendContext => ({
+      prompt: promptRef.current,
+      images: composerImagesRef.current,
+      terminalContexts: composerTerminalContextsRef.current,
+      elementContexts: composerElementContextsRef.current,
+      previewAnnotations: composerPreviewAnnotations,
+      reviewComments: composerReviewComments,
+      selectedPromptEffort,
+      selectedModelOptionsForDispatch,
+      selectedModelSelection,
+      providerAvailable: !noProviderAvailable,
+      selectedProvider,
+      selectedModel,
+      selectedProviderModels,
+    }),
+    [
+      composerElementContextsRef,
+      composerImagesRef,
+      composerPreviewAnnotations,
+      composerReviewComments,
+      composerTerminalContextsRef,
+      noProviderAvailable,
+      promptRef,
+      selectedModel,
+      selectedModelOptionsForDispatch,
+      selectedModelSelection,
+      selectedPromptEffort,
+      selectedProvider,
+      selectedProviderModels,
     ],
   );
 
@@ -1852,6 +1917,111 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       shouldBlurMobileComposerOnSubmit,
     ],
   );
+
+  const scheduleCurrentMessage = useCallback(
+    (nextScheduledSend: ScheduledSendState) => {
+      if (!composerSendState.hasSendableContent || noProviderAvailable || isSendDisabled) return;
+      setComposerScheduledSend(composerDraftTarget, nextScheduledSend);
+      onScheduleSend(nextScheduledSend, readCurrentSendContext());
+    },
+    [
+      composerDraftTarget,
+      composerSendState.hasSendableContent,
+      isSendDisabled,
+      noProviderAvailable,
+      onScheduleSend,
+      readCurrentSendContext,
+      setComposerScheduledSend,
+    ],
+  );
+
+  const handleSendContextMenu = useCallback(
+    async (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (
+        scheduledSend ||
+        phase === "running" ||
+        isSendBusy ||
+        isConnecting ||
+        isSendDisabled ||
+        environmentUnavailable !== null ||
+        noProviderAvailable ||
+        projectSelectionRequired ||
+        !composerSendState.hasSendableContent
+      ) {
+        return;
+      }
+      const clicked = await readLocalApi()?.contextMenu.show(
+        [
+          { id: "custom", label: "Send later…" },
+          ...(rateLimitSchedule
+            ? ([
+                {
+                  id: "rate-limit" as const,
+                  label: `Send when ${rateLimitSchedule.limitWindow === "fiveHour" ? "5-hour" : "weekly"} limit resets`,
+                },
+              ] as const)
+            : []),
+        ],
+        { x: event.clientX, y: event.clientY },
+      );
+      if (clicked === "custom") {
+        setScheduleDialogOpen(true);
+      } else if (clicked === "rate-limit" && rateLimitSchedule) {
+        scheduleCurrentMessage(rateLimitSchedule.scheduledSend);
+      }
+    },
+    [
+      composerSendState.hasSendableContent,
+      environmentUnavailable,
+      isConnecting,
+      isSendBusy,
+      isSendDisabled,
+      noProviderAvailable,
+      phase,
+      projectSelectionRequired,
+      rateLimitSchedule,
+      scheduleCurrentMessage,
+      scheduledSend,
+    ],
+  );
+
+  const handleScheduledSendClick = useCallback(
+    async (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const clicked = await readLocalApi()?.contextMenu.show(
+        [
+          { id: "send-now", label: "Send now" },
+          { id: "cancel", label: "Cancel scheduled send" },
+        ],
+        { x: event.clientX, y: event.clientY },
+      );
+      if (clicked === "cancel") {
+        setComposerScheduledSend(composerDraftTarget, null);
+        onCancelScheduledSend();
+      } else if (clicked === "send-now") {
+        setComposerScheduledSend(composerDraftTarget, null);
+        onCancelScheduledSend();
+        submitComposer();
+      }
+    },
+    [composerDraftTarget, onCancelScheduledSend, setComposerScheduledSend, submitComposer],
+  );
+
+  const scheduledSendLabel = useMemo(() => {
+    if (!scheduledSend) return null;
+    const scheduledAt = new Date(scheduledSend.scheduledAt);
+    if (!Number.isFinite(scheduledAt.getTime())) return "Scheduled send has an invalid time";
+    const formatted = new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(scheduledAt);
+    return isScheduledSendOverdue(scheduledSend)
+      ? `Scheduled send overdue since ${formatted}`
+      : `Scheduled for ${formatted}`;
+  }, [scheduledSend]);
   const expandMobileComposer = useCallback(() => {
     if (composerBlurFrameRef.current !== null) {
       window.cancelAnimationFrame(composerBlurFrameRef.current);
@@ -2615,21 +2785,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           composerEditorRef.current?.focusAt(nextCollapsedCursor);
         });
       },
-      getSendContext: () => ({
-        prompt: promptRef.current,
-        images: composerImagesRef.current,
-        terminalContexts: composerTerminalContextsRef.current,
-        elementContexts: composerElementContextsRef.current,
-        previewAnnotations: composerPreviewAnnotations,
-        reviewComments: composerReviewComments,
-        selectedPromptEffort,
-        selectedModelOptionsForDispatch,
-        selectedModelSelection,
-        providerAvailable: !noProviderAvailable,
-        selectedProvider,
-        selectedModel,
-        selectedProviderModels,
-      }),
+      getSendContext: readCurrentSendContext,
     }),
     [
       activeThread,
@@ -2657,6 +2813,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedPromptEffort,
       selectedProvider,
       selectedProviderModels,
+      readCurrentSendContext,
     ],
   );
 
@@ -2811,6 +2968,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                       onInterrupt={handleInterruptPrimaryAction}
                       onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
+                      scheduledSend={scheduledSend !== null}
+                      scheduledSendOverdue={isScheduledSendOverdue(scheduledSend)}
+                      scheduledSendLabel={scheduledSendLabel}
+                      onScheduledSendClick={handleScheduledSendClick}
+                      onSendContextMenu={handleSendContextMenu}
                     />
                   ) : null}
                 </div>
@@ -2840,24 +3002,46 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               </button>
               <button
                 type="button"
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-message-action text-message-action-foreground hover:bg-message-action-hover disabled:opacity-30"
-                disabled={collapsedComposerPrimaryActionDisabled}
-                aria-label={collapsedComposerPrimaryActionLabel}
+                className={cn(
+                  "flex size-8 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-30",
+                  scheduledSend
+                    ? isScheduledSendOverdue(scheduledSend)
+                      ? "bg-destructive hover:bg-destructive/90"
+                      : "bg-sky-500 hover:bg-sky-600"
+                    : "bg-message-action text-message-action-foreground hover:bg-message-action-hover",
+                )}
+                disabled={!scheduledSend && collapsedComposerPrimaryActionDisabled}
+                aria-label={
+                  scheduledSend
+                    ? isScheduledSendOverdue(scheduledSend)
+                      ? "Scheduled send overdue"
+                      : "Scheduled message"
+                    : collapsedComposerPrimaryActionLabel
+                }
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (scheduledSend) {
+                    void handleScheduledSendClick(event);
+                    return;
+                  }
                   submitComposer();
                 }}
+                onContextMenu={scheduledSend ? undefined : handleSendContextMenu}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path
-                    d="M8 3L8 13M8 3L4 7M8 3L12 7"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                {scheduledSend ? (
+                  <TimerIcon className="size-4" aria-hidden="true" />
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path
+                      d="M8 3L8 13M8 3L4 7M8 3L12 7"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
               </button>
             </div>
           ) : null}
@@ -3228,12 +3412,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                   onInterrupt={handleInterruptPrimaryAction}
                   onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
+                  scheduledSend={scheduledSend}
+                  scheduledSendOverdue={isScheduledSendOverdue(scheduledSend)}
+                  scheduledSendLabel={scheduledSendLabel}
+                  onScheduledSendClick={handleScheduledSendClick}
+                  onSendContextMenu={handleSendContextMenu}
                 />
               </div>
             </div>
           )}
         </div>
       </div>
+      <ScheduleSendDialog
+        open={scheduleDialogOpen}
+        onOpenChange={setScheduleDialogOpen}
+        onSchedule={(scheduledAt) => scheduleCurrentMessage({ scheduledAt, source: "custom" })}
+      />
     </form>
   );
 });

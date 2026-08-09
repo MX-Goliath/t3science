@@ -1,5 +1,5 @@
-import { memo, type PointerEventHandler } from "react";
-import { ChevronDownIcon, ChevronLeftIcon } from "lucide-react";
+import { memo, type MouseEventHandler, type PointerEventHandler } from "react";
+import { ChevronDownIcon, ChevronLeftIcon, TimerIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
@@ -29,6 +29,11 @@ interface ComposerPrimaryActionsProps {
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  scheduledSend?: boolean;
+  scheduledSendOverdue?: boolean;
+  scheduledSendLabel?: string | null;
+  onScheduledSendClick?: MouseEventHandler<HTMLButtonElement>;
+  onSendContextMenu?: MouseEventHandler<HTMLButtonElement>;
 }
 
 export const formatPendingPrimaryActionLabel = (input: {
@@ -69,6 +74,11 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   onPreviousPendingQuestion,
   onInterrupt,
   onImplementPlanInNewThread,
+  scheduledSend = false,
+  scheduledSendOverdue = false,
+  scheduledSendLabel = null,
+  onScheduledSendClick,
+  onSendContextMenu,
 }: ComposerPrimaryActionsProps) {
   const pointerFocusProps = preserveComposerFocusOnPointerDown
     ? { onPointerDown: preventPointerFocus }
@@ -147,6 +157,26 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     );
   }
 
+  if (scheduledSend) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          "relative isolate flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-full text-white shadow-xs transition-all duration-150 enabled:inset-shadow-[0_1px_--theme(--color-white/16%)] hover:scale-105 active:shadow-none sm:h-8 sm:w-8",
+          scheduledSendOverdue
+            ? "bg-destructive shadow-destructive/24 hover:bg-destructive/90"
+            : "bg-sky-500 shadow-sky-500/24 hover:bg-sky-600",
+        )}
+        {...pointerFocusProps}
+        onClick={onScheduledSendClick}
+        aria-label={scheduledSendOverdue ? "Scheduled send overdue" : "Scheduled message"}
+        title={scheduledSendLabel ?? undefined}
+      >
+        <TimerIcon className="size-4" aria-hidden="true" />
+      </button>
+    );
+  }
+
   if (isRunning) {
     return renderStopGenerationButton(false);
   }
@@ -216,6 +246,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         "bg-message-action enabled:shadow-message-action/24 hover:bg-message-action-hover",
       )}
       {...pointerFocusProps}
+      onContextMenu={onSendContextMenu}
       disabled={
         isSendBusy ||
         isSendDisabled ||

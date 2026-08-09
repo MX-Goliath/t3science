@@ -289,6 +289,48 @@ describe("composerDraftStore clearComposerContent", () => {
   });
 });
 
+describe("composerDraftStore scheduled sends", () => {
+  const threadId = ThreadId.make("thread-scheduled-send");
+  const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+
+  beforeEach(resetComposerDraftStore);
+
+  it("keeps the editable prompt while scheduling and removes the timer on cancel", () => {
+    const store = useComposerDraftStore.getState();
+    store.setPrompt(threadRef, "Send this later");
+    store.setScheduledSend(threadRef, {
+      scheduledAt: "2026-08-09T18:00:00.000Z",
+      source: "custom",
+    });
+
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toMatchObject({
+      prompt: "Send this later",
+      scheduledSend: {
+        scheduledAt: "2026-08-09T18:00:00.000Z",
+        source: "custom",
+      },
+    });
+
+    store.setPrompt(threadRef, "Edited before it fired");
+    store.setScheduledSend(threadRef, null);
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toMatchObject({
+      prompt: "Edited before it fired",
+      scheduledSend: null,
+    });
+  });
+
+  it("clears the schedule together with successfully submitted content", () => {
+    const store = useComposerDraftStore.getState();
+    store.setPrompt(threadRef, "Ready");
+    store.setScheduledSend(threadRef, {
+      scheduledAt: "2026-08-09T18:00:00.000Z",
+      source: "custom",
+    });
+    store.clearComposerContent(threadRef);
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toBeUndefined();
+  });
+});
+
 describe("composerDraftStore syncPersistedAttachments", () => {
   const threadId = ThreadId.make("thread-sync-persisted");
   const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);

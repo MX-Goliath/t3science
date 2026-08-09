@@ -254,7 +254,17 @@ import {
   useThreadShell,
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
-import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
+import {
+  ChatComposer,
+  type ChatComposerHandle,
+  type ComposerSendContext,
+} from "./chat/ChatComposer";
+import {
+  armScheduledSend,
+  cancelArmedScheduledSend,
+  scheduledSendTimeMs,
+  type ScheduledSendState,
+} from "../scheduledSend";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
@@ -1199,6 +1209,8 @@ function ChatViewContent(props: ChatViewProps) {
     [environmentId, threadId],
   );
   const routeThreadKey = useMemo(() => scopedThreadKey(routeThreadRef), [routeThreadRef]);
+  const scheduledSendRuntimeKey =
+    routeKind === "draft" ? `draft:${String(draftId)}` : routeThreadKey;
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
@@ -1316,6 +1328,9 @@ function ChatViewContent(props: ChatViewProps) {
     (store) => store.setInteractionMode,
   );
   const clearComposerDraftContent = useComposerDraftStore((store) => store.clearComposerContent);
+  const scheduledSend = useComposerDraftStore(
+    (store) => store.getComposerDraft(composerDraftTarget)?.scheduledSend ?? null,
+  );
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const getDraftSessionByLogicalProjectKey = useComposerDraftStore(
     (store) => store.getDraftSessionByLogicalProjectKey,
@@ -4902,6 +4917,7 @@ function ChatViewContent(props: ChatViewProps) {
       annotation: PreviewAnnotationPayload;
       image: ComposerImageAttachment | null;
     },
+    scheduledDispatch?: { sendContext: ComposerSendContext },
   ) => {
     e?.preventDefault();
     const notifyDirectAnnotationAttached = () => {
@@ -4942,23 +4958,35 @@ function ChatViewContent(props: ChatViewProps) {
       onAdvanceActivePendingUserInput();
       return;
     }
-    const sendCtx = composerRef.current?.getSendContext();
+    const sendCtx = scheduledDispatch?.sendContext ?? composerRef.current?.getSendContext();
     if (!sendCtx?.providerAvailable) {
       notifyDirectAnnotationAttached();
       return;
     }
+    const latestScheduledDraft = scheduledDispatch
+      ? useComposerDraftStore.getState().getComposerDraft(composerDraftTarget)
+      : null;
     const {
-      images: sendContextImages,
-      terminalContexts: composerTerminalContexts,
-      elementContexts: composerElementContexts,
-      previewAnnotations: sendContextPreviewAnnotations,
-      reviewComments: composerReviewComments,
+      images: capturedSendContextImages,
+      terminalContexts: capturedComposerTerminalContexts,
+      elementContexts: capturedComposerElementContexts,
+      previewAnnotations: capturedSendContextPreviewAnnotations,
+      reviewComments: capturedComposerReviewComments,
       selectedProvider: ctxSelectedProvider,
       selectedModel: ctxSelectedModel,
       selectedProviderModels: ctxSelectedProviderModels,
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
     } = sendCtx;
+    const sendContextImages = latestScheduledDraft?.images ?? capturedSendContextImages;
+    const composerTerminalContexts =
+      latestScheduledDraft?.terminalContexts ?? capturedComposerTerminalContexts;
+    const composerElementContexts =
+      latestScheduledDraft?.elementContexts ?? capturedComposerElementContexts;
+    const sendContextPreviewAnnotations =
+      latestScheduledDraft?.previewAnnotations ?? capturedSendContextPreviewAnnotations;
+    const composerReviewComments =
+      latestScheduledDraft?.reviewComments ?? capturedComposerReviewComments;
     const composerImages =
       directAnnotation?.image &&
       !sendContextImages.some((image) => image.id === directAnnotation.image?.id)
@@ -4979,7 +5007,13 @@ function ChatViewContent(props: ChatViewProps) {
             },
           ]
         : sendContextPreviewAnnotations;
-    const promptForSend = promptRef.current;
+    const promptForSend = latestScheduledDraft?.prompt ?? promptRef.current;
+    if (scheduledDispatch) {
+      promptRef.current = promptForSend;
+      composerImagesRef.current = [...sendContextImages];
+      composerTerminalContextsRef.current = [...composerTerminalContexts];
+      composerElementContextsRef.current = [...composerElementContexts];
+    }
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,
@@ -5348,6 +5382,43 @@ function ChatViewContent(props: ChatViewProps) {
       resetLocalDispatch();
     }
   };
+
+  const armCurrentScheduledSend = useCallback(
+    (nextScheduledSend: ScheduledSendState, sendContext: ComposerSendContext) => {
+      armScheduledSend({
+        key: scheduledSendRuntimeKey,
+        scheduledSend: nextScheduledSend,
+        onDue: async () => {
+          const store = useComposerDraftStore.getState();
+          const latestScheduledSend = store.getComposerDraft(composerDraftTarget)?.scheduledSend;
+          if (latestScheduledSend?.scheduledAt !== nextScheduledSend.scheduledAt) return;
+          await onSend(undefined, undefined, { sendContext });
+        },
+      });
+    },
+    [composerDraftTarget, onSend, scheduledSendRuntimeKey],
+  );
+
+  const handleScheduleSend = useCallback(
+    (nextScheduledSend: ScheduledSendState, sendContext: ComposerSendContext) => {
+      armCurrentScheduledSend(nextScheduledSend, sendContext);
+    },
+    [armCurrentScheduledSend],
+  );
+
+  const handleCancelScheduledSend = useCallback(() => {
+    cancelArmedScheduledSend(scheduledSendRuntimeKey);
+  }, [scheduledSendRuntimeKey]);
+
+  // A future timer is re-armed when its chat is opened after a reload. An
+  // already missed timer is deliberately left untouched so the red overdue
+  // state can be resolved by the user instead of sending unexpectedly.
+  useEffect(() => {
+    if (!scheduledSend || scheduledSendTimeMs(scheduledSend) === null) return;
+    const sendContext = composerRef.current?.getSendContext();
+    if (!sendContext) return;
+    armCurrentScheduledSend(scheduledSend, sendContext);
+  }, [armCurrentScheduledSend, composerRef, scheduledSend]);
 
   const onInterrupt = async () => {
     if (!activeThread) return;
@@ -6369,6 +6440,8 @@ function ChatViewContent(props: ChatViewProps) {
                             onSend={onSend}
                             onInterrupt={onInterrupt}
                             onImplementPlanInNewThread={onImplementPlanInNewThread}
+                            onScheduleSend={handleScheduleSend}
+                            onCancelScheduledSend={handleCancelScheduledSend}
                             onRespondToApproval={onRespondToApproval}
                             onSelectActivePendingUserInputOption={
                               onSelectActivePendingUserInputOption

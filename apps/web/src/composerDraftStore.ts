@@ -52,12 +52,13 @@ import { createDebouncedStorage, createMemoryStorage } from "./lib/storage";
 import { getDefaultServerModel } from "./providerModels";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
+import type { ScheduledSendState } from "./scheduledSend";
 const isRuntimeMode = Schema.is(RuntimeMode);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 const isReviewCommentContext = Schema.is(ReviewCommentContextSchema);
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
-const COMPOSER_DRAFT_STORAGE_VERSION = 8;
+const COMPOSER_DRAFT_STORAGE_VERSION = 9;
 const DraftThreadEnvModeSchema = Schema.Literals(["local", "worktree"]);
 export type DraftThreadEnvMode = typeof DraftThreadEnvModeSchema.Type;
 
@@ -147,6 +148,13 @@ const PersistedComposerThreadDraftState = Schema.Struct({
   activeProvider: Schema.optionalKey(Schema.NullOr(ProviderInstanceId)),
   runtimeMode: Schema.optionalKey(RuntimeMode),
   interactionMode: Schema.optionalKey(ProviderInteractionMode),
+  scheduledSend: Schema.optionalKey(
+    Schema.Struct({
+      scheduledAt: Schema.String,
+      source: Schema.Literals(["custom", "rate-limit"]),
+      limitWindow: Schema.optionalKey(Schema.Literals(["fiveHour", "weekly"])),
+    }),
+  ),
 });
 type PersistedComposerThreadDraftState = typeof PersistedComposerThreadDraftState.Type;
 
@@ -275,11 +283,13 @@ export interface ComposerThreadDraftState {
   activeProvider: ProviderInstanceId | null;
   runtimeMode: RuntimeMode | null;
   interactionMode: ProviderInteractionMode | null;
+  /** One locally armed send. It remains persisted so missed timers are visible after restart. */
+  scheduledSend: ScheduledSendState | null;
 }
 
 /**
- * True when the user has invested real content in the draft: typed text or
- * any attachment/context. Model selection and mode choices alone do not
+ * True when the user has invested real content in the draft: typed text,
+ * any attachment/context, or a scheduled-send decision. Model selection and mode choices alone do not
  * count — those are ambient defaults, not work in progress. Used by the
  * sidebar draft rows (which draft sessions deserve a row) and by new-thread
  * resurrection (a draft with content keeps its settings instead of being
@@ -298,7 +308,8 @@ export function composerDraftHasUserContent(
     draft.terminalContexts.length > 0 ||
     draft.elementContexts.length > 0 ||
     draft.previewAnnotations.length > 0 ||
-    draft.reviewComments.length > 0
+    draft.reviewComments.length > 0 ||
+    draft.scheduledSend !== null
   );
 }
 
@@ -514,6 +525,10 @@ interface ComposerDraftStoreState {
     comments: ReadonlyArray<ReviewCommentContext>,
   ) => void;
   removeReviewComment: (threadRef: ComposerThreadTarget, commentId: string) => void;
+  setScheduledSend: (
+    threadRef: ComposerThreadTarget,
+    scheduledSend: ScheduledSendState | null,
+  ) => void;
   clearPersistedAttachments: (threadRef: ComposerThreadTarget) => void;
   syncPersistedAttachments: (
     threadRef: ComposerThreadTarget,
@@ -625,6 +640,7 @@ const EMPTY_THREAD_DRAFT = Object.freeze<ComposerThreadDraftState>({
   activeProvider: null,
   runtimeMode: null,
   interactionMode: null,
+  scheduledSend: null,
 });
 
 /**
@@ -647,6 +663,7 @@ export function createEmptyThreadDraft(): ComposerThreadDraftState {
     activeProvider: null,
     runtimeMode: null,
     interactionMode: null,
+    scheduledSend: null,
   };
 }
 
@@ -719,7 +736,8 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
     Object.keys(draft.modelSelectionByProvider).length === 0 &&
     draft.activeProvider === null &&
     draft.runtimeMode === null &&
-    draft.interactionMode === null
+    draft.interactionMode === null &&
+    draft.scheduledSend === null
   );
 }
 
@@ -1705,6 +1723,22 @@ function normalizePersistedDraftsByThreadId(
       draftCandidate.interactionMode === "plan" || draftCandidate.interactionMode === "default"
         ? draftCandidate.interactionMode
         : null;
+    const scheduledSendCandidate = draftCandidate.scheduledSend;
+    const scheduledSend: ScheduledSendState | null =
+      scheduledSendCandidate &&
+      typeof scheduledSendCandidate.scheduledAt === "string" &&
+      (scheduledSendCandidate.source === "custom" ||
+        scheduledSendCandidate.source === "rate-limit") &&
+      Number.isFinite(Date.parse(scheduledSendCandidate.scheduledAt))
+        ? {
+            scheduledAt: scheduledSendCandidate.scheduledAt,
+            source: scheduledSendCandidate.source,
+            ...(scheduledSendCandidate.limitWindow === "fiveHour" ||
+            scheduledSendCandidate.limitWindow === "weekly"
+              ? { limitWindow: scheduledSendCandidate.limitWindow }
+              : {}),
+          }
+        : null;
     const prompt = ensureInlineTerminalContextPlaceholders(
       promptCandidate,
       terminalContexts.length,
@@ -1765,7 +1799,8 @@ function normalizePersistedDraftsByThreadId(
       reviewComments.length === 0 &&
       !hasModelData &&
       !runtimeMode &&
-      !interactionMode
+      !interactionMode &&
+      !scheduledSend
     ) {
       continue;
     }
@@ -1795,6 +1830,7 @@ function normalizePersistedDraftsByThreadId(
         : {}),
       ...(runtimeMode ? { runtimeMode } : {}),
       ...(interactionMode ? { interactionMode } : {}),
+      ...(scheduledSend ? { scheduledSend } : {}),
     };
   }
 
@@ -1895,6 +1931,7 @@ function partializeComposerDraftStoreState(
       draft.elementContexts.length === 0 &&
       draft.previewAnnotations.length === 0 &&
       draft.reviewComments.length === 0 &&
+      draft.scheduledSend === null &&
       !hasModelData &&
       draft.runtimeMode === null &&
       draft.interactionMode === null
@@ -1956,6 +1993,7 @@ function partializeComposerDraftStoreState(
         : {}),
       ...(draft.runtimeMode ? { runtimeMode: draft.runtimeMode } : {}),
       ...(draft.interactionMode ? { interactionMode: draft.interactionMode } : {}),
+      ...(draft.scheduledSend ? { scheduledSend: { ...draft.scheduledSend } } : {}),
     };
     persistedDraftsByThreadKey[threadKey] = persistedDraft;
   }
@@ -2202,6 +2240,7 @@ function toHydratedThreadDraft(
     activeProvider,
     runtimeMode: persistedDraft.runtimeMode ?? null,
     interactionMode: persistedDraft.interactionMode ?? null,
+    scheduledSend: persistedDraft.scheduledSend ? { ...persistedDraft.scheduledSend } : null,
   };
 }
 
@@ -3360,6 +3399,22 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             return { draftsByThreadKey: nextDraftsByThreadKey };
           });
         },
+        setScheduledSend: (threadRef, scheduledSend) => {
+          const threadKey = resolveComposerDraftKey(get(), threadRef);
+          if (!threadKey) return;
+          set((state) => {
+            const current = state.draftsByThreadKey[threadKey];
+            if (!current && !scheduledSend) return state;
+            const nextDraft: ComposerThreadDraftState = {
+              ...(current ?? createEmptyThreadDraft()),
+              scheduledSend: scheduledSend ? { ...scheduledSend } : null,
+            };
+            const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+            if (shouldRemoveDraft(nextDraft)) delete nextDraftsByThreadKey[threadKey];
+            else nextDraftsByThreadKey[threadKey] = nextDraft;
+            return { draftsByThreadKey: nextDraftsByThreadKey };
+          });
+        },
         clearPersistedAttachments: (threadRef) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
           if (threadKey.length === 0) {
@@ -3435,6 +3490,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               elementContexts: [],
               previewAnnotations: [],
               reviewComments: [],
+              scheduledSend: null,
             };
             const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
             if (shouldRemoveDraft(nextDraft)) {

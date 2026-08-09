@@ -23,3 +23,15 @@ not provide drag reordering.
 If reordering is unavailable for one environment, update the T3 Code server running in that
 environment. Older servers can still pin and unpin threads, but do not understand synced ordering;
 their pinned threads keep the default newest-first order below the ones you have arranged.
+
+## Scheduled messages
+
+Right-click the send button in the web or desktop composer to send the current message at a chosen
+time. When the active provider reports less than 20% remaining in its 5-hour limit, the same menu
+also offers the limit's reset time. If no 5-hour window is reported, T3 Code uses the weekly window.
+The reset time is captured when you schedule the message; T3 Code does not keep polling the limit.
+
+Scheduled chats appear with a blue timer and a subtle blue background above regular threads. Open
+one to edit its prompt. The send button becomes a timer; click it to send now or cancel. If T3 Code
+was closed when the time passed, the timer is shown in red after reopening and waits for you to
+choose what to do instead of sending unexpectedly.
