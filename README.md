@@ -7,6 +7,8 @@ This project is a fork of [T3 Code](https://github.com/pingdotgg/t3code) that ad
 - Added the ability to store conversations directly in the project root. This is useful for projects that need to remain fully local, be portable on a USB drive, or avoid relying on synchronization services.
 - Added support for Qwen Code, including local agents such as Qwen 3.6 27B (and the upcoming 3.8), as well as Qwen 3.8 Max.
 - Added display of the remaining 5-hour and weekly usage limits for Codex.
+- Added the ability to pin chats within projects in the legacy sidebar.
+- Added an opt-in web interface for using ChatGPT, Claude, and Grok without consuming Codex limits, making it possible to run tasks such as Deep Research separately. By default, downloaded files are saved to the most recently opened project directory, with a save-location dialog opening inside that project folder for more convenient document export.
 
 # T3 Code
 
