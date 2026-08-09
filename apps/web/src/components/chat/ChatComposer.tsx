@@ -29,6 +29,7 @@ import {
   Fragment,
   memo,
   type ReactNode,
+  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -217,6 +218,15 @@ import {
 } from "./composerScrollGesture";
 import { selectionHoldsComposerOpen } from "./composerSelectionHold";
 import { prepareVideoFirstFrame } from "../../lib/videoFirstFrame";
+import { readLocalApi } from "../../localApi";
+import {
+  armScheduledSend,
+  cancelArmedScheduledSend,
+  isScheduledSendOverdue,
+  resolveRateLimitSchedule,
+  type ScheduledSendState,
+} from "../../scheduledSend";
+import { ScheduleSendDialog } from "./ScheduleSendDialog";
 
 function ComposerVideoThumbnail({ file }: { file: File }) {
   const setVideo = useCallback(
@@ -1071,6 +1081,10 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  scheduledSend: ScheduledSendState | null;
+  scheduledSendLabel: string | null;
+  onScheduledSendClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onSendContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onCompactContext?: (() => void) | undefined;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -1109,6 +1123,10 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
         onImplementPlanInNewThread={props.onImplementPlanInNewThread}
+        scheduledSend={props.scheduledSend !== null}
+        scheduledSendLabel={props.scheduledSendLabel}
+        onScheduledSendClick={props.onScheduledSendClick}
+        onSendContextMenu={props.onSendContextMenu}
       />
     </>
   );
@@ -1431,6 +1449,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerElementContexts = composerDraft.elementContexts;
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
   const composerReviewComments = composerDraft.reviewComments;
+  const scheduledSend = composerDraft.scheduledSend;
   const standaloneComposerImages = useMemo(() => {
     const previewAnnotationIds = new Set(
       composerPreviewAnnotations.map((annotation) => annotation.id),
@@ -1489,6 +1508,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const removeComposerDraftReviewComment = useComposerDraftStore(
     (store) => store.removeReviewComment,
   );
+  const setComposerScheduledSend = useComposerDraftStore((store) => store.setScheduledSend);
   const clearComposerDraftPersistedAttachments = useComposerDraftStore(
     (store) => store.clearPersistedAttachments,
   );
@@ -1828,6 +1848,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const [composerMenuAnchor, setComposerMenuAnchor] = useState<HTMLDivElement | null>(null);
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [isTasksDrawerOpen, setIsTasksDrawerOpen] = useState(false);
   const [stashPulse, setStashPulse] = useState<{ key: number; active: boolean }>({
     key: 0,
@@ -2920,6 +2941,115 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       shouldBlurMobileComposerOnSubmit,
     ],
   );
+  const scheduledSendRuntimeKey = composerTargetKey(composerDraftTarget);
+  const rateLimitSchedule = useMemo(
+    () => resolveRateLimitSchedule(selectedProviderStatus?.usageLimits),
+    [selectedProviderStatus?.usageLimits],
+  );
+  const scheduleCurrentMessage = useCallback(
+    (nextScheduledSend: ScheduledSendState) => {
+      if (!composerSendState.hasSendableContent || isSendDisabled || noProviderAvailable) return;
+      setComposerScheduledSend(composerDraftTarget, nextScheduledSend);
+      armScheduledSend({
+        key: scheduledSendRuntimeKey,
+        scheduledSend: nextScheduledSend,
+        onDue: () => {
+          setComposerScheduledSend(composerDraftTarget, null);
+          submitComposer();
+        },
+      });
+    },
+    [
+      composerDraftTarget,
+      composerSendState.hasSendableContent,
+      isSendDisabled,
+      noProviderAvailable,
+      scheduledSendRuntimeKey,
+      setComposerScheduledSend,
+      submitComposer,
+    ],
+  );
+  useEffect(() => {
+    if (!scheduledSend || isScheduledSendOverdue(scheduledSend)) return;
+    armScheduledSend({
+      key: scheduledSendRuntimeKey,
+      scheduledSend,
+      onDue: () => {
+        setComposerScheduledSend(composerDraftTarget, null);
+        submitComposer();
+      },
+    });
+    return () => cancelArmedScheduledSend(scheduledSendRuntimeKey);
+  }, [
+    composerDraftTarget,
+    scheduledSend,
+    scheduledSendRuntimeKey,
+    setComposerScheduledSend,
+    submitComposer,
+  ]);
+  const handleSendContextMenu = useCallback(
+    async (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      if (scheduledSend || !composerSendState.hasSendableContent || isSendDisabled) return;
+      const api = readLocalApi();
+      if (!api) return;
+      const action = await api.contextMenu.show(
+        [
+          { id: "custom", label: "Send later…" },
+          ...(rateLimitSchedule
+            ? [
+                {
+                  id: "rate-limit",
+                  label: `Send when ${rateLimitSchedule.limitWindow === "fiveHour" ? "session" : "weekly"} limit resets`,
+                },
+              ]
+            : []),
+        ],
+        { x: event.clientX, y: event.clientY },
+      );
+      if (action === "custom") setScheduleDialogOpen(true);
+      if (action === "rate-limit" && rateLimitSchedule) {
+        scheduleCurrentMessage(rateLimitSchedule.scheduledSend);
+      }
+    },
+    [
+      composerSendState.hasSendableContent,
+      isSendDisabled,
+      rateLimitSchedule,
+      scheduleCurrentMessage,
+      scheduledSend,
+    ],
+  );
+  const handleScheduledSendClick = useCallback(
+    async (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      const api = readLocalApi();
+      if (!api) return;
+      const action = await api.contextMenu.show(
+        [
+          { id: "send-now", label: "Send now" },
+          { id: "cancel", label: "Cancel scheduled send" },
+        ],
+        { x: event.clientX, y: event.clientY },
+      );
+      cancelArmedScheduledSend(scheduledSendRuntimeKey);
+      setComposerScheduledSend(composerDraftTarget, null);
+      if (action === "send-now") submitComposer();
+    },
+    [composerDraftTarget, scheduledSendRuntimeKey, setComposerScheduledSend, submitComposer],
+  );
+  const scheduledSendLabel = useMemo(() => {
+    if (!scheduledSend) return null;
+    const date = new Date(scheduledSend.scheduledAt);
+    if (!Number.isFinite(date.getTime())) return "Scheduled send has an invalid time";
+    const formatted = new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date);
+    return isScheduledSendOverdue(scheduledSend)
+      ? `Scheduled send overdue since ${formatted}`
+      : `Scheduled for ${formatted}`;
+  }, [scheduledSend]);
   const submitCitationAndSend = useCallback(() => {
     const intent = composerSubmissionIntentForEnter({
       isMobileViewport,
@@ -4849,6 +4979,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       className="mx-auto w-full min-w-0 max-w-3xl"
       data-chat-composer-form="true"
     >
+      <ScheduleSendDialog
+        open={scheduleDialogOpen}
+        onOpenChange={setScheduleDialogOpen}
+        onSchedule={(scheduledAt) => scheduleCurrentMessage({ scheduledAt, source: "custom" })}
+      />
       {composerControlsInStrip && restingControlsHost
         ? createPortal(
             <div
@@ -5557,6 +5692,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                       onInterrupt={handleInterruptPrimaryAction}
                       onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
+                      scheduledSend={scheduledSend !== null}
+                      scheduledSendLabel={scheduledSendLabel}
+                      onScheduledSendClick={handleScheduledSendClick}
+                      onSendContextMenu={handleSendContextMenu}
                     />
                   </div>
                 ) : null}
@@ -5664,6 +5803,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                     onInterrupt={handleInterruptPrimaryAction}
                     onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
+                    scheduledSend={scheduledSend}
+                    scheduledSendLabel={scheduledSendLabel}
+                    onScheduledSendClick={handleScheduledSendClick}
+                    onSendContextMenu={handleSendContextMenu}
                     compactDisabled={
                       compactDisabled || noProviderAvailable || isSendBusy || isConnecting
                     }

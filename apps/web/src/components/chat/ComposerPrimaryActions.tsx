@@ -1,5 +1,5 @@
-import { memo, type PointerEventHandler } from "react";
-import { ChevronDownIcon, ChevronLeftIcon } from "lucide-react";
+import { memo, type MouseEvent, type PointerEventHandler } from "react";
+import { ChevronDownIcon, ChevronLeftIcon, TimerIcon } from "lucide-react";
 import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 import { StageBackdropButtonArt, useSidebarStageBackdropVariant } from "../SidebarStageBackdrop";
@@ -35,6 +35,10 @@ interface ComposerPrimaryActionsProps {
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  scheduledSend?: boolean;
+  scheduledSendLabel?: string | null;
+  onScheduledSendClick?: (event: MouseEvent<HTMLButtonElement>) => void;
+  onSendContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void;
 }
 
 const formatPendingPrimaryActionLabel = (input: {
@@ -76,6 +80,10 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   onPreviousPendingQuestion,
   onInterrupt,
   onImplementPlanInNewThread,
+  scheduledSend = false,
+  scheduledSendLabel = null,
+  onScheduledSendClick,
+  onSendContextMenu,
 }: ComposerPrimaryActionsProps) {
   const pointerFocusProps = preserveComposerFocusOnPointerDown
     ? { onPointerDown: preventPointerFocus }
@@ -221,7 +229,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
 
   const sendButton = (
     <button
-      type="submit"
+      type={scheduledSend ? "button" : "submit"}
       className={cn(
         "relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-[0_1px_--theme(--color-white/16%)] hover:scale-105 active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8",
         stageBackdropVariant
@@ -229,6 +237,8 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           : "bg-message-action text-message-action-foreground enabled:shadow-message-action/24 hover:bg-message-action-hover",
       )}
       {...pointerFocusProps}
+      onClick={scheduledSend ? onScheduledSendClick : undefined}
+      onContextMenu={onSendContextMenu}
       disabled={
         isSendBusy ||
         isSendDisabled ||
@@ -237,20 +247,24 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         !hasSendableContent
       }
       aria-label={
-        isEnvironmentUnavailable
-          ? "Environment disconnected"
-          : sendDisabledReason
-            ? sendDisabledReason
-            : isConnecting
-              ? "Connecting"
-              : isPreparingWorktree
-                ? "Preparing worktree"
-                : isSendBusy
-                  ? "Sending"
-                  : "Send message"
+        scheduledSend
+          ? (scheduledSendLabel ?? "Scheduled send")
+          : isEnvironmentUnavailable
+            ? "Environment disconnected"
+            : sendDisabledReason
+              ? sendDisabledReason
+              : isConnecting
+                ? "Connecting"
+                : isPreparingWorktree
+                  ? "Preparing worktree"
+                  : isSendBusy
+                    ? "Sending"
+                    : "Send message"
       }
     >
-      {stageBackdropVariant ? (
+      {scheduledSend ? (
+        <TimerIcon className="size-3.5" aria-hidden="true" />
+      ) : stageBackdropVariant ? (
         <span className="absolute inset-0 -z-10" aria-hidden="true">
           <StageBackdropButtonArt variant={stageBackdropVariant} />
         </span>
