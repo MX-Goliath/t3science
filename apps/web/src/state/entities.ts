@@ -8,7 +8,12 @@ import {
   type EnvironmentThreadStatus,
   mergeEnvironmentThread,
 } from "@t3tools/client-runtime/state/threads";
-import type { ScopedProjectRef, ScopedThreadRef, ServerConfig } from "@t3tools/contracts";
+import {
+  isGeneralChatsProjectId,
+  type ScopedProjectRef,
+  type ScopedThreadRef,
+  type ServerConfig,
+} from "@t3tools/contracts";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
 import { useMemo } from "react";
@@ -67,7 +72,23 @@ export function useEnvironmentThreadRefs(
 }
 
 export function useProjects(): ReadonlyArray<EnvironmentProject> {
+  const projects = useAtomValue(environmentProjects.projectsAtom);
+  return useMemo(
+    () => projects.filter((project) => !isGeneralChatsProjectId(project.id)),
+    [projects],
+  );
+}
+
+export function useAllProjects(): ReadonlyArray<EnvironmentProject> {
   return useAtomValue(environmentProjects.projectsAtom);
+}
+
+export function useGeneralChatsProjects(): ReadonlyArray<EnvironmentProject> {
+  const projects = useAtomValue(environmentProjects.projectsAtom);
+  return useMemo(
+    () => projects.filter((project) => isGeneralChatsProjectId(project.id)),
+    [projects],
+  );
 }
 
 export function useServerConfigs(): ReadonlyMap<EnvironmentId, ServerConfig> {

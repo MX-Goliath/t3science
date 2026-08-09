@@ -1,5 +1,6 @@
 import {
   EventId,
+  GENERAL_CHATS_PROJECT_ID,
   MessageId,
   UserInputRequestedPayload,
   isImportedAgentSessionMessageId,
@@ -240,6 +241,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "project.meta.update": {
+      if (command.projectId === GENERAL_CHATS_PROJECT_ID) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "The general chats container is managed by T3 Science.",
+        });
+      }
       yield* requireProject({
         readModel,
         command,
@@ -282,6 +289,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "project.delete": {
+      if (command.projectId === GENERAL_CHATS_PROJECT_ID) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "The general chats container cannot be deleted.",
+        });
+      }
       yield* requireProject({
         readModel,
         command,

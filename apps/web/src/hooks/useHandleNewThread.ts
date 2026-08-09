@@ -7,6 +7,7 @@ import {
 import {
   DEFAULT_RUNTIME_MODE,
   DEFAULT_SERVER_SETTINGS,
+  isGeneralChatsProjectId,
   type ScopedProjectRef,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -152,6 +153,7 @@ export function useNewThreadHandler() {
       // skipped entirely when a higher-priority source decides, and its
       // query atom caches per project after the first call.
       const resolveDefaultEnvMode = async (): Promise<DraftThreadEnvMode> => {
+        if (isGeneralChatsProjectId(projectRef.projectId)) return "local";
         const consultProjectFile = project !== undefined && project.defaultThreadEnvMode == null;
         return resolveDefaultThreadEnvMode({
           projectSetting: project?.defaultThreadEnvMode,

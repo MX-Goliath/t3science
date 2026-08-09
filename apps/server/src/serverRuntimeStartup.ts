@@ -3,6 +3,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_SERVER_SETTINGS,
+  GENERAL_CHATS_PROJECT_ID,
   type ModelSelection,
   type OrchestrationProjectShell,
   ProjectId,
@@ -19,6 +20,7 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -173,6 +175,32 @@ export const recordStartupHeartbeat = Effect.gen(function* () {
 const getAutoBootstrapThreadModelSelection = (): ModelSelection => ({
   instanceId: ProviderInstanceId.make("codex"),
   model: DEFAULT_MODEL,
+});
+
+export const ensureGeneralChatsProject = Effect.gen(function* () {
+  const serverConfig = yield* ServerConfig.ServerConfig;
+  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const crypto = yield* Crypto.Crypto;
+
+  const existingProject =
+    yield* projectionSnapshotQuery.getProjectShellById(GENERAL_CHATS_PROJECT_ID);
+  if (Option.isSome(existingProject)) return;
+
+  const workspaceRoot = path.join(serverConfig.stateDir, "general-chats");
+  yield* fileSystem.makeDirectory(workspaceRoot, { recursive: true });
+  const createdAt = DateTime.formatIso(yield* DateTime.now);
+  yield* orchestrationEngine.dispatch({
+    type: "project.create",
+    commandId: CommandId.make(yield* crypto.randomUUIDv4),
+    projectId: GENERAL_CHATS_PROJECT_ID,
+    title: "General chats",
+    workspaceRoot,
+    defaultModelSelection: null,
+    createdAt,
+  });
 });
 
 export const resolveWelcomeBase = Effect.gen(function* () {
@@ -878,6 +906,13 @@ export const make = (options?: StartupOptions) =>
 
       yield* Effect.logDebug("startup phase: syncing clean projects");
       yield* runStartupPhase("projects.auto-pull", syncAutoPullProjects);
+
+      yield* runStartupPhase(
+        "general-chats.ensure",
+        ensureGeneralChatsProject.pipe(
+          Effect.catch((cause) => Effect.logWarning("failed to prepare general chats", { cause })),
+        ),
+      );
 
       const welcomeBase = yield* resolveWelcomeBase;
       const environment = yield* serverEnvironment.getDescriptor;
