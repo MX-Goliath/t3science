@@ -8,6 +8,7 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
+import { DESKTOP_LINUX_URL_HANDLER_DESKTOP_ENTRY_NAME } from "@t3tools/shared/desktopProductIdentity";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
 
@@ -20,7 +21,7 @@ import { makeComponentLogger } from "./DesktopObservability.ts";
 // our own handler entry pointing at the current AppImage and claim the
 // scheme default via xdg-mime, exactly what the file manager's "set as
 // default" checkbox would record in mimeapps.list.
-export const URL_HANDLER_DESKTOP_ENTRY_NAME = "t3code-url-handler.desktop";
+export const URL_HANDLER_DESKTOP_ENTRY_NAME = DESKTOP_LINUX_URL_HANDLER_DESKTOP_ENTRY_NAME;
 
 const { logInfo, logWarning } = makeComponentLogger("desktop-linux-url-handler");
 

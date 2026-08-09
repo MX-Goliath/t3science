@@ -1,7 +1,7 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useEnvironments } from "../../state/environments";
 import {
   EMPTY_PROJECT_SCRIPT_INPUT,
@@ -13,6 +13,11 @@ import { Button } from "../ui/button";
 import { ProjectActionsList } from "./ProjectActionsList";
 import { useProjectScriptSettings } from "./ProjectSettingsPanel";
 import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayout";
+import {
+  deriveProviderInstanceEntries,
+  resolveDefaultProviderModelSelection,
+  sortProviderInstanceEntries,
+} from "../../providerInstances";
 
 export function ProjectDefaultActionsSettings({
   environmentId,
@@ -35,6 +40,27 @@ export function ProjectDefaultActionsSettings({
       JSON.stringify(scripts),
   );
   const [request, setRequest] = useState<ProjectScriptEditorRequest | null>(null);
+  const defaultModelSelection = useMemo(
+    () =>
+      representative
+        ? resolveDefaultProviderModelSelection(
+            representative.providers,
+            representative.settings.defaultModelSelection,
+          )
+        : null,
+    [representative],
+  );
+  const instanceEntries = useMemo(
+    () =>
+      representative
+        ? sortProviderInstanceEntries(deriveProviderInstanceEntries(representative.providers))
+        : [],
+    [representative],
+  );
+  const modelOptionsByInstance = useMemo(
+    () => new Map(instanceEntries.map((entry) => [entry.instanceId, entry.models] as const)),
+    [instanceEntries],
+  );
   const { saving, persist, submit } = useProjectScriptSettings(
     targets.flatMap(({ environmentId, serverConfig }) =>
       serverConfig
@@ -80,7 +106,12 @@ export function ProjectDefaultActionsSettings({
             size="xs"
             variant="outline"
             disabled={saving || targets.length === 0}
-            onClick={() => setRequest({ scriptId: null, initial: EMPTY_PROJECT_SCRIPT_INPUT })}
+            onClick={() =>
+              setRequest({
+                scriptId: null,
+                initial: { ...EMPTY_PROJECT_SCRIPT_INPUT, modelSelection: defaultModelSelection },
+              })
+            }
           >
             <PlusIcon className="size-3.5" />
             Add action
@@ -108,6 +139,8 @@ export function ProjectDefaultActionsSettings({
           void persist((current) => current.filter((script) => script.id !== id), id, null)
         }
         onClose={() => setRequest(null)}
+        defaultModelSelection={defaultModelSelection}
+        modelPicker={{ instanceEntries, modelOptionsByInstance }}
       />
     </SettingsSection>
   );

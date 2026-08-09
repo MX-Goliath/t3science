@@ -1,6 +1,7 @@
 import {
   type EnvironmentId,
   type EditorId,
+  type ModelSelection,
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
@@ -46,6 +47,8 @@ import {
   WorkspaceBreadcrumbSeparator,
 } from "../WorkspaceBreadcrumb";
 import { cn } from "~/lib/utils";
+import type { ProviderInstanceEntry } from "~/providerInstances";
+import type { ModelEsque } from "./providerIconUtils";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -60,6 +63,14 @@ interface ChatHeaderProps {
   activeProjectIcon: import("@t3tools/contracts").ProjectIconOverride | null;
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
+  activeProjectDefaultModelSelection: ModelSelection | null;
+  actionModelPicker: {
+    readonly instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+    readonly modelOptionsByInstance: ReadonlyMap<
+      ModelSelection["instanceId"],
+      ReadonlyArray<ModelEsque>
+    >;
+  };
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
@@ -132,6 +143,8 @@ export const ChatHeader = memo(function ChatHeader({
   activeProjectIcon,
   openInCwd,
   activeProjectScripts,
+  activeProjectDefaultModelSelection,
+  actionModelPicker,
   preferredScriptId,
   keybindings,
   availableEditors,
@@ -429,6 +442,8 @@ export const ChatHeader = memo(function ChatHeader({
             onAddScript={onAddProjectScript}
             onUpdateScript={onUpdateProjectScript}
             onDeleteScript={onDeleteProjectScript}
+            defaultModelSelection={activeProjectDefaultModelSelection}
+            modelPicker={actionModelPicker}
           />
         )}
         {showOpenInPicker && (

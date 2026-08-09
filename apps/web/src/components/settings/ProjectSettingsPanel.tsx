@@ -29,6 +29,7 @@ import { resolveEnvModeLabel } from "../BranchToolbar.logic";
 import { createModelSelection } from "@t3tools/shared/model";
 import { resolveProjectAutoPull } from "@t3tools/shared/serverSettings";
 import {
+  isProjectCommandAction,
   projectScriptsInheritDefaults,
   resolveProjectScripts,
 } from "@t3tools/shared/projectScripts";
@@ -737,7 +738,7 @@ function ProjectDetail({
         (fileScript) =>
           !scripts.some(
             (script) =>
-              script.command === fileScript.command ||
+              (isProjectCommandAction(script) && script.command === fileScript.command) ||
               script.name.toLowerCase() === fileScript.name.toLowerCase(),
           ),
       ),
@@ -755,7 +756,10 @@ function ProjectDetail({
     async (fileScript: T3ProjectFileScript) => {
       const payload: NewProjectScriptInput = {
         name: fileScript.name,
+        kind: "command",
         command: fileScript.command,
+        prompt: "",
+        modelSelection: null,
         icon: fileScript.icon ?? "play",
         runOnWorktreeCreate: fileScript.runOnWorktreeCreate ?? false,
         keybinding: null,
@@ -1348,7 +1352,13 @@ function ProjectDetail({
                 variant="outline"
                 disabled={isSavingScripts}
                 onClick={() =>
-                  setEditorRequest({ scriptId: null, initial: EMPTY_PROJECT_SCRIPT_INPUT })
+                  setEditorRequest({
+                    scriptId: null,
+                    initial: {
+                      ...EMPTY_PROJECT_SCRIPT_INPUT,
+                      modelSelection: resolvedSelection,
+                    },
+                  })
                 }
               >
                 <PlusIcon className="size-3.5" />
@@ -1411,6 +1421,8 @@ function ProjectDetail({
         onSubmit={submitScript}
         onDelete={deleteScript}
         onClose={() => setEditorRequest(null)}
+        defaultModelSelection={resolvedSelection}
+        modelPicker={{ instanceEntries, modelOptionsByInstance }}
       />
       <ProjectFaviconPickerDialog
         key={`${representative.environmentId}:${representative.workspaceRoot}:${faviconPickerOpen}`}

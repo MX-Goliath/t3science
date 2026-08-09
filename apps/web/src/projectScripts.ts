@@ -9,7 +9,10 @@ const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 
 export interface ProjectScriptInput {
   readonly name: ProjectScript["name"];
-  readonly command: ProjectScript["command"];
+  readonly kind: "command" | "prompt";
+  readonly command: string;
+  readonly prompt: string;
+  readonly modelSelection: ProjectScript["modelSelection"] | null;
   readonly icon: ProjectScript["icon"];
   readonly runOnWorktreeCreate: ProjectScript["runOnWorktreeCreate"];
   readonly previewUrl: Exclude<ProjectScript["previewUrl"], undefined> | null;
@@ -17,6 +20,20 @@ export interface ProjectScriptInput {
 }
 
 export function buildProjectScript(id: string, input: ProjectScriptInput): ProjectScript {
+  if (input.kind === "prompt") {
+    if (!input.modelSelection) {
+      throw new Error("Model is required for prompt actions.");
+    }
+    return {
+      id,
+      name: input.name,
+      kind: "prompt",
+      prompt: input.prompt,
+      modelSelection: input.modelSelection,
+      icon: input.icon,
+      runOnWorktreeCreate: false,
+    };
+  }
   return {
     id,
     name: input.name,

@@ -1,8 +1,10 @@
 import type {
+  ModelSelection,
   ProjectScript,
   ResolvedKeybindingsConfig,
   T3ProjectFileScript,
 } from "@t3tools/contracts";
+import { isProjectCommandAction, isProjectPromptAction } from "@t3tools/shared/projectScripts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -11,6 +13,8 @@ import { ChevronDownIcon, DownloadIcon, PlusIcon, SettingsIcon } from "lucide-re
 import { useCallback, useMemo, useState } from "react";
 
 import { commandForProjectScript, primaryProjectScript } from "~/projectScripts";
+import type { ProviderInstanceEntry } from "~/providerInstances";
+import type { ModelEsque } from "./chat/providerIconUtils";
 import { shortcutLabelForCommand } from "~/keybindings";
 import {
   EMPTY_PROJECT_SCRIPT_INPUT,
@@ -52,6 +56,14 @@ interface ProjectScriptsControlProps {
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  defaultModelSelection: ModelSelection | null;
+  modelPicker: {
+    readonly instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+    readonly modelOptionsByInstance: ReadonlyMap<
+      ModelSelection["instanceId"],
+      ReadonlyArray<ModelEsque>
+    >;
+  };
 }
 
 export default function ProjectScriptsControl({
@@ -63,6 +75,8 @@ export default function ProjectScriptsControl({
   onAddScript,
   onUpdateScript,
   onDeleteScript,
+  defaultModelSelection,
+  modelPicker,
 }: ProjectScriptsControlProps) {
   const [actionsMenuOpen, setActionsMenuOpen] = useState({
     scripts: false,
@@ -83,7 +97,7 @@ export default function ProjectScriptsControl({
         (fileScript) =>
           !scripts.some(
             (script) =>
-              script.command === fileScript.command ||
+              (isProjectCommandAction(script) && script.command === fileScript.command) ||
               script.name.toLowerCase() === fileScript.name.toLowerCase(),
           ),
       ),
@@ -93,7 +107,10 @@ export default function ProjectScriptsControl({
     "data-highlighted:bg-transparent data-highlighted:text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground data-highlighted:hover:bg-accent data-highlighted:hover:text-accent-foreground data-highlighted:focus-visible:bg-accent data-highlighted:focus-visible:text-accent-foreground";
 
   const openAddDialog = () => {
-    setEditorRequest({ scriptId: null, initial: EMPTY_PROJECT_SCRIPT_INPUT });
+    setEditorRequest({
+      scriptId: null,
+      initial: { ...EMPTY_PROJECT_SCRIPT_INPUT, modelSelection: defaultModelSelection },
+    });
   };
 
   const openEditDialog = (script: ProjectScript) => {
@@ -110,7 +127,10 @@ export default function ProjectScriptsControl({
   const importFileScript = async (fileScript: T3ProjectFileScript) => {
     const payload: NewProjectScriptInput = {
       name: fileScript.name,
+      kind: "command",
       command: fileScript.command,
+      prompt: "",
+      modelSelection: null,
       icon: fileScript.icon ?? "play",
       runOnWorktreeCreate: fileScript.runOnWorktreeCreate ?? false,
       keybinding: null,
@@ -155,7 +175,7 @@ export default function ProjectScriptsControl({
   return (
     <>
       {primaryScript ? (
-        <Group aria-label="Project scripts">
+        <Group aria-label="Project actions">
           <Tooltip>
             <TooltipTrigger
               render={
@@ -185,7 +205,7 @@ export default function ProjectScriptsControl({
             onOpenChange={(open) => setActionsMenuOpen({ scripts: open, imports: false })}
           >
             <MenuTrigger
-              render={<Button size="icon-xs" variant="outline" aria-label="Script actions" />}
+              render={<Button size="icon-xs" variant="outline" aria-label="Project actions" />}
             >
               <ChevronDownIcon className="size-4" />
             </MenuTrigger>
@@ -205,6 +225,9 @@ export default function ProjectScriptsControl({
                     <span className="truncate">
                       {script.runOnWorktreeCreate ? `${script.name} (setup)` : script.name}
                     </span>
+                    {isProjectPromptAction(script) ? (
+                      <span className="text-xs text-muted-foreground">new chat</span>
+                    ) : null}
                     <span className="relative ms-auto flex h-6 min-w-6 items-center justify-end">
                       {shortcutLabel && (
                         <MenuShortcut className="ms-0 transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0">
@@ -293,6 +316,8 @@ export default function ProjectScriptsControl({
         onSubmit={submitScript}
         onDelete={(scriptId) => void onDeleteScript(scriptId)}
         onClose={() => setEditorRequest(null)}
+        defaultModelSelection={defaultModelSelection}
+        modelPicker={modelPicker}
       />
     </>
   );

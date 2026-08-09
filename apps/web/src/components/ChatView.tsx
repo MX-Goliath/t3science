@@ -55,6 +55,8 @@ import {
   resolvePromptInjectedEffort,
 } from "@t3tools/shared/model";
 import {
+  isProjectCommandAction,
+  isProjectPromptAction,
   projectScriptCwd,
   projectScriptRuntimeEnv,
   resolveProjectScripts,
@@ -226,6 +228,7 @@ import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
   NO_PROVIDER_MODEL_SELECTION,
+  resolveDefaultProviderModelSelection,
   sortProviderInstanceEntries,
 } from "../providerInstances";
 import {
@@ -238,7 +241,10 @@ import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations"
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { useThreadActions } from "../hooks/useThreadActions";
-import { resolveAppModelSelectionForInstance } from "../modelSelection";
+import {
+  getCustomModelOptionsByInstance,
+  resolveAppModelSelectionForInstance,
+} from "../modelSelection";
 import { confirmTerminalClose, isTerminalCloseConfirmPending } from "../lib/terminalCloseConfirm";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
 import {
@@ -2522,6 +2528,25 @@ export default function ChatView(props: ChatViewProps) {
       ),
     [providerStatuses, settings],
   );
+  const actionModelOptionsByInstance = useMemo(
+    () => getCustomModelOptionsByInstance(settings, providerStatuses),
+    [providerStatuses, settings],
+  );
+  const actionModelPicker = useMemo(
+    () => ({
+      instanceEntries: providerInstanceEntries,
+      modelOptionsByInstance: actionModelOptionsByInstance,
+    }),
+    [actionModelOptionsByInstance, providerInstanceEntries],
+  );
+  const actionDefaultModelSelection = useMemo(
+    () =>
+      resolveDefaultProviderModelSelection(
+        providerStatuses,
+        activeProject?.defaultModelSelection ?? settings.defaultModelSelection,
+      ),
+    [activeProject?.defaultModelSelection, providerStatuses, settings.defaultModelSelection],
+  );
   const { selectedProviderEntry, requestedDriverKind } = useMemo(
     () =>
       resolveComposerProviderSelection({
@@ -3664,6 +3689,70 @@ export default function ChatView(props: ChatViewProps) {
           return { ...current, [activeProject.id]: script.id };
         });
       }
+      if (isProjectPromptAction(script)) {
+        const nextThreadId = newThreadId();
+        const createdAt = new Date().toISOString();
+        const title = truncate(script.prompt.replace(/\s+/g, " "));
+        let failure: AtomCommandResult<unknown, unknown> | null = null;
+        const startResult = await startThreadTurn({
+          environmentId,
+          input: {
+            threadId: nextThreadId,
+            message: {
+              messageId: newMessageId(),
+              role: "user",
+              text: script.prompt,
+              attachments: [],
+            },
+            modelSelection: script.modelSelection,
+            titleSeed: title,
+            runtimeMode,
+            interactionMode,
+            bootstrap: {
+              createThread: {
+                projectId: activeProject.id,
+                title,
+                modelSelection: script.modelSelection,
+                runtimeMode,
+                interactionMode,
+                branch: activeThread.branch,
+                worktreePath: activeThread.worktreePath,
+                createdAt,
+              },
+            },
+            createdAt,
+          },
+        });
+        failure = startResult._tag === "Failure" ? startResult : null;
+        if (failure === null) {
+          const startedResult = await settlePromise(() =>
+            waitForStartedServerThread(scopeThreadRef(activeThread.environmentId, nextThreadId)),
+          );
+          failure = startedResult._tag === "Failure" ? startedResult : null;
+        }
+        if (failure === null) {
+          const navigateResult = await settlePromise(() =>
+            navigate({
+              to: "/$environmentId/$threadId",
+              params: { environmentId: activeThread.environmentId, threadId: nextThreadId },
+            }),
+          );
+          failure = navigateResult._tag === "Failure" ? navigateResult : null;
+        }
+        if (failure !== null && !isAtomCommandInterrupted(failure)) {
+          const error = squashAtomCommandFailure(failure);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: `Could not run action "${script.name}"`,
+              description:
+                error instanceof Error ? error.message : "The prompt could not be started.",
+            }),
+          );
+        }
+        return;
+      }
+      if (!isProjectCommandAction(script)) return;
       const targetCwd = options?.cwd ?? gitCwd ?? activeProject.workspaceRoot;
       const baseTerminalId =
         terminalUiState.activeTerminalId || activeKnownTerminalIds[0] || DEFAULT_THREAD_TERMINAL_ID;
@@ -3750,7 +3839,10 @@ export default function ChatView(props: ChatViewProps) {
       activeThread,
       activeThreadId,
       activeThreadRef,
+      interactionMode,
       gitCwd,
+      navigate,
+      runtimeMode,
       setTerminalOpen,
       setThreadError,
       storeNewTerminal,
@@ -3762,6 +3854,7 @@ export default function ChatView(props: ChatViewProps) {
       allocatableActiveTerminalIds,
       runningTerminalIds,
       terminalUiState.activeTerminalId,
+      startThreadTurn,
       writeTerminal,
     ],
   );
@@ -8027,6 +8120,8 @@ export default function ChatView(props: ChatViewProps) {
             activeProjectIcon={activeProject?.projectIcon ?? null}
             openInCwd={gitCwd}
             activeProjectScripts={activeProjectScripts}
+            activeProjectDefaultModelSelection={actionDefaultModelSelection}
+            actionModelPicker={actionModelPicker}
             preferredScriptId={
               activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
             }

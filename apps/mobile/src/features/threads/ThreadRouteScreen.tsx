@@ -18,6 +18,8 @@ import {
   threadHasOlderTurns,
 } from "@t3tools/client-runtime/state/threads";
 import {
+  isProjectCommandAction,
+  isProjectPromptAction,
   projectScriptCwd,
   projectScriptRuntimeEnv,
   resolveProjectScripts,
@@ -59,6 +61,7 @@ import {
 } from "../terminal/terminalLaunchContext";
 import { terminalDebugLog } from "../terminal/terminalDebugLog";
 import { ThreadDetailScreen } from "./ThreadDetailScreen";
+import { useCreateProjectThread } from "./use-project-actions";
 import {
   ThreadGitControls,
   useThreadGitCenterHeaderItems,
@@ -223,6 +226,7 @@ function ThreadRouteContent(
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
+  const createProjectThread = useCreateProjectThread();
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, "thread interrupt");
   const navigation = useNavigation();
   const params = props.route.params;
@@ -553,7 +557,7 @@ function ThreadRouteContent(
     async (script: ProjectScript) => {
       terminalDebugLog("project-script:press", {
         scriptId: script.id,
-        command: script.command,
+        command: isProjectCommandAction(script) ? script.command : null,
         hasThread: Boolean(selectedThread),
         hasWorkspaceRoot: Boolean(selectedThreadProject?.workspaceRoot),
       });
@@ -565,6 +569,31 @@ function ThreadRouteContent(
         });
         return;
       }
+
+      if (isProjectPromptAction(script)) {
+        const result = await createProjectThread({
+          project: selectedThreadProject,
+          modelSelection: script.modelSelection,
+          envMode: "local",
+          branch: selectedThread.branch,
+          worktreePath: selectedThread.worktreePath,
+          runtimeMode: selectedThread.runtimeMode,
+          interactionMode: selectedThread.interactionMode,
+          initialMessageText: script.prompt,
+          initialAttachments: [],
+          onAttachmentsUploaded: async () => undefined,
+        });
+        if (result._tag === "Success") {
+          navigation.dispatch(
+            StackActions.replace("Thread", {
+              environmentId: String(result.value.environmentId),
+              threadId: String(result.value.threadId),
+            }),
+          );
+        }
+        return;
+      }
+      if (!isProjectCommandAction(script)) return;
 
       const targetTerminalId = resolveProjectScriptTerminalId({
         existingTerminalIds: terminalMenuSessions.map((session) => session.terminalId),
@@ -611,6 +640,7 @@ function ThreadRouteContent(
       });
     },
     [
+      createProjectThread,
       navigation,
       selectedThread,
       selectedThreadDetailWorktreePath,

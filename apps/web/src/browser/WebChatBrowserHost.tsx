@@ -179,6 +179,7 @@ function MountedWebChatBrowser() {
   const active = presentation.visible && presentation.rect !== null;
   const wrapperStyle = resolveHostedBrowserWebviewWrapperStyle({
     active,
+    renderingActive: active,
     cornerRadius: presentation.cornerRadius,
     rect: presentation.rect,
     hiddenSize: HIDDEN_WEB_CHAT_SIZE,
