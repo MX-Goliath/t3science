@@ -309,6 +309,12 @@ describe("ClientSettings sidebar", () => {
     );
   });
 
+  it("defaults general chats off and preserves an explicit opt-in", () => {
+    expect(decodeClientSettings({}).generalChatsEnabled).toBe(false);
+    expect(decodeClientSettings({ generalChatsEnabled: true }).generalChatsEnabled).toBe(true);
+    expect(decodeClientSettingsPatch({ generalChatsEnabled: true }).generalChatsEnabled).toBe(true);
+  });
+
   it("keeps unpin confirmation opt-in and patchable", () => {
     expect(decodeClientSettings({}).confirmThreadUnpin).toBe(false);
     expect(decodeClientSettingsPatch({ confirmThreadUnpin: true }).confirmThreadUnpin).toBe(true);

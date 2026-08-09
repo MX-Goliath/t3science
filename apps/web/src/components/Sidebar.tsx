@@ -32,6 +32,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import {
   resolveEnvironmentMachineKind,
+  isGeneralChatsProjectId,
   type EnvironmentMachineKind,
   type ProjectIconOverride,
   type ScopedThreadRef,
@@ -50,6 +51,7 @@ import {
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
+  MessageSquareIcon,
   PinIcon,
   PlusIcon,
   SearchIcon,
@@ -118,6 +120,7 @@ import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments"
 import {
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
+  useGeneralChatsProjects,
   useProjects,
   useThreadShells,
 } from "../state/entities";
@@ -1873,14 +1876,23 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 
 export default function Sidebar() {
   const projects = useProjects();
+  const generalChatsProjects = useGeneralChatsProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
-  const threads = useThreadShells();
+  const allThreads = useThreadShells();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
+  const generalChatsEnabled = useClientSettings((s) => s.generalChatsEnabled);
+  const threads = useMemo(
+    () =>
+      generalChatsEnabled
+        ? allThreads
+        : allThreads.filter((thread) => !isGeneralChatsProjectId(thread.projectId)),
+    [allThreads, generalChatsEnabled],
+  );
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
@@ -1959,6 +1971,21 @@ export default function Sidebar() {
   );
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const generalChatsProject = useMemo(
+    () =>
+      generalChatsProjects.find((project) => project.environmentId === primaryEnvironmentId) ??
+      generalChatsProjects[0] ??
+      null,
+    [generalChatsProjects, primaryEnvironmentId],
+  );
+  const handleNewGeneralChat = useCallback(() => {
+    if (!generalChatsProject) return;
+    if (isMobile) setOpenMobile(false);
+    void newThreadContext.handleNewThread(
+      scopeProjectRef(generalChatsProject.environmentId, generalChatsProject.id),
+      { envMode: "local" },
+    );
+  }, [generalChatsProject, isMobile, newThreadContext, setOpenMobile]);
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
@@ -3744,6 +3771,17 @@ export default function Sidebar() {
             </div>
             <SidebarMenu>
               <WebChatSidebarItem />
+              {generalChatsEnabled ? (
+                <SidebarMenuButton
+                  type="button"
+                  onClick={handleNewGeneralChat}
+                  disabled={!generalChatsProject}
+                  aria-label="New general chat"
+                >
+                  <MessageSquareIcon className="size-4" />
+                  <span>New general chat</span>
+                </SidebarMenuButton>
+              ) : null}
             </SidebarMenu>
             {projectGroups.length > 0 ? (
               <div className="flex items-center gap-1">

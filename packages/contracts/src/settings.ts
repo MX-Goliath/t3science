@@ -368,6 +368,8 @@ export const ClientSettingsSchema = Schema.Struct({
   // old keys, so everyone, including prior beta opt-outs, resets to the new
   // default sidebar.
   legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Project-independent conversations backed by a hidden per-environment workspace.
+  generalChatsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Desktop-only persistent browser chat. The browser session and its cookies
   // belong to this device, so this remains a client-local setting.
   webChatEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -1301,6 +1303,7 @@ export const ClientSettingsPatch = Schema.Struct({
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
+  generalChatsEnabled: Schema.optionalKey(Schema.Boolean),
   webChatEnabled: Schema.optionalKey(Schema.Boolean),
   webChatProvider: Schema.optionalKey(WebChatProvider),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),

@@ -598,6 +598,9 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Delete confirmation"]
         : []),
       ...(settings.webChatEnabled !== DEFAULT_UNIFIED_SETTINGS.webChatEnabled ? ["Web chat"] : []),
+      ...(settings.generalChatsEnabled !== DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled
+        ? ["General chats"]
+        : []),
       ...(settings.webChatProvider !== DEFAULT_UNIFIED_SETTINGS.webChatProvider
         ? ["Web chat provider"]
         : []),
@@ -624,6 +627,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.confirmThreadDelete,
       settings.confirmThreadUnpin,
       settings.webChatEnabled,
+      settings.generalChatsEnabled,
       settings.webChatProvider,
       settings.composerCollapseOnBlur,
       settings.composerCollapseOnScroll,
@@ -756,6 +760,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
       webChatEnabled: DEFAULT_UNIFIED_SETTINGS.webChatEnabled,
+      generalChatsEnabled: DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled,
       webChatProvider: DEFAULT_UNIFIED_SETTINGS.webChatProvider,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
@@ -2109,6 +2114,33 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SharedSettingsMismatchAlert />
+      <SettingsSection id="general-chats" title="General chats">
+        <SettingsRow
+          {...searchableSetting("general-chats")}
+          description="Enable project-independent conversations that use a private T3 Science workspace."
+          resetAction={
+            settings.generalChatsEnabled !== DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled ? (
+              <SettingResetButton
+                label="general chats"
+                onClick={() =>
+                  updateSettings({
+                    generalChatsEnabled: DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.generalChatsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ generalChatsEnabled: Boolean(checked) })
+              }
+              aria-label="General chats"
+            />
+          }
+        />
+      </SettingsSection>
       <SettingsSection id="web-chat" title="Web chat">
         <SettingsRow
           {...searchableSetting("web-chat")}
