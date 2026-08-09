@@ -8,6 +8,7 @@
 - [Organizing threads](./user/thread-sidebar.md)
 - [Using persistent web chat](./user/web-chat.md)
 - [Portable local conversations (desktop)](./user/portable-conversations.md)
+- [Customize a project icon](./user/project-settings.md)
 - [Remote access](./user/remote-access.md)
 - [Keeping app and server in sync](./user/updating.md)
 - [Source control integrations](./user/source-control.md)
