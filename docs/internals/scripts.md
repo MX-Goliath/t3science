@@ -70,7 +70,7 @@ authenticated.
 - `vp run dist:desktop:dmg`: Builds a shareable macOS `.dmg` into `./release`. Architecture defaults
   to the host, so this produces an arm64 DMG on Apple Silicon. Use `dist:desktop:dmg:arm64` or
   `dist:desktop:dmg:x64`, or pass `--arch <arm64|x64|universal>`, to force one.
-- `vp run dist:desktop:linux`: Builds a Linux AppImage into `./release`.
+- `vp run dist:desktop:linux`: Builds `T3-Science-<version>-<arch>.AppImage` into `./release`.
 - `vp run dist:desktop:win`: Builds a Windows NSIS installer into `./release`. `:arm64` and `:x64`
   variants exist.
 
@@ -78,8 +78,11 @@ authenticated.
 
 - Default build is unsigned/not notarized for local sharing.
 - The DMG build uses `assets/prod/black-macos-1024.png` as the production app icon source.
-- Desktop production windows load the bundled UI from the `t3code://app/` root URL (not a
+- Desktop production windows load the bundled UI from the `t3science://app/` root URL (not a
   `127.0.0.1` document URL, and not an explicit `index.html` path).
+- T3 Science uses its own desktop application ID, protocol, process lock, and `~/.t3science`
+  state directory, so it can run alongside an installed T3 Code release.
+- Local T3 Science artifacts do not inherit the upstream T3 Code auto-update feed.
 - Desktop packaging includes `apps/server/dist` (the `t3` backend) and starts it on loopback with an
   auth token for WebSocket/API traffic.
 - Your tester can still open it on macOS by right-clicking the app and choosing **Open** on first

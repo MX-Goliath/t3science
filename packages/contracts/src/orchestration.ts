@@ -194,7 +194,14 @@ export type ProjectScriptIcon = typeof ProjectScriptIcon.Type;
 export const ProjectScript = Schema.Struct({
   id: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
-  command: TrimmedNonEmptyString,
+  /**
+   * Existing actions are terminal commands and predate `kind`, so an absent
+   * kind still means command. Prompt actions use the explicit prompt kind.
+   */
+  kind: Schema.optional(Schema.Literal("prompt")),
+  command: Schema.optional(TrimmedNonEmptyString),
+  prompt: Schema.optional(TrimmedNonEmptyString),
+  modelSelection: Schema.optional(ModelSelection),
   icon: ProjectScriptIcon,
   runOnWorktreeCreate: Schema.Boolean,
   /**
@@ -208,7 +215,27 @@ export const ProjectScript = Schema.Struct({
    * the moment this script starts. Ignored without `previewUrl` or on web.
    */
   autoOpenPreview: Schema.optional(Schema.Boolean),
-});
+}).check(
+  Schema.makeFilter((input) => {
+    if (input.kind === "prompt") {
+      return (
+        (input.prompt !== undefined &&
+          input.modelSelection !== undefined &&
+          input.command === undefined &&
+          input.runOnWorktreeCreate === false &&
+          input.previewUrl === undefined &&
+          input.autoOpenPreview === undefined) ||
+        "Prompt actions require a prompt and model and cannot configure terminal behavior"
+      );
+    }
+    return (
+      (input.command !== undefined &&
+        input.prompt === undefined &&
+        input.modelSelection === undefined) ||
+      "Command actions require a command and cannot configure a prompt or model"
+    );
+  }),
+);
 export type ProjectScript = typeof ProjectScript.Type;
 
 export const ProjectFaviconPath = TrimmedNonEmptyString.check(

@@ -19,6 +19,12 @@ This starts the T3 Code server on your machine and opens the local web app. Use
 
 ## Desktop App
 
+Desktop artifacts built from this repository are branded **T3 Science**. They use a separate
+application identity and `~/.t3science` state directory, so they can run alongside an installed
+T3 Code release. On Linux, `vp run dist:desktop:linux` creates
+`release/T3-Science-<version>-<arch>.AppImage`; local T3 Science builds do not use the upstream T3
+Code auto-update feed.
+
 Download the latest release from
 [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or install from a package
 registry.

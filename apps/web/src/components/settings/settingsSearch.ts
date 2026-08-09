@@ -203,7 +203,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "project-scripts",
-    title: "Project scripts",
+    title: "Project actions",
     to: "/settings/projects",
   },
   {

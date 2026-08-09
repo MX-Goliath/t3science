@@ -10,6 +10,10 @@ import {
   type LinuxPasswordStorePreference,
 } from "../linuxSecretStorage.ts";
 import {
+  DESKTOP_DEVELOPMENT_LINUX_WM_CLASS,
+  DESKTOP_PRODUCTION_LINUX_WM_CLASS,
+} from "@t3tools/shared/desktopProductIdentity";
+import {
   resolveDesktopBaseDir,
   resolveDesktopStateDir,
   type JoinPath,
@@ -81,7 +85,9 @@ export function resolveEarlyLinuxElectronOptions(
 ): EarlyLinuxElectronOptions {
   const preference = resolveEarlyLinuxPasswordStorePreference(input);
   return {
-    linuxWmClass: isDevelopmentEnvironment(input.env) ? "t3code-dev" : "t3code",
+    linuxWmClass: isDevelopmentEnvironment(input.env)
+      ? DESKTOP_DEVELOPMENT_LINUX_WM_CLASS
+      : DESKTOP_PRODUCTION_LINUX_WM_CLASS,
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,
       env: input.env,

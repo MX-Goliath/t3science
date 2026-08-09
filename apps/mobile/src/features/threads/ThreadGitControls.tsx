@@ -5,6 +5,7 @@ import {
   ThreadId,
   type VcsStatusResult,
 } from "@t3tools/contracts";
+import { isProjectCommandAction, isProjectPromptAction } from "@t3tools/shared/projectScripts";
 import {
   type GitActionRequestInput,
   requiresDefaultBranchConfirmation,
@@ -260,7 +261,11 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
         menu: {
           items: [
             ...props.projectScripts.map((script) => ({
-              description: script.command,
+              description: isProjectPromptAction(script)
+                ? `${script.modelSelection.model} · ${script.prompt}`
+                : isProjectCommandAction(script)
+                  ? script.command
+                  : undefined,
               icon: { name: projectScriptMenuIcon(script.icon), type: "sfSymbol" as const },
               label: projectScriptMenuLabel(script),
               onPress: () => void props.onRunProjectScript(script),
@@ -269,10 +274,10 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
             ...(props.projectScripts.length === 0
               ? [
                   {
-                    description: "This project has no saved scripts yet",
+                    description: "This project has no saved actions yet",
                     disabled: true,
                     icon: { name: "play", type: "sfSymbol" as const },
-                    label: "No project scripts",
+                    label: "No project actions",
                     onPress: () => {},
                     type: "action" as const,
                   },
@@ -436,7 +441,13 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
                 key={script.id}
                 icon={projectScriptMenuIcon(script.icon)}
                 onPress={() => void props.onRunProjectScript(script)}
-                subtitle={script.command}
+                subtitle={
+                  isProjectPromptAction(script)
+                    ? `${script.modelSelection.model} · ${script.prompt}`
+                    : isProjectCommandAction(script)
+                      ? script.command
+                      : undefined
+                }
               >
                 <NativeHeaderToolbar.Label>
                   {projectScriptMenuLabel(script)}
@@ -448,9 +459,9 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
               icon="play"
               disabled
               onPress={() => {}}
-              subtitle="This project has no saved scripts yet"
+              subtitle="This project has no saved actions yet"
             >
-              <NativeHeaderToolbar.Label>No project scripts</NativeHeaderToolbar.Label>
+              <NativeHeaderToolbar.Label>No project actions</NativeHeaderToolbar.Label>
             </NativeHeaderToolbar.MenuAction>
           )}
           {props.terminalSessions.map((session) => (

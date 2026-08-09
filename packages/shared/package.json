@@ -210,6 +210,10 @@
     "./devProxy": {
       "types": "./src/devProxy.ts",
       "import": "./src/devProxy.ts"
+    },
+    "./desktopProductIdentity": {
+      "types": "./src/desktopProductIdentity.ts",
+      "import": "./src/desktopProductIdentity.ts"
     }
   },
   "scripts": {

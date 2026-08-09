@@ -9,6 +9,15 @@ import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import rootPackageJson from "../package.json" with { type: "json" };
 import desktopPackageJson from "../apps/desktop/package.json" with { type: "json" };
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
+import {
+  DESKTOP_APP_BASE_NAME,
+  DESKTOP_APP_ID,
+  DESKTOP_ARTIFACT_BASE_NAME,
+  DESKTOP_DEVELOPMENT_SCHEME,
+  DESKTOP_LINUX_EXECUTABLE_NAME,
+  DESKTOP_PRODUCTION_LINUX_WM_CLASS,
+  DESKTOP_PRODUCTION_SCHEME,
+} from "@t3tools/shared/desktopProductIdentity";
 
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
 import {
@@ -35,7 +44,6 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.t3tools.t3code";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -628,7 +636,7 @@ interface StagePackageJson {
 export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
 export const DESKTOP_ELECTRON_LANGUAGES = ["en-US"] as const;
 export const DESKTOP_FILE_EXCLUSIONS = [
-  // T3 Code always passes the user's installed Claude executable to the SDK,
+  // T3 Science always passes the user's installed Claude executable to the SDK,
   // so the SDK's optional platform packages (each a ~200MB bundled executable)
   // are dead weight. The trailing dash keeps the SDK's own JS package.
   "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
@@ -950,6 +958,34 @@ const stageClerkPasskeyNativeBinaries = Effect.fn("stageClerkPasskeyNativeBinari
     yield* fs.copyFile(sourcePath, path.join(packageDir, artifact.binaryFileName));
   }
 });
+
+const LINUX_ELECTRON_BINARY_NAME = "electron-bin";
+
+export function renderLinuxElectronLauncher(): string {
+  return `#!/usr/bin/env sh
+unset ELECTRON_RUN_AS_NODE
+exec "$(dirname "$0")/${LINUX_ELECTRON_BINARY_NAME}" "$@"
+`;
+}
+
+// Electron-based terminals can export ELECTRON_RUN_AS_NODE to their children. A direct AppImage
+// launch must clear it before entering Electron or the executable opens a Node REPL instead. The
+// runtime is only available after electron-builder has packed it, so this hook installs the wrapper
+// in the unpacked application before the AppImage target is created.
+export function renderLinuxAfterPackHook(): string {
+  return `"use strict";
+const fs = require("node:fs/promises");
+const path = require("node:path");
+
+exports.default = async function afterPack(context) {
+  const executablePath = path.join(context.appOutDir, ${JSON.stringify(DESKTOP_LINUX_EXECUTABLE_NAME)});
+  const binaryPath = path.join(context.appOutDir, ${JSON.stringify(LINUX_ELECTRON_BINARY_NAME)});
+  await fs.rename(executablePath, binaryPath);
+  await fs.writeFile(executablePath, ${JSON.stringify(renderLinuxElectronLauncher())});
+  await fs.chmod(executablePath, 0o755);
+};
+`;
+}
 
 export function createStageWorkspaceConfig(input: {
   readonly platform: typeof BuildPlatform.Type;
@@ -1517,8 +1553,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    ? `${DESKTOP_APP_BASE_NAME} (Nightly)`
+    : (desktopPackageJson.productName ?? DESKTOP_APP_BASE_NAME);
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -1538,7 +1574,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    artifactName: `${DESKTOP_ARTIFACT_BASE_NAME}-\${version}-\${arch}.\${ext}`,
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
     directories: {
@@ -1550,11 +1586,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     ...(platform === "win" ? { asarUnpack: [...WINDOWS_ASAR_UNPACK] } : {}),
     extraResources: DESKTOP_EXTRA_RESOURCES,
   };
-  const updateChannel = resolveDesktopUpdateChannel(version);
-  const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
-  if (publishConfig) {
-    buildConfig.publish = [publishConfig];
-  } else if (mockUpdates) {
+  // T3 Science is a distinct desktop product. Do not point it at the upstream
+  // T3 Code update feed, whose artifacts have a different identity. Mock
+  // updates remain available for local updater verification.
+  if (mockUpdates) {
     buildConfig.publish = [
       {
         provider: "generic",
@@ -1570,8 +1605,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "public.app-category.developer-tools",
       protocols: [
         {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
+          name: DESKTOP_APP_BASE_NAME,
+          schemes: [DESKTOP_PRODUCTION_SCHEME, DESKTOP_DEVELOPMENT_SCHEME],
         },
       ],
       ...(macPasskeySigning
@@ -1586,21 +1621,21 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: "t3code",
+      executableName: DESKTOP_LINUX_EXECUTABLE_NAME,
       icon: "icons",
       category: "Development",
       // electron-builder turns these into MimeType=x-scheme-handler/<scheme>;
       // in the .desktop entry (Exec already gets %U), so browsers can hand
-      // t3code:// OAuth callbacks to the app.
+      // T3 Science OAuth callbacks to the app.
       protocols: [
         {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
+          name: DESKTOP_APP_BASE_NAME,
+          schemes: [DESKTOP_PRODUCTION_SCHEME, DESKTOP_DEVELOPMENT_SCHEME],
         },
       ],
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: DESKTOP_PRODUCTION_LINUX_WM_CLASS,
         },
       },
     };
@@ -1911,30 +1946,35 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     workspacePatchedDependencies,
     stageDependencies,
   );
+  const stageBuildConfig = yield* createBuildConfig(
+    options.platform,
+    options.target,
+    appVersion,
+    options.signed,
+    options.mockUpdates,
+    options.mockUpdateServerPort,
+    macPasskeySigning && macEntitlementsPath
+      ? {
+          entitlementsPath: macEntitlementsPath,
+          provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
+        }
+      : undefined,
+  );
+  if (options.platform === "linux") {
+    stageBuildConfig.afterPack = path.join(stageAppDir, "after-pack.cjs");
+  }
+
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: "t3science",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: "T3 Code desktop build",
+    description: "T3 Science desktop build",
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.cjs",
-    build: yield* createBuildConfig(
-      options.platform,
-      options.target,
-      appVersion,
-      options.signed,
-      options.mockUpdates,
-      options.mockUpdateServerPort,
-      macPasskeySigning && macEntitlementsPath
-        ? {
-            entitlementsPath: macEntitlementsPath,
-            provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
-          }
-        : undefined,
-    ),
+    build: stageBuildConfig,
     dependencies: stageDependencies,
     devDependencies: {
       electron: electronVersion,
@@ -1943,6 +1983,9 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   const stagePackageJsonString = yield* encodeJsonString(stagePackageJson);
   yield* fs.writeFileString(path.join(stageAppDir, "package.json"), `${stagePackageJsonString}\n`);
+  if (options.platform === "linux") {
+    yield* fs.writeFileString(path.join(stageAppDir, "after-pack.cjs"), renderLinuxAfterPackHook());
+  }
   const stageWorkspaceConfig = createStageWorkspaceConfig({
     platform: options.platform,
     arch: options.arch,
@@ -2142,7 +2185,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for T3 Code."),
+  Command.withDescription("Build a desktop artifact for T3 Science."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

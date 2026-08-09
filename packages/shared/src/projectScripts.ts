@@ -32,6 +32,31 @@ export function projectScriptRuntimeEnv(
   return env;
 }
 
-export function setupProjectScript(scripts: readonly ProjectScript[]): ProjectScript | null {
-  return scripts.find((script) => script.runOnWorktreeCreate) ?? null;
+export type ProjectPromptAction = ProjectScript & {
+  readonly kind: "prompt";
+  readonly prompt: string;
+  readonly modelSelection: NonNullable<ProjectScript["modelSelection"]>;
+};
+
+export function isProjectPromptAction(script: ProjectScript): script is ProjectPromptAction {
+  return (
+    script.kind === "prompt" && script.prompt !== undefined && script.modelSelection !== undefined
+  );
+}
+
+export type ProjectCommandAction = ProjectScript & {
+  readonly kind?: undefined;
+  readonly command: string;
+};
+
+export function isProjectCommandAction(script: ProjectScript): script is ProjectCommandAction {
+  return script.kind !== "prompt" && script.command !== undefined;
+}
+
+function isProjectCommandActionWithSetup(script: ProjectScript): script is ProjectCommandAction {
+  return isProjectCommandAction(script) && script.runOnWorktreeCreate;
+}
+
+export function setupProjectScript(scripts: readonly ProjectScript[]): ProjectCommandAction | null {
+  return scripts.find(isProjectCommandActionWithSetup) ?? null;
 }

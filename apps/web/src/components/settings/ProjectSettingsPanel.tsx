@@ -21,6 +21,7 @@ import type {
 } from "@t3tools/contracts";
 import { resolveEnvModeLabel } from "../BranchToolbar.logic";
 import { createModelSelection } from "@t3tools/shared/model";
+import { isProjectCommandAction, isProjectPromptAction } from "@t3tools/shared/projectScripts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import { CopyIcon, FolderIcon, PlusIcon, ServerIcon, SettingsIcon, Trash2Icon } from "lucide-react";
@@ -363,7 +364,10 @@ function ProjectDetail({
 
   // ----- default model -----
   const storedSelection = representative.defaultModelSelection;
-  const resolvedSelection = resolveDefaultProviderModelSelection(serverProviders, storedSelection);
+  const resolvedSelection = useMemo(
+    () => resolveDefaultProviderModelSelection(serverProviders, storedSelection),
+    [serverProviders, storedSelection],
+  );
   const instanceEntries = useMemo(
     () =>
       sortProviderInstanceEntries(
@@ -432,7 +436,7 @@ function ProjectDetail({
         (fileScript) =>
           !scripts.some(
             (script) =>
-              script.command === fileScript.command ||
+              (isProjectCommandAction(script) && script.command === fileScript.command) ||
               script.name.toLowerCase() === fileScript.name.toLowerCase(),
           ),
       ),
@@ -568,7 +572,10 @@ function ProjectDetail({
     async (fileScript: T3ProjectFileScript) => {
       const payload: NewProjectScriptInput = {
         name: fileScript.name,
+        kind: "command",
         command: fileScript.command,
+        prompt: "",
+        modelSelection: null,
         icon: fileScript.icon ?? "play",
         runOnWorktreeCreate: fileScript.runOnWorktreeCreate ?? false,
         keybinding: null,
@@ -886,14 +893,20 @@ function ProjectDetail({
 
       <SettingsSection
         id="project-scripts"
-        title="Scripts"
+        title="Actions"
         headerAction={
           <Button
             size="xs"
             variant="outline"
             disabled={isSavingScripts}
             onClick={() =>
-              setEditorRequest({ scriptId: null, initial: EMPTY_PROJECT_SCRIPT_INPUT })
+              setEditorRequest({
+                scriptId: null,
+                initial: {
+                  ...EMPTY_PROJECT_SCRIPT_INPUT,
+                  modelSelection: resolvedSelection,
+                },
+              })
             }
           >
             <PlusIcon className="size-3.5" />
@@ -903,8 +916,8 @@ function ProjectDetail({
       >
         {scripts.length === 0 ? (
           <p className="px-3 py-2 text-sm text-muted-foreground sm:px-4">
-            No scripts yet. Scripts run in a project terminal from the thread top bar; one script
-            can run automatically when a worktree is created.
+            No actions yet. Actions can run a terminal command or start a new chat with a saved
+            prompt and model.
           </p>
         ) : (
           <div className="space-y-0.5">
@@ -936,7 +949,11 @@ function ProjectDetail({
                     </span>
                   ) : null}
                   <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground/80">
-                    {script.command}
+                    {isProjectPromptAction(script)
+                      ? `${script.modelSelection.model} · ${script.prompt}`
+                      : isProjectCommandAction(script)
+                        ? script.command
+                        : "Invalid action"}
                   </span>
                   {shortcutLabel ? (
                     <span className="shrink-0 text-xs text-muted-foreground">{shortcutLabel}</span>
@@ -1128,6 +1145,8 @@ function ProjectDetail({
         onSubmit={submitScript}
         onDelete={deleteScript}
         onClose={() => setEditorRequest(null)}
+        defaultModelSelection={resolvedSelection}
+        modelPicker={{ instanceEntries, modelOptionsByInstance }}
       />
       <ProjectFaviconPickerDialog
         key={`${representative.environmentId}:${representative.workspaceRoot}:${faviconPickerOpen}`}

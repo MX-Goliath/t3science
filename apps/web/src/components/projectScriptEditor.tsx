@@ -1,8 +1,11 @@
 import type {
+  ModelSelection,
   ProjectScript,
   ProjectScriptIcon,
   ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
+import { createModelSelection } from "@t3tools/shared/model";
+import { isProjectCommandAction, isProjectPromptAction } from "@t3tools/shared/projectScripts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -24,6 +27,10 @@ import {
 } from "~/lib/projectScriptKeybindings";
 import { keybindingFromKeyboardEvent } from "~/components/settings/KeybindingsSettings.logic";
 import { commandForProjectScript, nextProjectScriptId } from "~/projectScripts";
+import type { ProviderInstanceEntry } from "~/providerInstances";
+import type { ModelEsque } from "./chat/providerIconUtils";
+import { ProviderModelPicker } from "./chat/ProviderModelPicker";
+import { TraitsPicker } from "./chat/TraitsPicker";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -46,6 +53,7 @@ import {
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 import { Switch } from "./ui/switch";
 import { Textarea } from "./ui/textarea";
 
@@ -75,7 +83,10 @@ export function ScriptIcon({
 
 export interface NewProjectScriptInput {
   name: string;
+  kind: "command" | "prompt";
   command: string;
+  prompt: string;
+  modelSelection: ModelSelection | null;
   icon: ProjectScriptIcon;
   runOnWorktreeCreate: boolean;
   keybinding: string | null;
@@ -89,7 +100,10 @@ export type ProjectScriptActionResult = AtomCommandResult<void, unknown>;
 
 export const EMPTY_PROJECT_SCRIPT_INPUT: NewProjectScriptInput = {
   name: "",
+  kind: "command",
   command: "",
+  prompt: "",
+  modelSelection: null,
   icon: "play",
   runOnWorktreeCreate: false,
   keybinding: null,
@@ -113,7 +127,10 @@ export function editorRequestForScript(
     scriptId: script.id,
     initial: {
       name: script.name,
-      command: script.command,
+      kind: isProjectPromptAction(script) ? "prompt" : "command",
+      command: isProjectCommandAction(script) ? script.command : "",
+      prompt: isProjectPromptAction(script) ? script.prompt : "",
+      modelSelection: isProjectPromptAction(script) ? script.modelSelection : null,
       icon: script.icon,
       runOnWorktreeCreate: script.runOnWorktreeCreate,
       keybinding: keybindingValueForCommand(keybindings, commandForProjectScript(script.id)),
@@ -134,6 +151,8 @@ export function ProjectScriptEditorDialog({
   onSubmit,
   onDelete,
   onClose,
+  defaultModelSelection,
+  modelPicker,
 }: {
   request: ProjectScriptEditorRequest | null;
   /** Existing scripts, used to derive a unique id for new scripts. */
@@ -144,10 +163,21 @@ export function ProjectScriptEditorDialog({
   ) => Promise<ProjectScriptActionResult>;
   onDelete: (scriptId: string) => void;
   onClose: () => void;
+  defaultModelSelection: ModelSelection | null;
+  modelPicker: {
+    readonly instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+    readonly modelOptionsByInstance: ReadonlyMap<
+      ModelSelection["instanceId"],
+      ReadonlyArray<ModelEsque>
+    >;
+  };
 }) {
   const formId = React.useId();
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<"command" | "prompt">("command");
   const [command, setCommand] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
   const [icon, setIcon] = useState<ProjectScriptIcon>("play");
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [runOnWorktreeCreate, setRunOnWorktreeCreate] = useState(false);
@@ -159,12 +189,18 @@ export function ProjectScriptEditorDialog({
 
   const isOpen = request !== null;
   const isEditing = request?.scriptId != null;
+  const selectedModelEntry = modelPicker.instanceEntries.find(
+    (entry) => entry.instanceId === modelSelection?.instanceId,
+  );
 
   // Hydrate the form whenever a new request opens the dialog.
   useEffect(() => {
     if (!request) return;
     setName(request.initial.name);
+    setKind(request.initial.kind);
     setCommand(request.initial.command);
+    setPrompt(request.initial.prompt);
+    setModelSelection(request.initial.modelSelection ?? defaultModelSelection);
     setIcon(request.initial.icon);
     setIconPickerOpen(false);
     setRunOnWorktreeCreate(request.initial.runOnWorktreeCreate);
@@ -172,7 +208,7 @@ export function ProjectScriptEditorDialog({
     setPreviewUrl(request.initial.previewUrl ?? "");
     setAutoOpenPreview(request.initial.autoOpenPreview);
     setValidationError(request.error ?? null);
-  }, [request]);
+  }, [defaultModelSelection, request]);
 
   const captureKeybinding = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Tab") return;
@@ -191,12 +227,21 @@ export function ProjectScriptEditorDialog({
     if (!request) return;
     const trimmedName = name.trim();
     const trimmedCommand = command.trim();
+    const trimmedPrompt = prompt.trim();
     if (trimmedName.length === 0) {
       setValidationError("Name is required.");
       return;
     }
-    if (trimmedCommand.length === 0) {
+    if (kind === "command" && trimmedCommand.length === 0) {
       setValidationError("Command is required.");
+      return;
+    }
+    if (kind === "prompt" && trimmedPrompt.length === 0) {
+      setValidationError("Prompt is required.");
+      return;
+    }
+    if (kind === "prompt" && modelSelection === null) {
+      setValidationError("Choose a model for this prompt.");
       return;
     }
 
@@ -216,12 +261,16 @@ export function ProjectScriptEditorDialog({
       const trimmedPreviewUrl = previewUrl.trim();
       payload = {
         name: trimmedName,
-        command: trimmedCommand,
+        kind,
+        command: kind === "command" ? trimmedCommand : "",
+        prompt: kind === "prompt" ? trimmedPrompt : "",
+        modelSelection: kind === "prompt" ? modelSelection : null,
         icon,
-        runOnWorktreeCreate,
+        runOnWorktreeCreate: kind === "command" ? runOnWorktreeCreate : false,
         keybinding: keybindingRule?.key ?? null,
-        previewUrl: trimmedPreviewUrl.length > 0 ? trimmedPreviewUrl : null,
-        autoOpenPreview: trimmedPreviewUrl.length > 0 ? autoOpenPreview : false,
+        previewUrl: kind === "command" && trimmedPreviewUrl.length > 0 ? trimmedPreviewUrl : null,
+        autoOpenPreview:
+          kind === "command" && trimmedPreviewUrl.length > 0 ? autoOpenPreview : false,
       } satisfies NewProjectScriptInput;
     } catch (error) {
       setValidationError(error instanceof Error ? error.message : "Failed to save action.");
@@ -255,7 +304,7 @@ export function ProjectScriptEditorDialog({
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit Action" : "Add Action"}</DialogTitle>
             <DialogDescription>
-              Actions are project-scoped commands you can run from the top bar or keybindings.
+              Actions run a project command or start a chat from the top bar or a keybinding.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -312,6 +361,27 @@ export function ProjectScriptEditorDialog({
                 </div>
               </div>
               <div className="space-y-1.5">
+                <Label htmlFor="script-kind">Action type</Label>
+                <Select
+                  value={kind}
+                  onValueChange={(value) => {
+                    const nextKind = value as "command" | "prompt";
+                    setKind(nextKind);
+                    if (nextKind === "prompt" && modelSelection === null) {
+                      setModelSelection(defaultModelSelection);
+                    }
+                  }}
+                >
+                  <SelectTrigger id="script-kind">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="command">Terminal command</SelectItem>
+                    <SelectItem value="prompt">New chat prompt</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="script-keybinding">Keybinding</Label>
                 <Input
                   id="script-keybinding"
@@ -324,46 +394,114 @@ export function ProjectScriptEditorDialog({
                   Press a shortcut. Use <code>Backspace</code> to clear.
                 </p>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="script-command">Command</Label>
-                <Textarea
-                  id="script-command"
-                  placeholder="bun test"
-                  value={command}
-                  onChange={(event) => setCommand(event.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="script-preview-url">Preview URL (optional)</Label>
-                <Input
-                  id="script-preview-url"
-                  placeholder="http://localhost:5173"
-                  value={previewUrl}
-                  onChange={(event) => setPreviewUrl(event.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Open this URL in the in-app preview when this action runs.
-                </p>
-              </div>
-              <label className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035]">
-                <span>Run automatically on worktree creation</span>
-                <Switch
-                  checked={runOnWorktreeCreate}
-                  onCheckedChange={(checked) => setRunOnWorktreeCreate(Boolean(checked))}
-                />
-              </label>
-              <label
-                className={`flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035] ${
-                  previewUrl.trim().length === 0 ? "opacity-60" : ""
-                }`}
-              >
-                <span>Open preview automatically when this action runs</span>
-                <Switch
-                  checked={autoOpenPreview}
-                  disabled={previewUrl.trim().length === 0}
-                  onCheckedChange={(checked) => setAutoOpenPreview(Boolean(checked))}
-                />
-              </label>
+              {kind === "command" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="script-command">Command</Label>
+                  <Textarea
+                    id="script-command"
+                    placeholder="bun test"
+                    value={command}
+                    onChange={(event) => setCommand(event.target.value)}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="script-prompt">Prompt</Label>
+                    <Textarea
+                      id="script-prompt"
+                      placeholder="Review this project and suggest the next highest-impact improvement."
+                      value={prompt}
+                      onChange={(event) => setPrompt(event.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Running this action starts a new chat in the current project.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Model and reasoning</Label>
+                    {modelSelection ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        <ProviderModelPicker
+                          activeInstanceId={modelSelection.instanceId}
+                          model={modelSelection.model}
+                          lockedProvider={null}
+                          instanceEntries={modelPicker.instanceEntries}
+                          modelOptionsByInstance={modelPicker.modelOptionsByInstance}
+                          triggerVariant="outline"
+                          triggerClassName="min-w-0 max-w-none flex-1"
+                          triggerAriaLabel="Prompt model"
+                          onInstanceModelChange={(instanceId, model) =>
+                            setModelSelection(createModelSelection(instanceId, model))
+                          }
+                        />
+                        {selectedModelEntry ? (
+                          <TraitsPicker
+                            provider={selectedModelEntry.driverKind}
+                            models={selectedModelEntry.models}
+                            model={modelSelection.model}
+                            prompt={prompt}
+                            onPromptChange={setPrompt}
+                            modelOptions={modelSelection.options ?? []}
+                            triggerVariant="outline"
+                            triggerClassName="min-w-0 max-w-none"
+                            onModelOptionsChange={(options) =>
+                              setModelSelection(
+                                createModelSelection(
+                                  modelSelection.instanceId,
+                                  modelSelection.model,
+                                  options,
+                                ),
+                              )
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Configure an available provider before creating a prompt action.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+              {kind === "command" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="script-preview-url">Preview URL (optional)</Label>
+                  <Input
+                    id="script-preview-url"
+                    placeholder="http://localhost:5173"
+                    value={previewUrl}
+                    onChange={(event) => setPreviewUrl(event.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Open this URL in the in-app preview when this action runs.
+                  </p>
+                </div>
+              ) : null}
+              {kind === "command" ? (
+                <label className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035]">
+                  <span>Run automatically on worktree creation</span>
+                  <Switch
+                    checked={runOnWorktreeCreate}
+                    onCheckedChange={(checked) => setRunOnWorktreeCreate(Boolean(checked))}
+                  />
+                </label>
+              ) : null}
+              {kind === "command" ? (
+                <label
+                  className={`flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035] ${
+                    previewUrl.trim().length === 0 ? "opacity-60" : ""
+                  }`}
+                >
+                  <span>Open preview automatically when this action runs</span>
+                  <Switch
+                    checked={autoOpenPreview}
+                    disabled={previewUrl.trim().length === 0}
+                    onCheckedChange={(checked) => setAutoOpenPreview(Boolean(checked))}
+                  />
+                </label>
+              ) : null}
               {validationError && <p className="text-sm text-destructive">{validationError}</p>}
             </form>
           </DialogPanel>

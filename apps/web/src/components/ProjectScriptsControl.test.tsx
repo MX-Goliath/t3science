@@ -18,6 +18,8 @@ function renderControl(scripts: ReadonlyArray<ProjectScript>) {
     <ProjectScriptsControl
       scripts={scripts}
       keybindings={EMPTY_KEYBINDINGS}
+      defaultModelSelection={null}
+      modelPicker={{ instanceEntries: [], modelOptionsByInstance: new Map() }}
       onRunScript={() => {}}
       onAddScript={async () => undefined as never}
       onUpdateScript={async () => undefined as never}

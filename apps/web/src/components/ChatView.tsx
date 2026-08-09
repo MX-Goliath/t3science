@@ -43,7 +43,12 @@ import {
   resolvePromptInjectedEffort,
 } from "@t3tools/shared/model";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
-import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
+import {
+  isProjectCommandAction,
+  isProjectPromptAction,
+  projectScriptCwd,
+  projectScriptRuntimeEnv,
+} from "@t3tools/shared/projectScripts";
 import { truncate } from "@t3tools/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
 import { Debouncer } from "@tanstack/react-pacer";
@@ -174,7 +179,13 @@ import {
 import { newDraftId, newMessageId, newThreadId } from "~/lib/utils";
 import { useBrowserHistoryStore } from "~/browserHistoryStore";
 import { getProviderModelCapabilities, resolveSelectableProvider } from "../providerModels";
-import { NO_PROVIDER_MODEL_SELECTION } from "../providerInstances";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  NO_PROVIDER_MODEL_SELECTION,
+  resolveDefaultProviderModelSelection,
+  sortProviderInstanceEntries,
+} from "../providerInstances";
 import {
   useClientSettings,
   useClientSettingsHydrated,
@@ -182,7 +193,10 @@ import {
 } from "../hooks/useSettings";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import { resolveAppModelSelectionForInstance } from "../modelSelection";
+import {
+  getCustomModelOptionsByInstance,
+  resolveAppModelSelectionForInstance,
+} from "../modelSelection";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
 import { preventRepeatedTerminalCloseShortcut } from "../lib/terminalCloseShortcut";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
@@ -2128,6 +2142,29 @@ function ChatViewContent(props: ChatViewProps) {
     versionMismatchServerLabel,
   ]);
   const providerStatuses = serverConfig?.providers ?? EMPTY_PROVIDERS;
+  const actionModelInstanceEntries = useMemo(
+    () =>
+      sortProviderInstanceEntries(
+        applyProviderInstanceSettings(deriveProviderInstanceEntries(providerStatuses), settings),
+      ),
+    [providerStatuses, settings],
+  );
+  const actionModelOptionsByInstance = useMemo(
+    () => getCustomModelOptionsByInstance(settings, providerStatuses),
+    [providerStatuses, settings],
+  );
+  const actionModelPicker = useMemo(
+    () => ({
+      instanceEntries: actionModelInstanceEntries,
+      modelOptionsByInstance: actionModelOptionsByInstance,
+    }),
+    [actionModelInstanceEntries, actionModelOptionsByInstance],
+  );
+  const actionDefaultModelSelection = useMemo(
+    () =>
+      resolveDefaultProviderModelSelection(providerStatuses, activeProject?.defaultModelSelection),
+    [activeProject?.defaultModelSelection, providerStatuses],
+  );
   const unlockedSelectedProvider = resolveSelectableProvider(
     providerStatuses,
     selectedProviderByThreadId ?? threadProvider,
@@ -2919,6 +2956,74 @@ function ChatViewContent(props: ChatViewProps) {
           return { ...current, [activeProject.id]: script.id };
         });
       }
+      if (isProjectPromptAction(script)) {
+        const nextThreadId = newThreadId();
+        const createdAt = new Date().toISOString();
+        const title = truncate(script.prompt.replace(/\s+/g, " "));
+        let failure: AtomCommandResult<unknown, unknown> | null = null;
+        const startResult = await startThreadTurn({
+          environmentId,
+          input: {
+            threadId: nextThreadId,
+            message: {
+              messageId: newMessageId(),
+              role: "user",
+              text: script.prompt,
+              attachments: [],
+            },
+            modelSelection: script.modelSelection,
+            titleSeed: title,
+            runtimeMode,
+            interactionMode,
+            bootstrap: {
+              createThread: {
+                projectId: activeProject.id,
+                title,
+                modelSelection: script.modelSelection,
+                runtimeMode,
+                interactionMode,
+                branch: activeThread.branch,
+                worktreePath: activeThread.worktreePath,
+                createdAt,
+              },
+            },
+            createdAt,
+          },
+        });
+        failure = startResult._tag === "Failure" ? startResult : null;
+
+        if (failure === null) {
+          const startedResult = await settlePromise(() =>
+            waitForStartedServerThread(scopeThreadRef(activeThread.environmentId, nextThreadId)),
+          );
+          failure = startedResult._tag === "Failure" ? startedResult : null;
+        }
+        if (failure === null) {
+          const navigateResult = await settlePromise(() =>
+            navigate({
+              to: "/$environmentId/$threadId",
+              params: {
+                environmentId: activeThread.environmentId,
+                threadId: nextThreadId,
+              },
+            }),
+          );
+          failure = navigateResult._tag === "Failure" ? navigateResult : null;
+        }
+        if (failure !== null && !isAtomCommandInterrupted(failure)) {
+          const error = squashAtomCommandFailure(failure);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: `Could not run action "${script.name}"`,
+              description:
+                error instanceof Error ? error.message : "The prompt could not be started.",
+            }),
+          );
+        }
+        return;
+      }
+      if (!isProjectCommandAction(script)) return;
       const targetCwd = options?.cwd ?? gitCwd ?? activeProject.workspaceRoot;
       const baseTerminalId =
         terminalUiState.activeTerminalId || activeKnownTerminalIds[0] || DEFAULT_THREAD_TERMINAL_ID;
@@ -3005,7 +3110,10 @@ function ChatViewContent(props: ChatViewProps) {
       activeThread,
       activeThreadId,
       activeThreadRef,
+      interactionMode,
       gitCwd,
+      navigate,
+      runtimeMode,
       setTerminalOpen,
       setThreadError,
       storeNewTerminal,
@@ -3017,6 +3125,7 @@ function ChatViewContent(props: ChatViewProps) {
       allocatableActiveTerminalIds,
       runningTerminalIds,
       terminalUiState.activeTerminalId,
+      startThreadTurn,
       writeTerminal,
     ],
   );
@@ -6051,6 +6160,8 @@ function ChatViewContent(props: ChatViewProps) {
             activeProjectFaviconPath={activeProject?.faviconPath ?? null}
             openInCwd={gitCwd}
             activeProjectScripts={activeProject?.scripts}
+            activeProjectDefaultModelSelection={actionDefaultModelSelection}
+            actionModelPicker={actionModelPicker}
             preferredScriptId={
               activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
             }

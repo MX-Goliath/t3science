@@ -18,7 +18,10 @@ describe("projectScripts helpers", () => {
     expect(
       buildProjectScript("dev", {
         name: "Dev server",
+        kind: "command",
         command: "pnpm dev",
+        prompt: "",
+        modelSelection: null,
         icon: "debug",
         runOnWorktreeCreate: false,
         previewUrl: "http://localhost:5733",
@@ -39,7 +42,10 @@ describe("projectScripts helpers", () => {
     expect(
       buildProjectScript("test", {
         name: "Test",
+        kind: "command",
         command: "pnpm test",
+        prompt: "",
+        modelSelection: null,
         icon: "test",
         runOnWorktreeCreate: false,
         previewUrl: null,
@@ -50,6 +56,38 @@ describe("projectScripts helpers", () => {
       name: "Test",
       command: "pnpm test",
       icon: "test",
+      runOnWorktreeCreate: false,
+    });
+  });
+
+  it("builds prompt actions with their model selection", () => {
+    expect(
+      buildProjectScript("review", {
+        name: "Review",
+        kind: "prompt",
+        command: "",
+        prompt: "Review the current changes.",
+        modelSelection: {
+          instanceId: "codex" as never,
+          model: "gpt-5.4",
+          options: [{ id: "reasoningEffort", value: "high" }],
+        },
+        icon: "play",
+        runOnWorktreeCreate: false,
+        previewUrl: null,
+        autoOpenPreview: false,
+      }),
+    ).toEqual({
+      id: "review",
+      name: "Review",
+      kind: "prompt",
+      prompt: "Review the current changes.",
+      modelSelection: {
+        instanceId: "codex",
+        model: "gpt-5.4",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      },
+      icon: "play",
       runOnWorktreeCreate: false,
     });
   });
