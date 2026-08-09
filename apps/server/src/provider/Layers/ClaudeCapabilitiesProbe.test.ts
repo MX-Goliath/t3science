@@ -1,3 +1,4 @@
+import type { SDKControlGetUsageResponse } from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeSettings } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -10,10 +11,31 @@ import {
   buildClaudeCapabilitiesProbeQueryOptions,
   CLAUDE_CAPABILITIES_PROBE_SETTING_SOURCES,
   isLegacyClaudeModel,
+  normalizeClaudeRateLimits,
   probeClaudeCapabilities,
+  probeClaudeRateLimits,
+  supportsClaudePlanRateLimits,
 } from "./ClaudeProvider.ts";
 
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
+
+const usageResponse = (
+  rateLimits: SDKControlGetUsageResponse["rate_limits"],
+  rateLimitsAvailable = true,
+): SDKControlGetUsageResponse => ({
+  session: {
+    total_cost_usd: 0,
+    total_api_duration_ms: 0,
+    total_duration_ms: 0,
+    total_lines_added: 0,
+    total_lines_removed: 0,
+    model_usage: {},
+  },
+  subscription_type: "pro",
+  rate_limits_available: rateLimitsAvailable,
+  rate_limits: rateLimits,
+  behaviors: null,
+});
 
 it("keeps only the Claude 5 family out of legacy models", () => {
   assert.deepStrictEqual(
@@ -28,6 +50,63 @@ it("keeps only the Claude 5 family out of legacy models", () => {
       ["claude-opus-4-8", true],
     ],
   );
+});
+
+it("normalizes Claude plan windows as remaining percentages", () => {
+  const limits = normalizeClaudeRateLimits(
+    usageResponse({
+      five_hour: {
+        utilization: 16,
+        resets_at: "2026-08-09T18:29:59.549870+00:00",
+      },
+      seven_day: { utilization: 2.4, resets_at: "2026-08-13T20:59:59.549890+00:00" },
+    }),
+  );
+
+  assert.deepStrictEqual(limits, {
+    fiveHour: {
+      remainingPercent: 84,
+      resetsAt: Math.floor(Date.parse("2026-08-09T18:29:59.549870+00:00") / 1_000),
+      windowDurationMinutes: 300,
+    },
+    weekly: {
+      remainingPercent: 98,
+      resetsAt: Math.floor(Date.parse("2026-08-13T20:59:59.549890+00:00") / 1_000),
+      windowDurationMinutes: 10_080,
+    },
+  });
+});
+
+it("keeps the five-hour window when Claude reports no reset timestamp", () => {
+  const limits = normalizeClaudeRateLimits(
+    usageResponse({
+      five_hour: { utilization: 100, resets_at: null },
+      seven_day: { utilization: null, resets_at: null },
+    }),
+  );
+
+  assert.deepStrictEqual(limits, {
+    fiveHour: { remainingPercent: 0, windowDurationMinutes: 300 },
+  });
+});
+
+it("hides the meter when plan limits do not apply", () => {
+  assert.equal(normalizeClaudeRateLimits(undefined), undefined);
+  assert.equal(
+    normalizeClaudeRateLimits(
+      usageResponse({ five_hour: { utilization: 20, resets_at: null } }, false),
+    ),
+    undefined,
+  );
+  assert.equal(normalizeClaudeRateLimits(usageResponse(null)), undefined);
+  assert.equal(normalizeClaudeRateLimits(usageResponse({})), undefined);
+});
+
+it("only probes plan limits for first-party Anthropic auth", () => {
+  assert.equal(supportsClaudePlanRateLimits(undefined), true);
+  assert.equal(supportsClaudePlanRateLimits("firstParty"), true);
+  assert.equal(supportsClaudePlanRateLimits("bedrock"), false);
+  assert.equal(supportsClaudePlanRateLimits("vertex"), false);
 });
 
 it("isolates Claude capability probes without dropping workspace setting sources", () => {
@@ -149,6 +228,85 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
       assert.equal(invocation.mcpConfig, undefined);
 
       assert.equal(invocation.args.includes("--setting-sources=user,project,local"), true);
+    }).pipe(Effect.scoped),
+  );
+});
+
+it.layer(NodeServices.layer)("Claude rate limit probe SDK boundary", (it) => {
+  it.effect("maps the experimental /usage control response onto snapshot windows", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-usage-sdk-" });
+      const executablePath = path.join(tempDir, "fake-claude.mjs");
+
+      yield* fs.writeFileString(
+        executablePath,
+        [
+          "#!/usr/bin/env node",
+          'import { createInterface } from "node:readline";',
+          "const respond = (requestId, response) => process.stdout.write(JSON.stringify({",
+          '  type: "control_response",',
+          '  response: { subtype: "success", request_id: requestId, response },',
+          '}) + "\\n");',
+          "const lines = createInterface({ input: process.stdin });",
+          'lines.on("line", (line) => {',
+          "  const message = JSON.parse(line);",
+          '  if (message.type !== "control_request") return;',
+          '  if (message.request?.subtype === "initialize") {',
+          "    respond(message.request_id, {",
+          "      commands: [],",
+          "      agents: [],",
+          '      output_style: "default",',
+          '      available_output_styles: ["default"],',
+          "      models: [],",
+          '      account: { email: "dev@example.com", subscriptionType: "pro" },',
+          "    });",
+          "    return;",
+          "  }",
+          '  if (message.request?.subtype === "get_usage") {',
+          "    respond(message.request_id, {",
+          "      session: {",
+          "        total_cost_usd: 0,",
+          "        total_api_duration_ms: 0,",
+          "        total_duration_ms: 0,",
+          "        total_lines_added: 0,",
+          "        total_lines_removed: 0,",
+          "        model_usage: {},",
+          "      },",
+          '      subscription_type: "pro",',
+          "      rate_limits_available: true,",
+          "      rate_limits: {",
+          '        five_hour: { utilization: 25, resets_at: "2026-08-09T18:00:00.000Z" },',
+          '        seven_day: { utilization: 90, resets_at: "2026-08-13T18:00:00.000Z" },',
+          "      },",
+          "      behaviors: null,",
+          "    });",
+          "  }",
+          "});",
+          "setInterval(() => {}, 1_000);",
+          "",
+        ].join("\n"),
+      );
+      yield* fs.chmod(executablePath, 0o755);
+
+      const rateLimits = yield* probeClaudeRateLimits(
+        decodeClaudeSettings({ binaryPath: executablePath }),
+        process.env,
+      );
+
+      assert.deepStrictEqual(rateLimits, {
+        fiveHour: {
+          remainingPercent: 75,
+          resetsAt: Math.floor(Date.parse("2026-08-09T18:00:00.000Z") / 1_000),
+          windowDurationMinutes: 300,
+        },
+        weekly: {
+          remainingPercent: 10,
+          resetsAt: Math.floor(Date.parse("2026-08-13T18:00:00.000Z") / 1_000),
+          windowDurationMinutes: 10_080,
+        },
+      });
     }).pipe(Effect.scoped),
   );
 });

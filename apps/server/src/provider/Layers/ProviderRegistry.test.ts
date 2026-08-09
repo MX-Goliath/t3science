@@ -1896,6 +1896,61 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         ),
       );
 
+      it.effect("attaches plan rate limits to ready Claude snapshots", () =>
+        Effect.gen(function* () {
+          const status = yield* checkClaudeProviderStatus(
+            defaultClaudeSettings,
+            claudeCapabilities(),
+            undefined,
+            undefined,
+            () =>
+              Effect.succeed({
+                fiveHour: { remainingPercent: 84, windowDurationMinutes: 300 },
+                weekly: { remainingPercent: 98, windowDurationMinutes: 10_080 },
+              }),
+          );
+          assert.deepStrictEqual(status.rateLimits, {
+            fiveHour: { remainingPercent: 84, windowDurationMinutes: 300 },
+            weekly: { remainingPercent: 98, windowDurationMinutes: 10_080 },
+          });
+        }).pipe(
+          Effect.provide(
+            mockSpawnerLayer((args) => {
+              const joined = args.join(" ");
+              if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
+              throw new Error(`Unexpected args: ${joined}`);
+            }),
+          ),
+        ),
+      );
+
+      it.effect("skips the plan limit probe for Bedrock-backed Claude", () =>
+        Effect.gen(function* () {
+          let probes = 0;
+          const status = yield* checkClaudeProviderStatus(
+            defaultClaudeSettings,
+            claudeCapabilities({ apiProvider: "bedrock" }),
+            undefined,
+            undefined,
+            () =>
+              Effect.sync(() => {
+                probes += 1;
+                return undefined;
+              }),
+          );
+          assert.strictEqual(probes, 0);
+          assert.strictEqual(status.rateLimits, undefined);
+        }).pipe(
+          Effect.provide(
+            mockSpawnerLayer((args) => {
+              const joined = args.join(" ");
+              if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
+              throw new Error(`Unexpected args: ${joined}`);
+            }),
+          ),
+        ),
+      );
+
       it.effect("includes Claude Opus 5 on supported Claude Code versions", () =>
         Effect.gen(function* () {
           const status = yield* checkClaudeProviderStatus(

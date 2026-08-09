@@ -389,9 +389,17 @@ export const ClaudeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    showRateLimits: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({
+        title: "Show usage limits",
+        description: "Show remaining Claude limits beside the composer controls.",
+        providerSettingsForm: { control: "switch", clearWhenEmpty: "omit" },
+      }),
+    ),
   },
   {
-    order: ["binaryPath", "homePath", "launchArgs"],
+    order: ["binaryPath", "homePath", "launchArgs", "showRateLimits"],
   },
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
@@ -679,17 +687,33 @@ function readConfigBoolean(config: unknown, key: string): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-export function shouldShowCodexRateLimits(
+/**
+ * Driver kinds whose snapshots can carry `ServerProvider.rateLimits`. Both
+ * report subscription windows the composer renders as usage meters; every
+ * other driver never populates the field.
+ */
+const RATE_LIMIT_DRIVERS: ReadonlySet<string> = new Set(["codex", "claudeAgent"]);
+
+export function providerSupportsRateLimits(driver: string | null | undefined): boolean {
+  return driver !== null && driver !== undefined && RATE_LIMIT_DRIVERS.has(driver);
+}
+
+export function shouldShowProviderRateLimits(
   settings: Pick<ServerSettings, "providerInstances" | "providers">,
   instanceId: ProviderInstanceId,
 ): boolean {
   const instance = settings.providerInstances[instanceId];
   const instanceValue = readConfigBoolean(instance?.config, "showRateLimits");
-  if (instance?.driver === "codex" && instanceValue !== undefined) {
+  if (providerSupportsRateLimits(instance?.driver) && instanceValue !== undefined) {
     return instanceValue;
   }
+  // Legacy single-instance ids fall back to `providers.<kind>`, which is still
+  // the source of truth until every deployment migrates to `providerInstances`.
   if (String(instanceId) === "codex") {
     return settings.providers.codex.showRateLimits;
+  }
+  if (String(instanceId) === "claudeAgent") {
+    return settings.providers.claudeAgent.showRateLimits;
   }
   return true;
 }

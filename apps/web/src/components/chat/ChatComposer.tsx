@@ -102,8 +102,8 @@ import {
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
-import { CodexRateLimitsMeter } from "./CodexRateLimitsMeter";
-import { useCodexRateLimits } from "./useCodexRateLimits";
+import { ProviderRateLimitsMeter } from "./ProviderRateLimitsMeter";
+import { useProviderRateLimits } from "./useProviderRateLimits";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
@@ -216,7 +216,7 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
-import { shouldShowCodexRateLimits, type UnifiedSettings } from "@t3tools/contracts/settings";
+import { shouldShowProviderRateLimits, type UnifiedSettings } from "@t3tools/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
@@ -847,7 +847,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () => selectedProviderEntry?.snapshot ?? null,
     [selectedProviderEntry],
   );
-  const codexRateLimits = useCodexRateLimits({
+  const providerRateLimits = useProviderRateLimits({
     environmentId,
     instanceId: selectedInstanceId,
     provider: selectedProvider,
@@ -856,7 +856,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ? String(routeThreadRef.threadId)
         : `draft:${String(draftId ?? routeThreadRef.threadId)}`,
     phase,
-    enabled: shouldShowCodexRateLimits(settings, selectedInstanceId),
+    enabled: shouldShowProviderRateLimits(settings, selectedInstanceId),
     initialRateLimits: selectedProviderStatus?.rateLimits,
   });
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
@@ -3187,10 +3187,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   </>
                 )}
 
-                {codexRateLimits ? (
+                {providerRateLimits ? (
                   <>
                     <Separator orientation="vertical" className="mx-0.5 h-4" />
-                    <CodexRateLimitsMeter rateLimits={codexRateLimits} />
+                    <ProviderRateLimitsMeter
+                      rateLimits={providerRateLimits}
+                      providerLabel={selectedProviderStatus?.displayName?.trim() || "Provider"}
+                    />
                   </>
                 ) : null}
               </div>

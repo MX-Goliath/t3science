@@ -3,6 +3,8 @@ import {
   type ModelCapabilities,
   type ModelSelection,
   type ServerProviderModel,
+  type ServerProviderRateLimits,
+  type ServerProviderRateLimitWindow,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -23,7 +25,9 @@ import { compareSemverVersions } from "@t3tools/shared/semver";
 import {
   query as claudeQuery,
   type Options as ClaudeQueryOptions,
+  type Query as ClaudeQuerySession,
   type SlashCommand as ClaudeSlashCommand,
+  type SDKControlGetUsageResponse,
   type SDKUserMessage,
   type SettingSource,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -558,6 +562,14 @@ function claudeAuthMetadata(input: {
   return undefined;
 }
 
+/**
+ * Only first-party Anthropic auth carries claude.ai plan limits. `undefined`
+ * means the SDK did not report a backend, which is the pre-Bedrock default.
+ */
+export function supportsClaudePlanRateLimits(apiProvider: string | undefined): boolean {
+  return apiProvider === undefined || apiProvider === "firstParty";
+}
+
 function apiProviderAuthMetadata(
   apiProvider: string | undefined,
 ): { readonly type: string; readonly label: string } | undefined {
@@ -571,6 +583,61 @@ function apiProviderAuthMetadata(
 // account info. The previous 8s budget expired mid-init, so the probe returned
 // `undefined` and left the provider unverified and unselectable in the picker.
 const CAPABILITIES_PROBE_TIMEOUT_MS = 25_000;
+
+// The usage probe adds a claude.ai round trip on top of SDK initialization,
+// but never runs a model turn.
+const RATE_LIMITS_PROBE_TIMEOUT_MS = 20_000;
+
+const FIVE_HOUR_WINDOW_MINUTES = 5 * 60;
+const WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
+
+type ClaudeUsageWindow = NonNullable<
+  NonNullable<SDKControlGetUsageResponse["rate_limits"]>["five_hour"]
+>;
+
+function parseClaudeResetsAt(resetsAt: string | null | undefined): number | undefined {
+  if (!resetsAt) return undefined;
+  const parsed = Date.parse(resetsAt);
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+  return Math.floor(parsed / 1_000);
+}
+
+function mapClaudeRateLimitWindow(
+  window: ClaudeUsageWindow | null | undefined,
+  windowDurationMinutes: number,
+): ServerProviderRateLimitWindow | undefined {
+  if (!window) return undefined;
+  const utilization = window.utilization;
+  if (typeof utilization !== "number" || !Number.isFinite(utilization)) return undefined;
+  const resetsAt = parseClaudeResetsAt(window.resets_at);
+  return {
+    remainingPercent: Math.round(Math.max(0, Math.min(100, 100 - utilization))),
+    ...(resetsAt !== undefined ? { resetsAt } : {}),
+    windowDurationMinutes,
+  };
+}
+
+/**
+ * Map the experimental `/usage` payload onto the driver-agnostic snapshot
+ * shape the composer meters read.
+ *
+ * `rate_limits_available` is false for API key, Bedrock, and Vertex sessions
+ * — those have no plan windows, so the meter stays hidden.
+ */
+export function normalizeClaudeRateLimits(
+  usage: SDKControlGetUsageResponse | undefined,
+): ServerProviderRateLimits | undefined {
+  if (!usage || !usage.rate_limits_available || !usage.rate_limits) return undefined;
+
+  const fiveHour = mapClaudeRateLimitWindow(usage.rate_limits.five_hour, FIVE_HOUR_WINDOW_MINUTES);
+  const weekly = mapClaudeRateLimitWindow(usage.rate_limits.seven_day, WEEKLY_WINDOW_MINUTES);
+  if (!fiveHour && !weekly) return undefined;
+
+  return {
+    ...(fiveHour ? { fiveHour } : {}),
+    ...(weekly ? { weekly } : {}),
+  };
+}
 
 /**
  * Keep workspace-scoped command discovery intact while isolating the periodic
@@ -701,14 +768,67 @@ function waitForAbortSignal(signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Probe account information by spawning a lightweight Claude Agent SDK
- * session and reading the initialization result.
+ * Run `use` against a lightweight Claude Agent SDK session and tear the
+ * subprocess down afterwards.
  *
  * We pass a never-yielding AsyncIterable as the prompt so that no user
  * message is ever written to the subprocess stdin. This means the Claude
  * Code subprocess completes its local initialization IPC (returning
  * account info and slash commands) but never starts an API request to
- * Anthropic. We read the init data and then abort the subprocess.
+ * Anthropic. We read what we need and then abort the subprocess.
+ *
+ * Every failure — spawn, timeout, control-request rejection — collapses to
+ * `undefined` so a probe never fails the surrounding snapshot check.
+ */
+const withClaudeProbeSession = <A>(input: {
+  readonly claudeSettings: ClaudeSettings;
+  readonly environment: NodeJS.ProcessEnv | undefined;
+  readonly cwd: string | undefined;
+  readonly timeoutMs: number;
+  readonly use: (session: ClaudeQuerySession) => Promise<A>;
+}) => {
+  const abort = new AbortController();
+  return Effect.gen(function* () {
+    const claudeEnvironment = yield* makeClaudeEnvironment(input.claudeSettings, input.environment);
+    const executablePath = yield* resolveClaudeSdkExecutablePath(
+      input.claudeSettings.binaryPath,
+      claudeEnvironment,
+    );
+    return yield* Effect.tryPromise(() =>
+      input.use(
+        claudeQuery({
+          // Never yield — we only need control-plane data, not a conversation.
+          // This prevents any prompt from reaching the Anthropic API.
+          // oxlint-disable-next-line require-yield
+          prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
+            await waitForAbortSignal(abort.signal);
+          })(),
+          options: buildClaudeCapabilitiesProbeQueryOptions({
+            executablePath,
+            abortController: abort,
+            environment: claudeEnvironment,
+            cwd: input.cwd,
+          }),
+        }),
+      ),
+    );
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        if (!abort.signal.aborted) abort.abort();
+      }),
+    ),
+    Effect.timeoutOption(input.timeoutMs),
+    Effect.result,
+    Effect.map((result) => {
+      if (Result.isFailure(result)) return undefined;
+      return Option.isSome(result.success) ? result.success.value : undefined;
+    }),
+  );
+};
+
+/**
+ * Probe account information by reading the SDK initialization result.
  *
  * This is used as a fallback when `claude auth status` does not include
  * subscription type information.
@@ -717,30 +837,14 @@ const probeClaudeCapabilities = (
   claudeSettings: ClaudeSettings,
   environment?: NodeJS.ProcessEnv,
   cwd?: string,
-) => {
-  const abort = new AbortController();
-  return Effect.gen(function* () {
-    const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
-    const executablePath = yield* resolveClaudeSdkExecutablePath(
-      claudeSettings.binaryPath,
-      claudeEnvironment,
-    );
-    return yield* Effect.tryPromise(async () => {
-      const q = claudeQuery({
-        // Never yield — we only need initialization data, not a conversation.
-        // This prevents any prompt from reaching the Anthropic API.
-        // oxlint-disable-next-line require-yield
-        prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
-          await waitForAbortSignal(abort.signal);
-        })(),
-        options: buildClaudeCapabilitiesProbeQueryOptions({
-          executablePath,
-          abortController: abort,
-          environment: claudeEnvironment,
-          cwd,
-        }),
-      });
-      const init = await q.initializationResult();
+) =>
+  withClaudeProbeSession({
+    claudeSettings,
+    environment,
+    cwd,
+    timeoutMs: CAPABILITIES_PROBE_TIMEOUT_MS,
+    use: async (session) => {
+      const init = await session.initializationResult();
       const account = init.account as
         | {
             readonly email?: string;
@@ -756,21 +860,34 @@ const probeClaudeCapabilities = (
         apiProvider: account?.apiProvider,
         slashCommands: parseClaudeInitializationCommands(init.commands),
       } satisfies ClaudeCapabilitiesProbe;
-    });
-  }).pipe(
-    Effect.ensuring(
-      Effect.sync(() => {
-        if (!abort.signal.aborted) abort.abort();
-      }),
-    ),
-    Effect.timeoutOption(CAPABILITIES_PROBE_TIMEOUT_MS),
-    Effect.result,
-    Effect.map((result) => {
-      if (Result.isFailure(result)) return undefined;
-      return Option.isSome(result.success) ? result.success.value : undefined;
-    }),
-  );
-};
+    },
+  });
+
+/**
+ * Probe claude.ai plan usage windows (the structured data behind `/usage`).
+ *
+ * Runs in its own short-lived session because limits move with every turn
+ * while account metadata does not: `ClaudeDriver` caches this probe far more
+ * aggressively than {@link probeClaudeCapabilities}.
+ */
+const probeClaudeRateLimits = (
+  claudeSettings: ClaudeSettings,
+  environment?: NodeJS.ProcessEnv,
+  cwd?: string,
+): Effect.Effect<ServerProviderRateLimits | undefined, never, FileSystem.FileSystem | Path.Path> =>
+  withClaudeProbeSession({
+    claudeSettings,
+    environment,
+    cwd,
+    timeoutMs: RATE_LIMITS_PROBE_TIMEOUT_MS,
+    use: async (session) => {
+      await session.initializationResult();
+      // EXPERIMENTAL SDK surface: the method name and response shape are
+      // explicitly unstable, so an older/newer CLI rejecting the control
+      // request degrades to "no meter" instead of failing the snapshot.
+      return session.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET();
+    },
+  }).pipe(Effect.map(normalizeClaudeRateLimits));
 
 const runClaudeCommand = Effect.fn("runClaudeCommand")(function* (
   claudeSettings: ClaudeSettings,
@@ -795,6 +912,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
   ) => Effect.Effect<ClaudeCapabilitiesProbe | undefined>,
   environment?: NodeJS.ProcessEnv,
   cwd?: string,
+  resolveRateLimits?: () => Effect.Effect<ServerProviderRateLimits | undefined>,
 ): Effect.fn.Return<
   ServerProviderDraft,
   never,
@@ -937,25 +1055,34 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
       subscriptionType: capabilities.subscriptionType,
       authMethod: capabilities.tokenSource,
     }) ?? apiProviderAuthMetadata(capabilities.apiProvider);
-  return buildServerProvider({
-    presentation: CLAUDE_PRESENTATION,
-    enabled: claudeSettings.enabled,
-    checkedAt,
-    models,
-    slashCommands: dedupedSlashCommands,
-    skills,
-    probe: {
-      installed: true,
-      version: parsedVersion,
-      status: "ready",
-      auth: {
-        status: "authenticated",
-        ...(capabilities.email ? { email: capabilities.email } : {}),
-        ...(authMetadata ? authMetadata : {}),
+  // Bedrock/Vertex sessions bill through the cloud provider and never carry
+  // claude.ai plan windows; skip the probe spawn entirely for them.
+  const rateLimits =
+    resolveRateLimits && supportsClaudePlanRateLimits(capabilities.apiProvider)
+      ? yield* resolveRateLimits().pipe(Effect.orElseSucceed(() => undefined))
+      : undefined;
+  return {
+    ...buildServerProvider({
+      presentation: CLAUDE_PRESENTATION,
+      enabled: claudeSettings.enabled,
+      checkedAt,
+      models,
+      slashCommands: dedupedSlashCommands,
+      skills,
+      probe: {
+        installed: true,
+        version: parsedVersion,
+        status: "ready",
+        auth: {
+          status: "authenticated",
+          ...(capabilities.email ? { email: capabilities.email } : {}),
+          ...(authMetadata ? authMetadata : {}),
+        },
+        ...(versionUpgradeMessage ? { message: versionUpgradeMessage } : {}),
       },
-      ...(versionUpgradeMessage ? { message: versionUpgradeMessage } : {}),
-    },
-  });
+    }),
+    ...(rateLimits ? { rateLimits } : {}),
+  };
 });
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -1002,4 +1129,4 @@ export const makePendingClaudeProvider = (
     });
   });
 
-export { probeClaudeCapabilities };
+export { probeClaudeCapabilities, probeClaudeRateLimits };

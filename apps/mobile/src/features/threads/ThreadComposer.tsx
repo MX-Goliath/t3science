@@ -8,7 +8,7 @@ import type {
   RuntimeMode,
   ServerConfig as T3ServerConfig,
 } from "@t3tools/contracts";
-import { shouldShowCodexRateLimits } from "@t3tools/contracts/settings";
+import { shouldShowProviderRateLimits } from "@t3tools/contracts/settings";
 import {
   detectComposerTrigger,
   replaceTextRange,
@@ -66,8 +66,8 @@ import {
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
-import { CodexRateLimitsInline } from "./CodexRateLimitsInline";
-import { useCodexRateLimits } from "./useCodexRateLimits";
+import { ProviderRateLimitsInline } from "./ProviderRateLimitsInline";
+import { useProviderRateLimits } from "./useProviderRateLimits";
 import { ThreadSettingsSheet, threadSettingsSummaryLabel } from "./ThreadSettingsSheet";
 import { useThreadSettingsSheetPresentation } from "./use-thread-settings-sheet-presentation";
 
@@ -344,12 +344,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       ) ?? null
     );
   }, [props.serverConfig, props.selectedThread.modelSelection.instanceId]);
-  const codexRateLimits = useCodexRateLimits({
+  const providerRateLimits = useProviderRateLimits({
     environmentId: props.environmentId,
     thread: props.selectedThread,
     provider: selectedProviderStatus,
     enabled: props.serverConfig
-      ? shouldShowCodexRateLimits(
+      ? shouldShowProviderRateLimits(
           props.serverConfig.settings,
           props.selectedThread.modelSelection.instanceId,
         )
@@ -815,7 +815,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                   maxWidth={320}
                   onPress={settingsSheetPresentation.open}
                 />
-                {codexRateLimits ? <CodexRateLimitsInline rateLimits={codexRateLimits} /> : null}
+                {providerRateLimits ? (
+                  <ProviderRateLimitsInline
+                    rateLimits={providerRateLimits}
+                    providerLabel={selectedProviderStatus?.displayName?.trim() || "Provider"}
+                  />
+                ) : null}
                 {showStopAction ? (
                   <ComposerToolbarButton
                     accessibilityLabel="Stop"

@@ -3,9 +3,13 @@ import { View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 import { AppText as Text } from "../../components/AppText";
-import { codexRateLimitTrackColor } from "./codexRateLimits";
+import { providerRateLimitTrackColor } from "./providerRateLimits";
 
-function RateLimitRing(props: { label: string; window: ServerProviderRateLimitWindow }) {
+function RateLimitRing(props: {
+  label: string;
+  providerLabel: string;
+  window: ServerProviderRateLimitWindow;
+}) {
   const remainingPercent = Math.max(0, Math.min(100, props.window.remainingPercent));
   const radius = 7;
   const circumference = 2 * Math.PI * radius;
@@ -14,7 +18,7 @@ function RateLimitRing(props: { label: string; window: ServerProviderRateLimitWi
     <View
       className="flex-row items-center gap-1"
       accessible
-      accessibilityLabel={`${props.label} Codex limit: ${remainingPercent}% remaining`}
+      accessibilityLabel={`${props.label} ${props.providerLabel} limit: ${remainingPercent}% remaining`}
     >
       <Svg width={18} height={18} viewBox="0 0 18 18" style={{ transform: [{ rotate: "-90deg" }] }}>
         <Circle
@@ -30,7 +34,7 @@ function RateLimitRing(props: { label: string; window: ServerProviderRateLimitWi
           cy={9}
           r={radius}
           fill="none"
-          stroke={codexRateLimitTrackColor(remainingPercent)}
+          stroke={providerRateLimitTrackColor(remainingPercent)}
           strokeWidth={2.5}
           strokeLinecap="round"
           strokeDasharray={`${circumference} ${circumference}`}
@@ -43,16 +47,27 @@ function RateLimitRing(props: { label: string; window: ServerProviderRateLimitWi
   );
 }
 
-export function CodexRateLimitsInline(props: { rateLimits: ServerProviderRateLimits }) {
+export function ProviderRateLimitsInline(props: {
+  rateLimits: ServerProviderRateLimits;
+  providerLabel: string;
+}) {
   if (!props.rateLimits.fiveHour && !props.rateLimits.weekly) return null;
 
   return (
     <View className="h-11 flex-row items-center gap-2 rounded-full bg-subtle px-2.5">
       {props.rateLimits.fiveHour ? (
-        <RateLimitRing label="5h" window={props.rateLimits.fiveHour} />
+        <RateLimitRing
+          label="5h"
+          providerLabel={props.providerLabel}
+          window={props.rateLimits.fiveHour}
+        />
       ) : null}
       {props.rateLimits.weekly ? (
-        <RateLimitRing label="Week" window={props.rateLimits.weekly} />
+        <RateLimitRing
+          label="Week"
+          providerLabel={props.providerLabel}
+          window={props.rateLimits.weekly}
+        />
       ) : null}
     </View>
   );

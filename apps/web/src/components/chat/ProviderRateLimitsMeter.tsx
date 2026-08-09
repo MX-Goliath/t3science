@@ -2,7 +2,7 @@ import type { ServerProviderRateLimitWindow, ServerProviderRateLimits } from "@t
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
-export function codexRateLimitColor(remainingPercent: number): string {
+export function providerRateLimitColor(remainingPercent: number): string {
   if (remainingPercent > 50) return "var(--color-success)";
   if (remainingPercent >= 20) return "var(--color-warning)";
   return "var(--color-error)";
@@ -16,13 +16,13 @@ function formatResetTime(resetsAt: number | undefined): string | null {
   }).format(new Date(resetsAt * 1_000));
 }
 
-function CodexRateLimit(props: {
+function ProviderRateLimit(props: {
   label: string;
   accessibleLabel: string;
   window: ServerProviderRateLimitWindow;
 }) {
   const remainingPercent = Math.max(0, Math.min(100, props.window.remainingPercent));
-  const color = codexRateLimitColor(remainingPercent);
+  const color = providerRateLimitColor(remainingPercent);
   const radius = 7.5;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - remainingPercent / 100);
@@ -80,22 +80,28 @@ function CodexRateLimit(props: {
   );
 }
 
-export function CodexRateLimitsMeter(props: { rateLimits: ServerProviderRateLimits }) {
+export function ProviderRateLimitsMeter(props: {
+  rateLimits: ServerProviderRateLimits;
+  providerLabel: string;
+}) {
   if (!props.rateLimits.fiveHour && !props.rateLimits.weekly) return null;
 
   return (
-    <div className="flex shrink-0 items-center gap-0.5" aria-label="Codex usage limits">
+    <div
+      className="flex shrink-0 items-center gap-0.5"
+      aria-label={`${props.providerLabel} usage limits`}
+    >
       {props.rateLimits.fiveHour ? (
-        <CodexRateLimit
+        <ProviderRateLimit
           label="5h"
-          accessibleLabel="5-hour Codex limit"
+          accessibleLabel={`5-hour ${props.providerLabel} limit`}
           window={props.rateLimits.fiveHour}
         />
       ) : null}
       {props.rateLimits.weekly ? (
-        <CodexRateLimit
+        <ProviderRateLimit
           label="Week"
-          accessibleLabel="Weekly Codex limit"
+          accessibleLabel={`Weekly ${props.providerLabel} limit`}
           window={props.rateLimits.weekly}
         />
       ) : null}

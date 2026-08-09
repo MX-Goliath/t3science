@@ -8,7 +8,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   ServerSettings,
   ServerSettingsPatch,
-  shouldShowCodexRateLimits,
+  shouldShowProviderRateLimits,
 } from "./settings.ts";
 
 const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
@@ -149,23 +149,46 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     // so existing call sites keep working through the migration.
     expect(decoded.providers.codex.enabled).toBe(true);
     expect(decoded.providers.codex.showRateLimits).toBe(true);
+    expect(decoded.providers.claudeAgent.showRateLimits).toBe(true);
   });
 
-  it("resolves Codex limit visibility per provider instance", () => {
+  it("resolves limit visibility per provider instance", () => {
     const settings = decodeServerSettings({
       providerInstances: {
         codex_personal: {
           driver: "codex",
           config: { showRateLimits: false },
         },
+        claude_work: {
+          driver: "claudeAgent",
+          config: { showRateLimits: false },
+        },
       },
     });
 
-    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex"))).toBe(true);
-    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex_personal"))).toBe(
+    expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("codex"))).toBe(true);
+    expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("codex_personal"))).toBe(
       false,
     );
-    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex_work"))).toBe(true);
+    expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("codex_work"))).toBe(
+      true,
+    );
+    expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("claudeAgent"))).toBe(
+      true,
+    );
+    expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("claude_work"))).toBe(
+      false,
+    );
+  });
+
+  it("honours the legacy Claude limit visibility toggle", () => {
+    const settings = decodeServerSettings({
+      providers: { claudeAgent: { showRateLimits: false } },
+    });
+
+    expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("claudeAgent"))).toBe(
+      false,
+    );
   });
 
   it("decodes a multi-instance map mixing first-party and fork drivers", () => {

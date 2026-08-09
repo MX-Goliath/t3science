@@ -4,13 +4,14 @@ import type {
   ServerProvider,
   ServerProviderRateLimits,
 } from "@t3tools/contracts";
+import { providerSupportsRateLimits } from "@t3tools/contracts/settings";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { didMobileCodexResponseFinish } from "./codexRateLimits";
+import { didMobileProviderResponseFinish } from "./providerRateLimits";
 
-export function useCodexRateLimits(input: {
+export function useProviderRateLimits(input: {
   environmentId: EnvironmentId;
   thread: OrchestrationThreadShell;
   provider: ServerProvider | null;
@@ -21,9 +22,9 @@ export function useCodexRateLimits(input: {
     reportDefect: false,
   });
   const instanceId = input.thread.modelSelection.instanceId;
-  const providerDriver = input.provider?.driver ?? null;
+  const supportsRateLimits = providerSupportsRateLimits(input.provider?.driver);
   const [rateLimits, setRateLimits] = useState<ServerProviderRateLimits | null>(
-    providerDriver === "codex" && input.enabled ? (input.provider?.rateLimits ?? null) : null,
+    supportsRateLimits && input.enabled ? (input.provider?.rateLimits ?? null) : null,
   );
   const targetKey = `${input.environmentId}:${instanceId}`;
   const targetKeyRef = useRef(targetKey);
@@ -31,12 +32,12 @@ export function useCodexRateLimits(input: {
 
   useEffect(() => {
     setRateLimits(
-      providerDriver === "codex" && input.enabled ? (input.provider?.rateLimits ?? null) : null,
+      supportsRateLimits && input.enabled ? (input.provider?.rateLimits ?? null) : null,
     );
-  }, [input.enabled, input.provider?.rateLimits, instanceId, providerDriver]);
+  }, [input.enabled, input.provider?.rateLimits, instanceId, supportsRateLimits]);
 
   const refreshRateLimits = useCallback(async () => {
-    if (providerDriver !== "codex" || !input.enabled) return;
+    if (!supportsRateLimits || !input.enabled) return;
     const requestTargetKey = targetKey;
     const result = await refreshProviders({
       environmentId: input.environmentId,
@@ -46,15 +47,22 @@ export function useCodexRateLimits(input: {
     const provider = result.value.providers.find(
       (candidate) => candidate.instanceId === instanceId,
     );
-    if (provider?.driver === "codex") {
+    if (provider && providerSupportsRateLimits(provider.driver)) {
       setRateLimits(provider.rateLimits ?? null);
     }
-  }, [input.enabled, input.environmentId, instanceId, providerDriver, refreshProviders, targetKey]);
+  }, [
+    input.enabled,
+    input.environmentId,
+    instanceId,
+    refreshProviders,
+    supportsRateLimits,
+    targetKey,
+  ]);
 
   useEffect(() => {
-    if (providerDriver !== "codex" || !input.enabled) return;
+    if (!supportsRateLimits || !input.enabled) return;
     void refreshRateLimits();
-  }, [input.enabled, input.thread.id, providerDriver, refreshRateLimits]);
+  }, [input.enabled, input.thread.id, refreshRateLimits, supportsRateLimits]);
 
   const sessionStatus = input.thread.session?.status ?? null;
   const previousStatusRef = useRef<string | null>(sessionStatus);
@@ -62,13 +70,13 @@ export function useCodexRateLimits(input: {
     const previousStatus = previousStatusRef.current;
     previousStatusRef.current = sessionStatus;
     if (
-      providerDriver === "codex" &&
+      supportsRateLimits &&
       input.enabled &&
-      didMobileCodexResponseFinish(previousStatus, sessionStatus)
+      didMobileProviderResponseFinish(previousStatus, sessionStatus)
     ) {
       void refreshRateLimits();
     }
-  }, [input.enabled, providerDriver, refreshRateLimits, sessionStatus]);
+  }, [input.enabled, refreshRateLimits, sessionStatus, supportsRateLimits]);
 
   return input.enabled ? rateLimits : null;
 }

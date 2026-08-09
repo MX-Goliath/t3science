@@ -33,6 +33,7 @@ import {
   checkClaudeProviderStatus,
   makePendingClaudeProvider,
   probeClaudeCapabilities,
+  probeClaudeRateLimits,
 } from "../Layers/ClaudeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
@@ -59,6 +60,10 @@ const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
 const CAPABILITIES_PROBE_TTL = Duration.minutes(5);
+// Plan windows move with every turn, so the composer meters need a much
+// fresher probe than account metadata — but still one that coalesces the
+// burst of refreshes a thread switch triggers.
+const RATE_LIMITS_PROBE_TTL = Duration.seconds(30);
 
 function isClaudeNativeCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
@@ -163,11 +168,25 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       });
       const capabilitiesCacheKey = yield* makeClaudeCapabilitiesCacheKey(effectiveConfig, cwd);
 
+      // Separate cache from the capabilities probe: same spawn shape, far
+      // shorter TTL, and only filled when the instance actually renders meters.
+      const rateLimitsProbeCache = yield* Cache.make({
+        capacity: 1,
+        timeToLive: RATE_LIMITS_PROBE_TTL,
+        lookup: () =>
+          probeClaudeRateLimits(effectiveConfig, processEnv, cwd).pipe(
+            Effect.provideService(Path.Path, path),
+          ),
+      });
+
       const checkProvider = checkClaudeProviderStatus(
         effectiveConfig,
         () => Cache.get(capabilitiesProbeCache, capabilitiesCacheKey),
         processEnv,
         cwd,
+        effectiveConfig.showRateLimits
+          ? () => Cache.get(rateLimitsProbeCache, capabilitiesCacheKey)
+          : undefined,
       ).pipe(
         Effect.map(stampIdentity),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
