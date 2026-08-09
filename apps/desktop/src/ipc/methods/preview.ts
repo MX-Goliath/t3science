@@ -8,6 +8,7 @@ import {
   DesktopPreviewAutomationTypeInputSchema,
   DesktopPreviewAutomationWaitForInputSchema,
   DesktopPreviewConfigInputSchema,
+  DesktopPreviewDownloadDirectoryInputSchema,
   DesktopPreviewNavigateInputSchema,
   DesktopPreviewRecordingArtifactSchema,
   DesktopPreviewRecordingSaveInputSchema,
@@ -73,6 +74,16 @@ export const registerWebview = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.preview.registerWebview")(function* ({ tabId, webContentsId }) {
     const manager = yield* PreviewManager.PreviewManager;
     yield* manager.registerWebview(tabId, webContentsId);
+  }),
+});
+
+export const setDownloadDirectory = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_SET_DOWNLOAD_DIRECTORY_CHANNEL,
+  payload: DesktopPreviewDownloadDirectoryInputSchema,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.preview.setDownloadDirectory")(function* ({ tabId, directory }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    yield* manager.setDownloadDirectory(tabId, directory);
   }),
 });
 
@@ -358,6 +369,7 @@ export const methods = [
   createTab,
   closeTab,
   registerWebview,
+  setDownloadDirectory,
   navigate,
   goBack,
   goForward,

@@ -19,7 +19,16 @@ describe("ProviderSettingsForm helpers", () => {
       "homePath",
       "shadowHomePath",
       "launchArgs",
+      "showRateLimits",
     ]);
+
+    expect(
+      deriveProviderSettingsFields(codex!).find((field) => field.key === "showRateLimits"),
+    ).toMatchObject({
+      control: "switch",
+      label: "Show usage limits",
+      defaultBooleanValue: true,
+    });
   });
 
   it("sources labels and descriptions from schema annotations", () => {

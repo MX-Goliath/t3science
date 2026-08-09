@@ -103,6 +103,26 @@ export const EnvironmentIdentificationMode = Schema.Literals(["artwork", "pill",
 export type EnvironmentIdentificationMode = typeof EnvironmentIdentificationMode.Type;
 export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationMode = "artwork";
 
+export const WebChatProvider = Schema.Literals(["chatgpt", "claude", "grok", "perplexity"]);
+export type WebChatProvider = typeof WebChatProvider.Type;
+export const DEFAULT_WEB_CHAT_PROVIDER: WebChatProvider = "chatgpt";
+
+const PersistedWebChatProvider = Schema.Literals([
+  "chatgpt",
+  "claude",
+  "gemini",
+  "grok",
+  "perplexity",
+]).pipe(
+  Schema.decodeTo(
+    WebChatProvider,
+    SchemaTransformation.transformOrFail({
+      decode: (provider) => Effect.succeed(provider === "gemini" ? "grok" : provider),
+      encode: (provider) => Effect.succeed(provider),
+    }),
+  ),
+);
+
 /**
  * A user-chosen font family (a single name or a comma-separated list). Empty
  * means "use the app default"; clients compose their own fallback stacks.
@@ -176,6 +196,12 @@ export const ClientSettingsSchema = Schema.Struct({
   // old keys, so everyone, including prior beta opt-outs, resets to the new
   // default sidebar.
   legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Desktop-only persistent browser chat. Kept client-local because the
+  // browser session and its authenticated cookies belong to this device.
+  webChatEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  webChatProvider: PersistedWebChatProvider.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_WEB_CHAT_PROVIDER)),
+  ),
   sidebarAutoSettleAfterDays: Schema.NullOr(SidebarAutoSettleAfterDays).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
@@ -305,13 +331,21 @@ export const CodexSettings = makeProviderSettingsSchema(
         description: "Additional CLI arguments passed to codex app-server on session start.",
       }),
     ),
+    showRateLimits: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({
+        title: "Show usage limits",
+        description: "Show remaining Codex limits beside the composer controls.",
+        providerSettingsForm: { control: "switch", clearWhenEmpty: "omit" },
+      }),
+    ),
     customModels: Schema.Array(Schema.String).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
   {
-    order: ["binaryPath", "homePath", "shadowHomePath", "launchArgs"],
+    order: ["binaryPath", "homePath", "shadowHomePath", "launchArgs", "showRateLimits"],
   },
 );
 export type CodexSettings = typeof CodexSettings.Type;
@@ -637,6 +671,27 @@ export const ServerSettings = Schema.Struct({
 });
 export type ServerSettings = typeof ServerSettings.Type;
 
+function readConfigBoolean(config: unknown, key: string): boolean | undefined {
+  if (config === null || typeof config !== "object") return undefined;
+  const value = (config as Record<string, unknown>)[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+export function shouldShowCodexRateLimits(
+  settings: Pick<ServerSettings, "providerInstances" | "providers">,
+  instanceId: ProviderInstanceId,
+): boolean {
+  const instance = settings.providerInstances[instanceId];
+  const instanceValue = readConfigBoolean(instance?.config, "showRateLimits");
+  if (instance?.driver === "codex" && instanceValue !== undefined) {
+    return instanceValue;
+  }
+  if (String(instanceId) === "codex") {
+    return settings.providers.codex.showRateLimits;
+  }
+  return true;
+}
+
 export const DEFAULT_SERVER_SETTINGS: ServerSettings = Schema.decodeSync(ServerSettings)({});
 
 export const ServerSettingsOperation = Schema.Literals([
@@ -695,6 +750,7 @@ const CodexSettingsPatch = Schema.Struct({
   homePath: Schema.optionalKey(TrimmedString),
   shadowHomePath: Schema.optionalKey(TrimmedString),
   launchArgs: Schema.optionalKey(TrimmedString),
+  showRateLimits: Schema.optionalKey(Schema.Boolean),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
@@ -822,6 +878,8 @@ export const ClientSettingsPatch = Schema.Struct({
   ),
   planModeEnabled: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
+  webChatEnabled: Schema.optionalKey(Schema.Boolean),
+  webChatProvider: Schema.optionalKey(WebChatProvider),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(

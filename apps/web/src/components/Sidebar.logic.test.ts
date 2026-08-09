@@ -29,6 +29,7 @@ import {
   pinOrderKeyBetween,
   planPinnedReorder,
   sortPinnedThreadsForSidebar,
+  sortProjectThreadsWithPins,
   sortThreadsForSidebar,
   sortProjectsForSidebar,
   sortScopedProjectsForSidebar,
@@ -870,6 +871,82 @@ describe("sortPinnedThreadsForSidebar", () => {
     ]);
 
     expect(sorted.map((thread) => thread.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("sortProjectThreadsWithPins", () => {
+  const thread = (input: {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    pinnedAt?: string | null;
+    pinOrderKey?: string | null;
+  }) => ({
+    id: input.id,
+    createdAt: input.createdAt,
+    updatedAt: input.updatedAt,
+    latestUserMessageAt: input.updatedAt,
+    pinnedAt: input.pinnedAt ?? null,
+    pinOrderKey: input.pinOrderKey ?? null,
+  });
+
+  it("keeps pinned threads above the project's regular sort order", () => {
+    const sorted = sortProjectThreadsWithPins(
+      [
+        thread({
+          id: "regular-new",
+          createdAt: "2026-03-09T12:00:00.000Z",
+          updatedAt: "2026-03-09T12:00:00.000Z",
+        }),
+        thread({
+          id: "pinned-second",
+          createdAt: "2026-03-09T09:00:00.000Z",
+          updatedAt: "2026-03-09T09:00:00.000Z",
+          pinnedAt: "2026-03-09T13:00:00.000Z",
+          pinOrderKey: "t",
+        }),
+        thread({
+          id: "regular-old",
+          createdAt: "2026-03-09T08:00:00.000Z",
+          updatedAt: "2026-03-09T14:00:00.000Z",
+        }),
+        thread({
+          id: "pinned-first",
+          createdAt: "2026-03-09T07:00:00.000Z",
+          updatedAt: "2026-03-09T07:00:00.000Z",
+          pinnedAt: "2026-03-09T13:00:00.000Z",
+          pinOrderKey: "g",
+        }),
+      ],
+      "updated_at",
+    );
+
+    expect(sorted.map((item) => item.id)).toEqual([
+      "pinned-first",
+      "pinned-second",
+      "regular-old",
+      "regular-new",
+    ]);
+  });
+
+  it("uses creation order for regular threads when selected", () => {
+    const sorted = sortProjectThreadsWithPins(
+      [
+        thread({
+          id: "created-first",
+          createdAt: "2026-03-09T08:00:00.000Z",
+          updatedAt: "2026-03-09T14:00:00.000Z",
+        }),
+        thread({
+          id: "created-last",
+          createdAt: "2026-03-09T12:00:00.000Z",
+          updatedAt: "2026-03-09T12:00:00.000Z",
+        }),
+      ],
+      "created_at",
+    );
+
+    expect(sorted.map((item) => item.id)).toEqual(["created-last", "created-first"]);
   });
 });
 

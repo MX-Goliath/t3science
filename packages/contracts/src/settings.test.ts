@@ -8,6 +8,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   ServerSettings,
   ServerSettingsPatch,
+  shouldShowCodexRateLimits,
 } from "./settings.ts";
 
 const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
@@ -103,6 +104,31 @@ describe("ClientSettings sidebar", () => {
   });
 });
 
+describe("ClientSettings web chat", () => {
+  it("defaults off with ChatGPT selected", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.webChatEnabled).toBe(false);
+    expect(settings.webChatProvider).toBe("chatgpt");
+  });
+
+  it.each(["chatgpt", "claude", "grok", "perplexity"] as const)(
+    "accepts the supported provider: %s",
+    (provider) => {
+      expect(decodeClientSettingsPatch({ webChatProvider: provider }).webChatProvider).toBe(
+        provider,
+      );
+    },
+  );
+
+  it("migrates the removed Gemini web chat provider to Grok", () => {
+    expect(decodeClientSettings({ webChatProvider: "gemini" }).webChatProvider).toBe("grok");
+  });
+
+  it("rejects an unsupported provider", () => {
+    expect(() => decodeClientSettingsPatch({ webChatProvider: "other" })).toThrow();
+  });
+});
+
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("defaults text generation to Luna at low reasoning effort", () => {
     expect(DEFAULT_SERVER_SETTINGS.textGenerationModelSelection).toEqual({
@@ -122,6 +148,24 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     // Legacy `providers` struct is still hydrated with its per-driver defaults
     // so existing call sites keep working through the migration.
     expect(decoded.providers.codex.enabled).toBe(true);
+    expect(decoded.providers.codex.showRateLimits).toBe(true);
+  });
+
+  it("resolves Codex limit visibility per provider instance", () => {
+    const settings = decodeServerSettings({
+      providerInstances: {
+        codex_personal: {
+          driver: "codex",
+          config: { showRateLimits: false },
+        },
+      },
+    });
+
+    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex"))).toBe(true);
+    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex_personal"))).toBe(
+      false,
+    );
+    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex_work"))).toBe(true);
   });
 
   it("decodes a multi-instance map mixing first-party and fork drivers", () => {

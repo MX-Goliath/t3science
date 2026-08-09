@@ -94,6 +94,16 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/appearance",
   },
   {
+    id: "web-chat",
+    title: "Web chat",
+    to: "/settings/general",
+  },
+  {
+    id: "web-chat-provider",
+    title: "Web chat provider",
+    to: "/settings/general",
+  },
+  {
     id: "project-grouping",
     title: "Project grouping",
     to: "/settings/general",

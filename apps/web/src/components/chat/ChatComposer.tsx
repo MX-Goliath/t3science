@@ -216,7 +216,7 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
-import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import { shouldShowCodexRateLimits, type UnifiedSettings } from "@t3tools/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
@@ -856,6 +856,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ? String(routeThreadRef.threadId)
         : `draft:${String(draftId ?? routeThreadRef.threadId)}`,
     phase,
+    enabled: shouldShowCodexRateLimits(settings, selectedInstanceId),
     initialRateLimits: selectedProviderStatus?.rateLimits,
   });
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(

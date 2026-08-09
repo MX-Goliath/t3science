@@ -40,6 +40,8 @@ const clientSettings: ClientSettings = {
   sidebarThreadSortOrder: "created_at",
   sidebarThreadPreviewCount: 6,
   legacySidebarEnabled: false,
+  webChatEnabled: false,
+  webChatProvider: "chatgpt",
   timestampFormat: "24-hour",
   wordWrap: true,
 };

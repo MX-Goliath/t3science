@@ -123,6 +123,7 @@ const environmentLayer = Layer.succeed(
 );
 
 const fileSystemLayer = FileSystem.layerNoop({
+  exists: () => Effect.succeed(true),
   makeDirectory: (path) =>
     Effect.sync(() => {
       mkdir(path);
@@ -371,6 +372,79 @@ describe("PreviewManager", () => {
 
         expect(loadURL).toHaveBeenCalledOnce();
         expect(loadURL).toHaveBeenCalledWith("http://localhost:3200/");
+      }),
+    ),
+  );
+
+  effectIt.effect("opens webview download dialogs in the configured directory", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const sessionListeners = new Map<
+          string,
+          (event: Electron.Event, item: Electron.DownloadItem, wc: Electron.WebContents) => void
+        >();
+        const sessionOn = vi.fn(
+          (
+            event: string,
+            listener: (
+              event: Electron.Event,
+              item: Electron.DownloadItem,
+              wc: Electron.WebContents,
+            ) => void,
+          ) => {
+            sessionListeners.set(event, listener);
+          },
+        );
+        const sessionOff = vi.fn();
+        const webview = {
+          id: 42,
+          isDestroyed: () => false,
+          getType: () => "webview",
+          getURL: () => "https://grok.com/",
+          getTitle: () => "Grok",
+          isLoading: () => false,
+          getZoomFactor: () => 1,
+          setZoomFactor: vi.fn(),
+          loadURL: vi.fn(async () => undefined),
+          on: vi.fn(),
+          off: vi.fn(),
+          ipc: { on: vi.fn(), off: vi.fn() },
+          send: webviewSend,
+          navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setWindowOpenHandler: vi.fn(),
+          session: { on: sessionOn, off: sessionOff },
+          debugger: {
+            isAttached: () => false,
+            attach: vi.fn(),
+            sendCommand: vi.fn(async () => undefined),
+            on: vi.fn(),
+            off: vi.fn(),
+          },
+        } as never;
+        fromId.mockReturnValue(webview);
+
+        yield* manager.createTab("web-chat");
+        yield* manager.setDownloadDirectory("web-chat", "/workspace/project");
+        yield* manager.registerWebview("web-chat", 42);
+
+        const setSaveDialogOptions = vi.fn();
+        sessionListeners.get("will-download")?.(
+          {} as Electron.Event,
+          {
+            getFilename: () => "research.pdf",
+            getSaveDialogOptions: () => ({ title: "Save research" }),
+            setSaveDialogOptions,
+          } as unknown as Electron.DownloadItem,
+          webview,
+        );
+
+        expect(setSaveDialogOptions).toHaveBeenCalledWith({
+          title: "Save research",
+          defaultPath: "/workspace/project/research.pdf",
+        });
+
+        yield* manager.closeTab("web-chat");
+        expect(sessionOff).toHaveBeenCalledWith("will-download", expect.any(Function));
       }),
     ),
   );

@@ -20,6 +20,7 @@ export function useCodexRateLimits(input: {
   provider: ProviderDriverKind;
   chatKey: string;
   phase: SessionPhase;
+  enabled: boolean;
   initialRateLimits: ServerProviderRateLimits | undefined;
 }): ServerProviderRateLimits | null {
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
@@ -27,18 +28,20 @@ export function useCodexRateLimits(input: {
     reportDefect: false,
   });
   const [rateLimits, setRateLimits] = useState<ServerProviderRateLimits | null>(
-    input.provider === "codex" ? (input.initialRateLimits ?? null) : null,
+    input.provider === "codex" && input.enabled ? (input.initialRateLimits ?? null) : null,
   );
   const targetKey = `${input.environmentId}:${input.instanceId}`;
   const targetKeyRef = useRef(targetKey);
   targetKeyRef.current = targetKey;
 
   useEffect(() => {
-    setRateLimits(input.provider === "codex" ? (input.initialRateLimits ?? null) : null);
-  }, [input.initialRateLimits, input.instanceId, input.provider]);
+    setRateLimits(
+      input.provider === "codex" && input.enabled ? (input.initialRateLimits ?? null) : null,
+    );
+  }, [input.enabled, input.initialRateLimits, input.instanceId, input.provider]);
 
   const refreshRateLimits = useCallback(async () => {
-    if (input.provider !== "codex") return;
+    if (input.provider !== "codex" || !input.enabled) return;
     const requestTargetKey = targetKey;
     const result = await refreshProviders({
       environmentId: input.environmentId,
@@ -51,21 +54,32 @@ export function useCodexRateLimits(input: {
     if (provider?.driver === "codex") {
       setRateLimits(provider.rateLimits ?? null);
     }
-  }, [input.environmentId, input.instanceId, input.provider, refreshProviders, targetKey]);
+  }, [
+    input.enabled,
+    input.environmentId,
+    input.instanceId,
+    input.provider,
+    refreshProviders,
+    targetKey,
+  ]);
 
   useEffect(() => {
-    if (input.provider !== "codex") return;
+    if (input.provider !== "codex" || !input.enabled) return;
     void refreshRateLimits();
-  }, [input.chatKey, input.provider, refreshRateLimits]);
+  }, [input.chatKey, input.enabled, input.provider, refreshRateLimits]);
 
   const previousPhaseRef = useRef(input.phase);
   useEffect(() => {
     const previousPhase = previousPhaseRef.current;
     previousPhaseRef.current = input.phase;
-    if (input.provider === "codex" && didCodexResponseFinish(previousPhase, input.phase)) {
+    if (
+      input.provider === "codex" &&
+      input.enabled &&
+      didCodexResponseFinish(previousPhase, input.phase)
+    ) {
       void refreshRateLimits();
     }
-  }, [input.phase, input.provider, refreshRateLimits]);
+  }, [input.enabled, input.phase, input.provider, refreshRateLimits]);
 
-  return rateLimits;
+  return input.enabled ? rateLimits : null;
 }

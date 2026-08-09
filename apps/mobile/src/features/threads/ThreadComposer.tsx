@@ -8,6 +8,7 @@ import type {
   RuntimeMode,
   ServerConfig as T3ServerConfig,
 } from "@t3tools/contracts";
+import { shouldShowCodexRateLimits } from "@t3tools/contracts/settings";
 import {
   detectComposerTrigger,
   replaceTextRange,
@@ -339,6 +340,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     environmentId: props.environmentId,
     thread: props.selectedThread,
     provider: selectedProviderStatus,
+    enabled: props.serverConfig
+      ? shouldShowCodexRateLimits(
+          props.serverConfig.settings,
+          props.selectedThread.modelSelection.instanceId,
+        )
+      : true,
   });
 
   // ── Trigger detection ────────────────────────────────────

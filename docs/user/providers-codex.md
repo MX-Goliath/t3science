@@ -6,6 +6,9 @@ When Codex reports subscription usage limits, the composer shows the remaining
 5-hour window, only the weekly limit is shown. Limits refresh when you open a
 thread and after an agent response finishes.
 
+You can hide these indicators per Codex instance with **Show usage limits** in
+Settings → Providers. The setting is enabled by default.
+
 This guide is for people who want to use more than one Codex account in T3 Code. For Claude, see
 [Claude](./providers-claude.md). For first-time setup, see [Install T3 Code](./install.md).
 
