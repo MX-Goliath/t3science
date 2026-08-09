@@ -60,6 +60,8 @@ const clientSettings: ClientSettings = {
   legacySidebarEnabled: false,
   loadBalancingEnabled: false,
   loadBalancingWeights: { "environment-1": 75, "environment-2": 0 },
+  webChatEnabled: false,
+  webChatProvider: "chatgpt",
   timestampFormat: "24-hour",
   wordWrap: true,
 };

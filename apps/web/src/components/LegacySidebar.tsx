@@ -197,6 +197,7 @@ import {
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { WebChatSidebarItem } from "./web-chat/WebChatSidebarItem";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
@@ -2972,6 +2973,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                 ) : null}
               </CommandDialogTrigger>
             </SidebarMenuItem>
+            <WebChatSidebarItem />
           </SidebarMenu>
         </SidebarGroup>
       }

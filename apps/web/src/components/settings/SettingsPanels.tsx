@@ -40,6 +40,7 @@ import {
   MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
   MIN_TERMINAL_FONT_SIZE,
   type QuitConfirmationMode,
+  type WebChatProvider,
 } from "@t3tools/contracts/settings";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { createModelSelection } from "@t3tools/shared/model";
@@ -161,6 +162,8 @@ import {
 import { searchableSetting } from "./settingsSearch";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
+import { WebChatProviderIcon } from "../web-chat/WebChatProviderIcon";
+import { WEB_CHAT_PROVIDERS } from "~/webChat";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: "Artwork",
@@ -173,6 +176,13 @@ const TIMESTAMP_FORMAT_LABELS = {
   "12-hour": "12-hour",
   "24-hour": "24-hour",
 } as const;
+
+const WEB_CHAT_PROVIDER_IDS = [
+  "chatgpt",
+  "claude",
+  "grok",
+  "perplexity",
+] as const satisfies ReadonlyArray<WebChatProvider>;
 
 const COMPOSER_COLLAPSE_TRIGGER_LABELS = {
   blur: "On unfocus",
@@ -587,6 +597,10 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
         ? ["Delete confirmation"]
         : []),
+      ...(settings.webChatEnabled !== DEFAULT_UNIFIED_SETTINGS.webChatEnabled ? ["Web chat"] : []),
+      ...(settings.webChatProvider !== DEFAULT_UNIFIED_SETTINGS.webChatProvider
+        ? ["Web chat provider"]
+        : []),
       ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? ["Quit shortcut"] : []),
       ...(isTextGenerationModelDirty ? ["Text generation model"] : []),
       ...getChangedBrowserSettingLabels(settings),
@@ -609,6 +623,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
       settings.confirmThreadUnpin,
+      settings.webChatEnabled,
+      settings.webChatProvider,
       settings.composerCollapseOnBlur,
       settings.composerCollapseOnScroll,
       settings.addProjectBaseDirectory,
@@ -739,6 +755,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
+      webChatEnabled: DEFAULT_UNIFIED_SETTINGS.webChatEnabled,
+      webChatProvider: DEFAULT_UNIFIED_SETTINGS.webChatProvider,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
       fontFamilyComposer: DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer,
@@ -2091,6 +2109,78 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SharedSettingsMismatchAlert />
+      <SettingsSection id="web-chat" title="Web chat">
+        <SettingsRow
+          {...searchableSetting("web-chat")}
+          description={
+            isElectron
+              ? "Keep a selected provider loaded in the chat sidebar for browser-only workflows."
+              : "Available in the desktop app because provider sites block iframe embedding."
+          }
+          resetAction={
+            settings.webChatEnabled !== DEFAULT_UNIFIED_SETTINGS.webChatEnabled ? (
+              <SettingResetButton
+                label="web chat"
+                onClick={() =>
+                  updateSettings({ webChatEnabled: DEFAULT_UNIFIED_SETTINGS.webChatEnabled })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.webChatEnabled}
+              disabled={!isElectron}
+              onCheckedChange={(checked) => updateSettings({ webChatEnabled: Boolean(checked) })}
+              aria-label="Web chat"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("web-chat-provider")}
+          description="The site opened by the persistent web chat page."
+          resetAction={
+            settings.webChatProvider !== DEFAULT_UNIFIED_SETTINGS.webChatProvider ? (
+              <SettingResetButton
+                label="web chat provider"
+                onClick={() =>
+                  updateSettings({ webChatProvider: DEFAULT_UNIFIED_SETTINGS.webChatProvider })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.webChatProvider}
+              disabled={!isElectron}
+              onValueChange={(value) => {
+                if (WEB_CHAT_PROVIDER_IDS.includes(value as WebChatProvider)) {
+                  updateSettings({ webChatProvider: value as WebChatProvider });
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Web chat provider">
+                <SelectValue>
+                  <span className="flex items-center gap-2">
+                    <WebChatProviderIcon provider={settings.webChatProvider} className="size-4" />
+                    {WEB_CHAT_PROVIDERS[settings.webChatProvider].label}
+                  </span>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {WEB_CHAT_PROVIDER_IDS.map((provider) => (
+                  <SelectItem hideIndicator key={provider} value={provider}>
+                    <span className="flex items-center gap-2">
+                      <WebChatProviderIcon provider={provider} className="size-4" />
+                      {WEB_CHAT_PROVIDERS[provider].label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+      </SettingsSection>
       <SettingsSection id="organization" title="Organization">
         <SettingsRow
           {...searchableSetting("project-grouping")}

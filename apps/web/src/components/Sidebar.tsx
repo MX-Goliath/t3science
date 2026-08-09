@@ -206,8 +206,15 @@ import {
   ComboboxTrigger,
   useComboboxFilter,
 } from "./ui/combobox";
-import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
+import {
+  SidebarContent,
+  SidebarGroup,
+  SidebarMenu,
+  SidebarMenuButton,
+  useSidebar,
+} from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { WebChatSidebarItem } from "./web-chat/WebChatSidebarItem";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
@@ -3735,6 +3742,9 @@ export default function Sidebar() {
                 </Tooltip>
               </div>
             </div>
+            <SidebarMenu>
+              <WebChatSidebarItem />
+            </SidebarMenu>
             {projectGroups.length > 0 ? (
               <div className="flex items-center gap-1">
                 <Combobox

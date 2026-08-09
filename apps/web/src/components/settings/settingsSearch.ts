@@ -155,6 +155,16 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["long lines code blocks tables diffs file previews"],
   },
   {
+    id: "web-chat",
+    title: "Web chat",
+    to: "/settings/general",
+  },
+  {
+    id: "web-chat-provider",
+    title: "Web chat provider",
+    to: "/settings/general",
+  },
+  {
     id: "project-grouping",
     title: "Project grouping",
     to: "/settings/general",

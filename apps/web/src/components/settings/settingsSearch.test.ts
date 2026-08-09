@@ -235,4 +235,11 @@ describe("searchSettings", () => {
       targetId: "browser-profiles",
     });
   });
+
+  it("indexes persistent web chat settings", () => {
+    expect(searchSettings("web chat").map((item) => item.id)).toEqual([
+      "web-chat",
+      "web-chat-provider",
+    ]);
+  });
 });

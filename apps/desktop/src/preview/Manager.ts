@@ -587,6 +587,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const playwrightInstallExpression = yield* Effect.cached(
     playwrightInjectedRuntimeInstallExpression(),
   );
+  const downloadDirectories = new Map<string, string>();
+  const downloadDirectoryGenerations = new Map<string, number>();
+  let nextDownloadDirectoryGeneration = 0;
 
   const annotationThemeRef = yield* Ref.make(DEFAULT_ANNOTATION_THEME);
   const mainWindowRef = yield* Ref.make<Option.Option<BrowserWindow>>(Option.none());
@@ -1614,6 +1617,21 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     wc: Electron.WebContents,
   ) {
     const scope = yield* Scope.fork(parentScope, "sequential");
+    const downloadSession = wc.session as Electron.Session | undefined;
+    const willDownload = (
+      _event: Electron.Event,
+      item: Electron.DownloadItem,
+      sourceWebContents: Electron.WebContents,
+    ): void => {
+      if (sourceWebContents.id !== wc.id) return;
+      const directory = downloadDirectories.get(tabId);
+      if (!directory) return;
+      const filename = path.basename(item.getFilename()) || "download";
+      item.setSaveDialogOptions({
+        ...item.getSaveDialogOptions(),
+        defaultPath: path.join(directory, filename),
+      });
+    };
     const attachmentId = Symbol();
     let documentId = 0;
     let nextRequestId = 0;
@@ -1872,6 +1890,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.off("before-input-event", beforeInput);
         wc.ipc.off(HUMAN_INPUT_CHANNEL, humanInput);
         wc.ipc.off(MOUSE_NAVIGATE_CHANNEL, mouseNavigate);
+        downloadSession?.off("will-download", willDownload);
       }).pipe(Effect.ignore),
     );
     const install = Effect.fn("PreviewManager.installWebContentsListeners")(function* () {
@@ -1890,6 +1909,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.on("audio-state-changed", audioStateChanged);
         wc.ipc.on(HUMAN_INPUT_CHANNEL, humanInput);
         wc.ipc.on(MOUSE_NAVIGATE_CHANNEL, mouseNavigate);
+        downloadSession?.on("will-download", willDownload);
         wc.setWindowOpenHandler((details) => {
           if (previewWindowOpenAction(details) === "popup") {
             return { action: "allow", overrideBrowserWindowOptions: POPUP_WINDOW_OPTIONS };
@@ -2020,6 +2040,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       ] as const;
     });
     if (Option.isNone(tab)) return;
+    downloadDirectories.delete(tabId);
+    downloadDirectoryGenerations.delete(tabId);
     const closedTab = tab.value;
     if (closedTab.webContentsId != null) {
       yield* Effect.all(
@@ -2231,6 +2253,32 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       tabId,
       registerWebviewUnlocked(tabId, webContentsId, expectedGeneration),
     );
+  });
+
+  const setDownloadDirectory = Effect.fn("PreviewManager.setDownloadDirectory")(function* (
+    tabId: string,
+    directory: string | null,
+  ) {
+    if (!(yield* SynchronizedRef.get(tabsRef)).has(tabId)) {
+      return yield* new PreviewTabNotFoundError({ tabId });
+    }
+    const generation = ++nextDownloadDirectoryGeneration;
+    downloadDirectoryGenerations.set(tabId, generation);
+    if (directory === null) {
+      downloadDirectories.delete(tabId);
+      return;
+    }
+    const directoryExists = yield* fileSystem
+      .exists(directory)
+      .pipe(Effect.orElseSucceed(() => false));
+    if (
+      downloadDirectoryGenerations.get(tabId) !== generation ||
+      !(yield* SynchronizedRef.get(tabsRef)).has(tabId)
+    ) {
+      return;
+    }
+    if (directoryExists) downloadDirectories.set(tabId, directory);
+    else downloadDirectories.delete(tabId);
   });
 
   const navigate = Effect.fn("PreviewManager.navigate")(function* (tabId: string, rawUrl: string) {
@@ -4166,6 +4214,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     reapplyZoom,
     refresh,
     registerWebview,
+    setDownloadDirectory,
     resetZoom: (tabId: string) => applyZoom(tabId, () => DEFAULT_ZOOM_FACTOR),
     revealArtifact,
     saveRecording,
@@ -4500,6 +4549,10 @@ export class PreviewManager extends Context.Service<
       tabId: string,
       webContentsId: number,
     ) => Effect.Effect<void, PreviewManagerError>;
+    readonly setDownloadDirectory: (
+      tabId: string,
+      directory: string | null,
+    ) => Effect.Effect<void, PreviewManagerError>;
     readonly navigate: (tabId: string, url: string) => Effect.Effect<void, PreviewManagerError>;
     readonly goBack: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
     readonly goForward: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
@@ -4617,6 +4670,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     createTab: operations.createTab,
     closeTab: operations.closeTab,
     registerWebview: operations.registerWebview,
+    setDownloadDirectory: operations.setDownloadDirectory,
     navigate: operations.navigate,
     goBack: operations.goBack,
     goForward: operations.goForward,

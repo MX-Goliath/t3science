@@ -2,6 +2,7 @@ import * as React from "react";
 import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
 import type { ContextMenuItem } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+import { sortPinnedThreadsByOrderKey } from "@t3tools/client-runtime/state/thread-sort";
 import {
   activeThreadAnchorTimestampMs,
   getThreadSortTimestamp,
@@ -589,6 +590,25 @@ export function sortThreadsForSidebar<
       activeThreadAnchorTimestampMs(right) - activeThreadAnchorTimestampMs(left) ||
       left.id.localeCompare(right.id),
   );
+}
+
+/** Legacy sidebar ordering within one project: pins form a stable block at
+    the top, while regular threads keep the user's selected sort order. */
+export function sortProjectThreadsWithPins<
+  T extends ThreadSortInput & {
+    readonly id: string;
+    readonly createdAt: string;
+    readonly pinnedAt?: string | null | undefined;
+    readonly pinOrderKey?: string | null | undefined;
+  },
+>(threads: readonly T[], sortOrder: SidebarThreadSortOrder): T[] {
+  const pinned: T[] = [];
+  const unpinned: T[] = [];
+  for (const thread of threads) {
+    (thread.pinnedAt != null ? pinned : unpinned).push(thread);
+  }
+
+  return [...sortPinnedThreadsByOrderKey(pinned), ...sortThreads(unpinned, sortOrder)];
 }
 
 // Pinned-reorder key math and the keyed sort live in client-runtime

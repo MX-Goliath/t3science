@@ -981,6 +981,11 @@ export const DesktopPreviewNavigateInputSchema = Schema.Struct({
   url: Schema.String,
 });
 
+export const DesktopPreviewDownloadDirectoryInputSchema = Schema.Struct({
+  tabId: DesktopPreviewTabIdSchema,
+  directory: Schema.NullOr(Schema.String.check(Schema.isTrimmed()).check(Schema.isNonEmpty())),
+});
+
 export const DesktopPreviewConfigInputSchema = Schema.Struct({
   environmentId: EnvironmentId,
   /**
@@ -1171,6 +1176,7 @@ export interface DesktopPreviewBridge {
   createTab: (tabId: string, defaults?: DesktopPreviewTabDefaults) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
   registerWebview: (tabId: string, webContentsId: number) => Promise<void>;
+  setDownloadDirectory: (tabId: string, directory: string | null) => Promise<void>;
   navigate: (tabId: string, url: string) => Promise<void>;
   goBack: (tabId: string) => Promise<void>;
   goForward: (tabId: string) => Promise<void>;
