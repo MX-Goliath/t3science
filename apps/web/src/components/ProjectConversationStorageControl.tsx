@@ -12,11 +12,22 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { Switch } from "./ui/switch";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
-export function ProjectConversationStorageControl({
-  member,
-}: {
-  member: SidebarProjectGroupMember;
-}) {
+export interface ProjectConversationStorageState {
+  readonly enabled: boolean;
+  /** A write is in flight, or the current value has not loaded yet. */
+  readonly busy: boolean;
+  readonly error: string | null;
+  readonly setEnabled: (enabled: boolean) => void;
+}
+
+/**
+ * Project-local conversation storage for one physical checkout. Shared by the
+ * legacy sidebar dialog and the project settings page, which render the same
+ * toggle in different layouts.
+ */
+export function useProjectConversationStorage(
+  member: SidebarProjectGroupMember,
+): ProjectConversationStorageState {
   const queryAtom = useMemo(
     () =>
       projectEnvironment.conversationStorage({
@@ -84,6 +95,23 @@ export function ProjectConversationStorageControl({
     [member.environmentId, member.id, setConversationStorage, state],
   );
 
+  return {
+    enabled,
+    busy: saving || state.isPending,
+    error: state.error ?? null,
+    setEnabled: (nextEnabled: boolean) => void updateEnabled(nextEnabled),
+  };
+}
+
+export const PORTABLE_CONVERSATIONS_SWITCH_LABEL = "Save conversations in the project directory";
+
+export function ProjectConversationStorageControl({
+  member,
+}: {
+  member: SidebarProjectGroupMember;
+}) {
+  const { enabled, busy, error, setEnabled } = useProjectConversationStorage(member);
+
   return (
     <div className="flex items-start justify-between gap-4 rounded-md border border-border/70 px-3 py-3 dark:border-transparent dark:bg-white/[0.035]">
       <div className="min-w-0">
@@ -93,13 +121,13 @@ export function ProjectConversationStorageControl({
           <code>.t3/conversations</code>. Imported conversations continue in a new provider session
           with their previous message context.
         </p>
-        {state.error ? <p className="mt-1 text-sm text-destructive">{state.error}</p> : null}
+        {error ? <p className="mt-1 text-sm text-destructive">{error}</p> : null}
       </div>
       <Switch
         checked={enabled}
-        disabled={saving || state.isPending}
-        aria-label="Save conversations in the project directory"
-        onCheckedChange={(checked) => void updateEnabled(Boolean(checked))}
+        disabled={busy}
+        aria-label={PORTABLE_CONVERSATIONS_SWITCH_LABEL}
+        onCheckedChange={(checked) => setEnabled(Boolean(checked))}
       />
     </div>
   );

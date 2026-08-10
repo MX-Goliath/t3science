@@ -373,6 +373,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["allow open drive preview tools sessions"],
   },
   {
+    id: "project-conversation-storage",
+    title: "Portable local conversations",
+    to: "/settings/projects",
+  },
+  {
     id: "browser-profiles",
     title: "Browser profiles",
     to: "/settings/integrations",

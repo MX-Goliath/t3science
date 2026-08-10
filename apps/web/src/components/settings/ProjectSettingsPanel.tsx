@@ -88,6 +88,10 @@ import {
   type NewProjectScriptInput,
   type ProjectScriptEditorRequest,
 } from "../projectScriptEditor";
+import {
+  PORTABLE_CONVERSATIONS_SWITCH_LABEL,
+  useProjectConversationStorage,
+} from "../ProjectConversationStorageControl";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {
@@ -378,6 +382,45 @@ export function useProjectScriptSettings(
   }
 
   return { saving, persist, submit };
+}
+
+function ProjectConversationStorageRow({
+  member,
+  showCheckout,
+}: {
+  member: SidebarProjectGroupMember;
+  showCheckout: boolean;
+}) {
+  const { enabled, busy, error, setEnabled } = useProjectConversationStorage(member);
+  return (
+    <SettingsRow
+      title="Portable local conversations"
+      description={
+        <>
+          Save and restore this checkout&apos;s conversations from <code>.t3/conversations</code>.
+        </>
+      }
+      status={
+        error ? (
+          <span className="text-destructive">{error}</span>
+        ) : showCheckout ? (
+          <span className="font-mono">{member.workspaceRoot}</span>
+        ) : null
+      }
+      control={
+        <Switch
+          checked={enabled}
+          disabled={busy}
+          aria-label={
+            showCheckout
+              ? `${PORTABLE_CONVERSATIONS_SWITCH_LABEL} for ${member.workspaceRoot}`
+              : PORTABLE_CONVERSATIONS_SWITCH_LABEL
+          }
+          onCheckedChange={(checked) => setEnabled(Boolean(checked))}
+        />
+      }
+    />
+  );
 }
 
 function ProjectDetail({
@@ -1379,6 +1422,16 @@ function ProjectDetail({
               className="text-warning"
             />
           ) : null}
+        </SettingsSection>
+
+        <SettingsSection id="project-conversation-storage" title="Conversations">
+          {group.memberProjects.map((member) => (
+            <ProjectConversationStorageRow
+              key={member.physicalProjectKey}
+              member={member}
+              showCheckout={group.memberProjects.length > 1}
+            />
+          ))}
         </SettingsSection>
 
         <SettingsSection title="Danger">
