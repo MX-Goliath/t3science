@@ -120,8 +120,8 @@ Codex Work      CODEX_HOME path: ~/.codex
 Codex Personal  CODEX_HOME path: ~/.codex, Shadow home path: ~/.codex_p
 ```
 
-Those two providers are considered compatible for continuation, so the locked model picker can show
-both.
+Those two providers are considered compatible for continuation, so the model picker can show both
+inside an existing thread.
 
 If you add a third Codex provider with a completely different `CODEX_HOME path`, T3 Code treats it
 as a different workspace. It will not be offered for existing threads created under `~/.codex`.

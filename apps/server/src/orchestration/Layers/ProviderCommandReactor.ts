@@ -4,6 +4,7 @@ import {
   EventId,
   type ModelSelection,
   type OrchestrationMessage,
+  type OrchestrationThreadActivity,
   type OrchestrationEvent,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   ProviderDriverKind,
@@ -103,15 +104,64 @@ const FIRST_USER_CONTEXT_TRUNCATION_MARKER = "\n[First user message truncated]";
 const PORTABLE_CONTEXT_RESERVE_CHARS = 2_000;
 const PORTABLE_CONTEXT_HEADER = [
   "<t3_portable_conversation_context>",
-  "This conversation was imported from another desktop device.",
-  "Treat the transcript below as prior conversation context. Continue the same task, but use the current project root and do not rely on absolute paths from the previous device.",
+  "This conversation is continuing in a fresh native provider session.",
+  "Treat the transcript below as prior conversation context. Continue the same task using the current project root; provider-specific hidden session state is not available.",
 ].join("\n");
 const PORTABLE_CONTEXT_FOOTER = "</t3_portable_conversation_context>";
+const COMPACTION_CONTEXT_HEADER = "[context_compaction]";
+const COMPACTION_CONTEXT_FALLBACK =
+  "The previous provider compacted the conversation here. Earlier messages are intentionally omitted; continue from the retained context below.";
+
+type ConversationCompaction = Pick<
+  OrchestrationThreadActivity,
+  "createdAt" | "payload" | "summary"
+>;
+
+function firstStringAtKeys(value: unknown, keys: ReadonlyArray<string>): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const candidate = record[key];
+    if (typeof candidate !== "string") continue;
+    const normalized = candidate.trim();
+    if (normalized.length > 0) return normalized;
+  }
+  return undefined;
+}
+
+function compactionSummary(compaction: ConversationCompaction): string {
+  return (
+    firstStringAtKeys(compaction.payload, ["summary", "message", "text"]) ??
+    firstStringAtKeys(
+      typeof compaction.payload === "object" && compaction.payload !== null
+        ? (compaction.payload as Record<string, unknown>).detail
+        : undefined,
+      ["summary", "message", "text", "details"],
+    ) ??
+    (typeof compaction.payload === "object" && compaction.payload !== null
+      ? (() => {
+          const detail = (compaction.payload as Record<string, unknown>).detail;
+          return typeof detail === "string" && detail.trim().length > 0 ? detail.trim() : undefined;
+        })()
+      : undefined) ??
+    (compaction.summary !== "Context compacted" ? compaction.summary : undefined) ??
+    COMPACTION_CONTEXT_FALLBACK
+  );
+}
+
+function latestConversationCompaction(
+  activities: ReadonlyArray<OrchestrationThreadActivity> | undefined,
+): ConversationCompaction | undefined {
+  return activities?.toReversed().find((activity) => activity.kind === "context-compaction");
+}
 
 export function buildPortableContinuationInput(input: {
   readonly messages: ReadonlyArray<OrchestrationMessage>;
   readonly currentMessageId: string;
   readonly currentInput: string | undefined;
+  readonly compactions?: ReadonlyArray<OrchestrationThreadActivity>;
 }): string {
   const rawCurrentInput = input.currentInput?.trim() ?? "";
   const currentInputWrapperChars =
@@ -135,11 +185,26 @@ export function buildPortableContinuationInput(input: {
     0,
     PROVIDER_SEND_TURN_MAX_INPUT_CHARS - fixed.length - PORTABLE_CONTEXT_RESERVE_CHARS,
   );
+  const compaction = latestConversationCompaction(input.compactions);
+  const compactionSummaryText = compaction
+    ? compactionSummary(compaction).slice(
+        0,
+        Math.max(0, budget - COMPACTION_CONTEXT_HEADER.length - 1),
+      )
+    : undefined;
+  const compactionSection = compaction
+    ? `${COMPACTION_CONTEXT_HEADER}\n${compactionSummaryText}`
+    : undefined;
+  const historyBudget = Math.max(
+    0,
+    budget - (compactionSection ? compactionSection.length + 2 : 0),
+  );
   const sections: string[] = [];
   let used = 0;
 
   for (const message of input.messages.toReversed()) {
     if (message.id === input.currentMessageId) continue;
+    if (compaction !== undefined && message.createdAt <= compaction.createdAt) continue;
     const attachments = (message.attachments ?? []).map((entry) => entry.name).join(", ");
     const body = [
       message.text.trim(),
@@ -149,10 +214,10 @@ export function buildPortableContinuationInput(input: {
       .join("\n");
     if (body.length === 0) continue;
     const section = `[${message.role}]\n${body}`;
-    if (used + section.length + 2 > budget) {
-      if (sections.length === 0 && budget > 32) {
+    if (used + section.length + 2 > historyBudget) {
+      if (sections.length === 0 && historyBudget > 32) {
         const marker = "[Earlier part of this message omitted]\n";
-        sections.unshift(`${marker}${section.slice(-(budget - marker.length))}`);
+        sections.unshift(`${marker}${section.slice(-(historyBudget - marker.length))}`);
       }
       break;
     }
@@ -160,7 +225,8 @@ export function buildPortableContinuationInput(input: {
     used += section.length + 2;
   }
 
-  return `${PORTABLE_CONTEXT_HEADER}\n\n${sections.join("\n\n")}\n\n${PORTABLE_CONTEXT_FOOTER}\n\n<current_user_message>\n${currentInput}\n</current_user_message>`;
+  const historySections = [...(compactionSection ? [compactionSection] : []), ...sections];
+  return `${PORTABLE_CONTEXT_HEADER}\n\n${historySections.join("\n\n")}\n\n${PORTABLE_CONTEXT_FOOTER}\n\n<current_user_message>\n${currentInput}\n</current_user_message>`;
 }
 
 type ThreadTitleMessage = {
@@ -516,12 +582,24 @@ const make = Effect.gen(function* () {
     readonly threadId: ThreadId;
     readonly currentModelSelection: ModelSelection;
     readonly requestedModelSelection: ModelSelection | undefined;
+    readonly currentProviderDriver?: ProviderDriverKind;
+    readonly requestedProviderDriver?: ProviderDriverKind;
   }) {
     const requestedModelSelection = input.requestedModelSelection;
     if (
       requestedModelSelection === undefined ||
       (input.currentModelSelection.instanceId === requestedModelSelection.instanceId &&
         input.currentModelSelection.model === requestedModelSelection.model)
+    ) {
+      return;
+    }
+    // A driver change starts a fresh provider conversation and transfers the
+    // portable transcript. Provider capabilities that require a new thread
+    // only apply to model changes within the same driver.
+    if (
+      input.currentProviderDriver !== undefined &&
+      input.requestedProviderDriver !== undefined &&
+      input.currentProviderDriver !== input.requestedProviderDriver
     ) {
       return;
     }
@@ -586,23 +664,30 @@ const make = Effect.gen(function* () {
       activeSession !== undefined &&
       activeSession.providerInstanceId !== undefined
         ? activeSession.providerInstanceId
-        : thread.modelSelection.instanceId;
+        : thread.session?.providerInstanceId !== undefined
+          ? thread.session.providerInstanceId
+          : thread.modelSelection.instanceId;
     const desiredModelSelection = requestedModelSelection ?? thread.modelSelection;
     const desiredInstanceId = desiredModelSelection.instanceId;
-    const currentInfo = yield* providerService.getInstanceInfo(currentInstanceId).pipe(
-      Effect.mapError(
-        () =>
-          new ProviderAdapterRequestError({
-            provider: providerErrorLabelFromInstanceHint({
-              instanceId: String(currentInstanceId),
-              modelSelectionInstanceId: String(thread.modelSelection.instanceId),
-              sessionProvider: thread.session?.providerName ?? undefined,
-            }),
-            method: "thread.turn.start",
-            detail: `Thread '${threadId}' references unknown provider instance '${currentInstanceId}'. The instance is not configured in this build.`,
-          }),
-      ),
+    const currentInfo = Option.getOrUndefined(
+      yield* providerService.getInstanceInfo(currentInstanceId).pipe(Effect.option),
     );
+    const currentDriverKind =
+      currentInfo?.driverKind ??
+      (thread.session?.providerName && isProviderDriverKind(thread.session.providerName)
+        ? thread.session.providerName
+        : undefined);
+    if (currentDriverKind === undefined) {
+      return yield* new ProviderAdapterRequestError({
+        provider: providerErrorLabelFromInstanceHint({
+          instanceId: String(currentInstanceId),
+          modelSelectionInstanceId: String(thread.modelSelection.instanceId),
+          sessionProvider: thread.session?.providerName ?? undefined,
+        }),
+        method: "thread.turn.start",
+        detail: `Thread '${threadId}' references unknown provider instance '${currentInstanceId}'. The instance is not configured in this build.`,
+      });
+    }
     const desiredInfo = yield* providerService.getInstanceInfo(desiredInstanceId).pipe(
       Effect.mapError(
         () =>
@@ -624,14 +709,19 @@ const make = Effect.gen(function* () {
       });
     }
     const preferredProvider: ProviderDriverKind = desiredDriverKind;
+    const providerChanged = currentDriverKind !== desiredInfo.driverKind;
     if (options?.pendingTurnStart === true && thread.session?.status !== "running") {
       yield* setThreadSession({
         threadId,
         session: {
           threadId,
           status: "starting",
-          providerName: activeSession?.provider ?? preferredProvider,
-          providerInstanceId: activeSession?.providerInstanceId ?? desiredInstanceId,
+          providerName:
+            activeSession?.provider ?? thread.session?.providerName ?? preferredProvider,
+          providerInstanceId:
+            activeSession?.providerInstanceId ??
+            thread.session?.providerInstanceId ??
+            desiredInstanceId,
           runtimeMode: desiredRuntimeMode,
           activeTurnId: null,
           lastError: null,
@@ -652,6 +742,8 @@ const make = Effect.gen(function* () {
               }
             : thread.modelSelection,
         requestedModelSelection,
+        currentProviderDriver: currentDriverKind,
+        requestedProviderDriver: desiredInfo.driverKind,
       });
     }
     if (
@@ -659,16 +751,11 @@ const make = Effect.gen(function* () {
       requestedModelSelection !== undefined &&
       requestedModelSelection.instanceId !== currentInstanceId
     ) {
-      if (currentInfo.driverKind !== desiredInfo.driverKind) {
-        return yield* new ProviderAdapterRequestError({
-          provider: preferredProvider,
-          method: "thread.turn.start",
-          detail: `Thread '${threadId}' is bound to driver '${currentInfo.driverKind}' and cannot switch to '${desiredInfo.driverKind}'.`,
-        });
-      }
       if (
-        currentInfo.continuationIdentity.continuationKey !==
-        desiredInfo.continuationIdentity.continuationKey
+        currentDriverKind === desiredInfo.driverKind &&
+        (currentInfo === undefined ||
+          currentInfo.continuationIdentity.continuationKey !==
+            desiredInfo.continuationIdentity.continuationKey)
       ) {
         return yield* new ProviderAdapterRequestError({
           provider: preferredProvider,
@@ -753,12 +840,13 @@ const make = Effect.gen(function* () {
         !shouldRestartForModelChange &&
         !shouldRestartForModelSelectionChange
       ) {
-        return existingSessionThreadId;
+        return { threadId: existingSessionThreadId, conversationTransfer: false };
       }
 
-      const resumeCursor = shouldRestartForModelChange
-        ? undefined
-        : (activeSession?.resumeCursor ?? undefined);
+      const resumeCursor =
+        shouldRestartForModelChange || currentDriverKind !== desiredInfo.driverKind
+          ? undefined
+          : (activeSession?.resumeCursor ?? undefined);
       yield* Effect.logInfo("provider command reactor restarting provider session", {
         threadId,
         existingSessionThreadId,
@@ -790,12 +878,12 @@ const make = Effect.gen(function* () {
         cwd: restartedSession.cwd,
       });
       yield* bindSessionToThread(restartedSession);
-      return restartedSession.threadId;
+      return { threadId: restartedSession.threadId, conversationTransfer: providerChanged };
     }
 
     const startedSession = yield* startProviderSession(undefined);
     yield* bindSessionToThread(startedSession);
-    return startedSession.threadId;
+    return { threadId: startedSession.threadId, conversationTransfer: providerChanged };
   });
 
   const buildSendTurnRequestForThread = Effect.fnUntraced(function* (input: {
@@ -814,7 +902,7 @@ const make = Effect.gen(function* () {
         new Error(`Thread '${input.threadId}' was not found in read model.`),
       );
     }
-    yield* ensureSessionForThread(input.threadId, input.createdAt, {
+    const ensuredSession = yield* ensureSessionForThread(input.threadId, input.createdAt, {
       ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
       pendingTurnStart: true,
     });
@@ -822,13 +910,15 @@ const make = Effect.gen(function* () {
       threadModelSelections.set(input.threadId, input.modelSelection);
     }
     const normalizedCurrentInput = toNonEmptyProviderInput(input.messageText);
-    const normalizedInput = input.portableContextPending
-      ? buildPortableContinuationInput({
-          messages: thread.messages,
-          currentMessageId: input.messageId,
-          currentInput: normalizedCurrentInput,
-        })
-      : normalizedCurrentInput;
+    const normalizedInput =
+      input.portableContextPending || ensuredSession.conversationTransfer
+        ? buildPortableContinuationInput({
+            messages: thread.messages,
+            currentMessageId: input.messageId,
+            currentInput: normalizedCurrentInput,
+            compactions: thread.activities,
+          })
+        : normalizedCurrentInput;
     const normalizedAttachments = input.attachments ?? [];
     const activeSession = yield* providerService
       .listSessions()

@@ -3133,7 +3133,10 @@ describe("ProviderRuntimeIngestion", () => {
       turnId: asTurnId("turn-1"),
       payload: {
         state: "compacted",
-        detail: { source: "provider" },
+        detail: {
+          source: "provider",
+          summary: "The implementation is complete; only verification remains.",
+        },
       },
     });
 
@@ -3148,6 +3151,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(activity?.summary).toBe("Context compacted");
     expect(activity?.tone).toBe("info");
+    expect(activity?.payload).toMatchObject({
+      summary: "The implementation is complete; only verification remains.",
+    });
   });
 
   it("projects Codex task lifecycle chunks into thread activities", async () => {

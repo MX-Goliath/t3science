@@ -4,6 +4,7 @@ import { ProviderInstanceId, type ServerConfig } from "@t3tools/contracts";
 
 import {
   buildModelOptions,
+  canSelectProviderInstanceForThread,
   groupByProvider,
   resolveDefaultableModelSelection,
   resolveSelectableModelSelection,
@@ -170,5 +171,45 @@ describe("mobile model options", () => {
     expect(resolveDefaultableModelSelection(config, legacy)).toBeNull();
     // Offline: nothing to validate against, selection passes through.
     expect(resolveDefaultableModelSelection(null, legacy)).toBe(legacy);
+  });
+
+  it("allows cross-driver switches while keeping same-driver continuation groups compatible", () => {
+    const config = {
+      providers: [
+        {
+          instanceId: "codex_work",
+          driver: "codex",
+          continuation: { groupKey: "codex:home:shared" },
+        },
+        {
+          instanceId: "codex_personal",
+          driver: "codex",
+          continuation: { groupKey: "codex:home:shared" },
+        },
+        {
+          instanceId: "codex_isolated",
+          driver: "codex",
+          continuation: { groupKey: "codex:home:isolated" },
+        },
+        {
+          instanceId: "claudeAgent",
+          driver: "claudeAgent",
+          continuation: { groupKey: "claude:home:default" },
+        },
+      ],
+    } as unknown as ServerConfig;
+    const canSelect = (targetInstanceId: string) =>
+      canSelectProviderInstanceForThread({
+        config,
+        hasStartedSession: true,
+        currentInstanceId: "codex_work",
+        currentDriver: "codex",
+        targetInstanceId,
+      });
+
+    expect(canSelect("codex_work")).toBe(true);
+    expect(canSelect("codex_personal")).toBe(true);
+    expect(canSelect("codex_isolated")).toBe(false);
+    expect(canSelect("claudeAgent")).toBe(true);
   });
 });

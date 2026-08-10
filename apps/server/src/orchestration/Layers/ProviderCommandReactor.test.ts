@@ -10,6 +10,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
+  type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import {
@@ -147,14 +148,19 @@ describe("ProviderCommandReactor", () => {
   });
 
   describe("portable continuation context", () => {
-    const message = (id: string, role: "user" | "assistant", text: string) => ({
+    const message = (
+      id: string,
+      role: "user" | "assistant",
+      text: string,
+      createdAt = "2026-01-01T00:00:00.000Z",
+    ) => ({
       id: MessageId.make(id),
       role,
       text,
       turnId: null,
       streaming: false,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
+      createdAt,
+      updatedAt: createdAt,
     });
 
     it("seeds a new provider session with prior messages but keeps the current request separate", () => {
@@ -172,7 +178,7 @@ describe("ProviderCommandReactor", () => {
       expect(input).toContain("[assistant]\nThe cache implementation is ready");
       expect(input.match(/Continue with tests/g)).toHaveLength(1);
       expect(input).toContain("<current_user_message>\nContinue with tests");
-      expect(input).toContain("use the current project root");
+      expect(input).toContain("using the current project root");
     });
 
     it("keeps the newest available history within the provider input limit", () => {
@@ -189,6 +195,38 @@ describe("ProviderCommandReactor", () => {
       expect(input.length).toBeLessThanOrEqual(PROVIDER_SEND_TURN_MAX_INPUT_CHARS);
       expect(input).toContain("[Earlier part of this message omitted]");
       expect(input).toContain(newestTail);
+    });
+
+    it("replaces history before the latest compaction with its summary", () => {
+      const compaction = {
+        id: EventId.make("evt-context-compacted"),
+        tone: "info" as const,
+        kind: "context-compaction",
+        summary: "Context compacted",
+        payload: {
+          summary: "The cache was implemented and the remaining work is test coverage.",
+        },
+        turnId: null,
+        createdAt: "2026-01-01T00:00:02.000Z",
+      } satisfies OrchestrationThreadActivity;
+      const input = buildPortableContinuationInput({
+        messages: [
+          message("old-user", "user", "DO NOT SEND THIS", "2026-01-01T00:00:00.000Z"),
+          message("old-assistant", "assistant", "OLD SECRET", "2026-01-01T00:00:01.000Z"),
+          message("new-user", "user", "Keep this retained context", "2026-01-01T00:00:03.000Z"),
+          message("current-user", "user", "Continue", "2026-01-01T00:00:04.000Z"),
+        ],
+        currentMessageId: "current-user",
+        currentInput: "Continue",
+        compactions: [compaction],
+      });
+
+      expect(input).toContain(
+        "[context_compaction]\nThe cache was implemented and the remaining work is test coverage.",
+      );
+      expect(input).toContain("[user]\nKeep this retained context");
+      expect(input).not.toContain("DO NOT SEND THIS");
+      expect(input).not.toContain("OLD SECRET");
     });
 
     it("keeps an oversized current request valid while preserving its newest text", () => {
@@ -225,6 +263,7 @@ describe("ProviderCommandReactor", () => {
     const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
     let nextSessionIndex = 1;
     const runtimeSessions: Array<ProviderSession> = [];
+    const unconfiguredProviderInstanceIds = new Set<string>();
     const modelSelection = input?.threadModelSelection ?? {
       instanceId: ProviderInstanceId.make("codex"),
       model: "gpt-5-codex",
@@ -384,6 +423,15 @@ describe("ProviderCommandReactor", () => {
         }),
       getInstanceInfo: (instanceId) => {
         const raw = String(instanceId);
+        if (unconfiguredProviderInstanceIds.has(raw)) {
+          return Effect.fail(
+            new ProviderAdapterRequestError({
+              provider: raw,
+              method: "getInstanceInfo",
+              detail: "Provider instance is no longer configured.",
+            }),
+          );
+        }
         const driverKind = ProviderDriverKind.make(
           raw.startsWith("claude") ? "claudeAgent" : raw.startsWith("codex") ? "codex" : raw,
         );
@@ -572,6 +620,9 @@ describe("ProviderCommandReactor", () => {
       generateBranchName,
       generateThreadTitle,
       runtimeSessions,
+      markProviderUnconfigured: (instanceId: string) => {
+        unconfiguredProviderInstanceIds.add(instanceId);
+      },
       stateDir,
       drain,
       runEffect,
@@ -2379,7 +2430,7 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("full-access");
   });
 
-  it("rejects provider changes after a thread is already bound to a session provider", async () => {
+  it("transfers the conversation when switching to another provider driver", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
@@ -2424,53 +2475,80 @@ describe("ProviderCommandReactor", () => {
       }),
     );
 
-    await waitFor(async () => {
-      const readModel = await harness.readModel();
-      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-      return (
-        thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
-        false
-      );
+    await waitFor(() => harness.startSession.mock.calls.length === 2);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+      provider: "claudeAgent",
+      providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-opus-4-6",
+      },
     });
-
-    expect(harness.startSession.mock.calls.length).toBe(1);
-    expect(harness.sendTurn.mock.calls.length).toBe(1);
+    expect(harness.startSession.mock.calls[1]?.[1]).not.toHaveProperty("resumeCursor");
+    const transferredTurn = harness.sendTurn.mock.calls[1]?.[0] as { input?: string } | undefined;
+    expect(transferredTurn?.input).toContain("[user]\nfirst");
+    expect(transferredTurn?.input).toContain("<current_user_message>\nsecond");
     expect(harness.stopSession.mock.calls.length).toBe(0);
 
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.session?.threadId).toBe("thread-1");
-    expect(thread?.session?.providerName).toBe("codex");
+    expect(thread?.session?.providerName).toBe("claudeAgent");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
     expect(
-      thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
-    ).toMatchObject({
-      payload: {
-        detail: expect.stringContaining("cannot switch to 'claudeAgent'"),
-      },
-    });
+      thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
+    ).toBe(false);
   });
 
-  it("rejects cross-driver provider changes after the existing thread session has stopped", async () => {
+  it("transfers history after a stopped session and a persisted provider selection change", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
     await Effect.runPromise(
       harness.engine.dispatch({
-        type: "thread.session.set",
-        commandId: CommandId.make("cmd-session-set-stopped-provider-switch"),
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-before-stopped-provider-switch"),
         threadId: ThreadId.make("thread-1"),
-        session: {
-          threadId: ThreadId.make("thread-1"),
-          status: "stopped",
-          providerName: "codex",
-          providerInstanceId: ProviderInstanceId.make("codex"),
-          runtimeMode: "approval-required",
-          activeTurnId: null,
-          lastError: null,
-          updatedAt: now,
+        message: {
+          messageId: asMessageId("user-message-before-stopped-provider-switch"),
+          role: "user",
+          text: "remember this before stopping",
+          attachments: [],
         },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
         createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.stop",
+        commandId: CommandId.make("cmd-session-stop-before-provider-switch"),
+        threadId: ThreadId.make("thread-1"),
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.stopSession.mock.calls.length === 1);
+    await waitFor(async () => {
+      const readModel = await harness.readModel();
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      return thread?.session?.status === "stopped";
+    });
+    harness.markProviderUnconfigured("codex");
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-meta-update-stopped-provider-switch"),
+        threadId: ThreadId.make("thread-1"),
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("claudeAgent"),
+          model: "claude-opus-4-6",
+        },
       }),
     );
 
@@ -2495,26 +2573,23 @@ describe("ProviderCommandReactor", () => {
       }),
     );
 
-    await waitFor(async () => {
-      const readModel = await harness.readModel();
-      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-      return (
-        thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
-        false
-      );
+    await waitFor(() => harness.startSession.mock.calls.length === 2);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+      provider: "claudeAgent",
+      providerInstanceId: ProviderInstanceId.make("claudeAgent"),
     });
-
-    expect(harness.startSession.mock.calls.length).toBe(0);
-    expect(harness.sendTurn.mock.calls.length).toBe(0);
+    const transferredTurn = harness.sendTurn.mock.calls[1]?.[0] as { input?: string } | undefined;
+    expect(transferredTurn?.input).toContain("[user]\nremember this before stopping");
+    expect(transferredTurn?.input).toContain(
+      "This conversation is continuing in a fresh native provider session.",
+    );
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.session?.providerName).toBe("claudeAgent");
     expect(
-      thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
-    ).toMatchObject({
-      payload: {
-        detail: expect.stringContaining("cannot switch to 'claudeAgent'"),
-      },
-    });
+      thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
+    ).toBe(false);
   });
 
   it("reacts to thread.turn.interrupt-requested by calling provider interrupt", async () => {

@@ -357,6 +357,24 @@ function taskLinkageActivityFields(payload: Record<string, unknown>): Record<str
   return fields;
 }
 
+function compactionSummaryFromDetail(detail: unknown): string | undefined {
+  if (typeof detail === "string") {
+    const normalized = detail.trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+  if (typeof detail !== "object" || detail === null || Array.isArray(detail)) {
+    return undefined;
+  }
+  const record = detail as Record<string, unknown>;
+  for (const key of ["summary", "message", "text", "details"] as const) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
 export function runtimeEventToActivities(
   event: ProviderRuntimeEvent,
   taskTitle?: string,
@@ -744,6 +762,8 @@ export function runtimeEventToActivities(
         return [];
       }
 
+      const summary = compactionSummaryFromDetail(event.payload.detail);
+
       return [
         {
           id: event.eventId,
@@ -754,6 +774,7 @@ export function runtimeEventToActivities(
           payload: {
             state: event.payload.state,
             ...(event.payload.detail !== undefined ? { detail: event.payload.detail } : {}),
+            ...(summary !== undefined ? { summary } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,

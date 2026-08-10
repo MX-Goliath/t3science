@@ -82,6 +82,15 @@ to run.
 
 For multi-account setups, see [Codex](./providers-codex.md) and [Claude](./providers-claude.md).
 
+### Switching Providers In An Existing Chat
+
+Select another provider driver from the model picker while the chat is open. T3 Code starts a
+fresh native session for that provider and sends the conversation history as context, so the
+provider-specific session state is not shared. If the previous provider compacted the context,
+messages before that boundary are omitted. T3 Code sends the provider's compaction summary when it
+is available; otherwise it sends an explicit compaction-boundary marker instead of replaying the
+older messages.
+
 ## Next Steps
 
 - [Permission modes](./permission-modes.md): how much T3 Code asks before acting

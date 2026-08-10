@@ -27,6 +27,38 @@ export type ProviderGroup = {
   readonly models: ReadonlyArray<ModelOption>;
 };
 
+export function canSelectProviderInstanceForThread(input: {
+  readonly config: T3ServerConfig | null | undefined;
+  readonly hasStartedSession: boolean;
+  readonly currentInstanceId: string;
+  readonly currentDriver: string | null | undefined;
+  readonly targetInstanceId: string;
+}): boolean {
+  if (!input.hasStartedSession || input.currentInstanceId === input.targetInstanceId) {
+    return true;
+  }
+  const currentProvider = input.config?.providers.find(
+    (provider) => provider.instanceId === input.currentInstanceId,
+  );
+  const targetProvider = input.config?.providers.find(
+    (provider) => provider.instanceId === input.targetInstanceId,
+  );
+  const currentDriver = currentProvider?.driver ?? input.currentDriver;
+  if (!targetProvider || !currentDriver) {
+    return false;
+  }
+  if (targetProvider.driver !== currentDriver) {
+    return true;
+  }
+  const currentGroupKey = currentProvider?.continuation?.groupKey;
+  const targetGroupKey = targetProvider.continuation?.groupKey;
+  return (
+    currentGroupKey !== undefined &&
+    targetGroupKey !== undefined &&
+    currentGroupKey === targetGroupKey
+  );
+}
+
 function providerDisplayLabel(provider: {
   readonly displayName?: string | undefined;
   readonly driver: string;
