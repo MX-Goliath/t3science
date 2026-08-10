@@ -77,8 +77,13 @@ import {
   type NewProjectScriptInput,
   type ProjectScriptEditorRequest,
 } from "../projectScriptEditor";
+import {
+  PORTABLE_CONVERSATIONS_SWITCH_LABEL,
+  useProjectConversationStorage,
+} from "../ProjectConversationStorageControl";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Switch } from "../ui/switch";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
@@ -252,6 +257,52 @@ export function ProjectSettingsPanel({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Conversation storage is written into each checkout's own `.t3/conversations`,
+ * so it stays per member instead of fanning out across the group.
+ */
+function ProjectConversationStorageRow({
+  member,
+  showCheckout,
+}: {
+  member: SidebarProjectGroupMember;
+  showCheckout: boolean;
+}) {
+  const { enabled, busy, error, setEnabled } = useProjectConversationStorage(member);
+
+  return (
+    <SettingsRow
+      title="Portable local conversations"
+      description={
+        <>
+          Save and automatically restore this checkout&apos;s conversations from{" "}
+          <code>.t3/conversations</code>. Imported conversations continue in a new provider session
+          with their previous message context.
+        </>
+      }
+      status={
+        error ? (
+          <span className="text-destructive">{error}</span>
+        ) : showCheckout ? (
+          <span className="font-mono">{member.workspaceRoot}</span>
+        ) : null
+      }
+      control={
+        <Switch
+          checked={enabled}
+          disabled={busy}
+          aria-label={
+            showCheckout
+              ? `${PORTABLE_CONVERSATIONS_SWITCH_LABEL} for ${member.workspaceRoot}`
+              : PORTABLE_CONVERSATIONS_SWITCH_LABEL
+          }
+          onCheckedChange={(checked) => setEnabled(Boolean(checked))}
+        />
+      }
+    />
   );
 }
 
@@ -889,6 +940,16 @@ function ProjectDetail({
             </Select>
           }
         />
+      </SettingsSection>
+
+      <SettingsSection id="project-conversation-storage" title="Conversations">
+        {group.memberProjects.map((member) => (
+          <ProjectConversationStorageRow
+            key={member.physicalProjectKey}
+            member={member}
+            showCheckout={group.memberProjects.length > 1}
+          />
+        ))}
       </SettingsSection>
 
       <SettingsSection

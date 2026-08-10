@@ -207,6 +207,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/projects",
   },
   {
+    id: "project-conversation-storage",
+    title: "Portable local conversations",
+    to: "/settings/projects",
+  },
+  {
     id: "project-scripts",
     title: "Project actions",
     to: "/settings/projects",

@@ -158,21 +158,52 @@ function firstValidTimestampMs(...candidates: ReadonlyArray<string | null | unde
   return 0;
 }
 
+export type ThreadActivityInput = {
+  readonly createdAt: string;
+  readonly latestUserMessageAt?: string | null | undefined;
+  readonly latestTurn?:
+    | {
+        readonly requestedAt?: string | null | undefined;
+        readonly startedAt?: string | null | undefined;
+        readonly completedAt?: string | null | undefined;
+      }
+    | null
+    | undefined;
+};
+
+/** The timestamp a live row sorts by: the newest message or turn stamp, with
+    creation time as the floor for threads that have no activity yet. Only
+    conversation events count — `updatedAt` also moves on renames, pins and
+    snoozes, which must not reshuffle the list. */
+export function threadListActivityMs(thread: ThreadActivityInput): number {
+  let latest = parseTimestampMs(thread.createdAt);
+  for (const candidate of [
+    thread.latestUserMessageAt,
+    thread.latestTurn?.requestedAt,
+    thread.latestTurn?.startedAt,
+    thread.latestTurn?.completedAt,
+  ]) {
+    if (candidate == null) continue;
+    const parsed = Date.parse(candidate);
+    if (!Number.isNaN(parsed) && parsed > latest) latest = parsed;
+  }
+  return latest;
+}
+
 /**
- * v2 sort: static creation order, newest thread on top. Activity NEVER
- * reorders the list — a row holds its position from open until settled, so
- * the screen only moves at lifecycle transitions. Mirrors web's
- * sortThreadsForSidebarV2.
+ * v2 sort: most recent activity on top — a thread that just took a message
+ * (or whose turn just moved) rises above quieter rows. Threads with no
+ * activity yet fall back to their creation time. Mirrors web's
+ * sortThreadsForSidebar.
  */
-export function sortThreadsForListV2<T extends { readonly id: string; readonly createdAt: string }>(
+export function sortThreadsForListV2<T extends { readonly id: string } & ThreadActivityInput>(
   threads: readonly T[],
 ): T[] {
   // .sort() on a copy, not .toSorted(): Hermes doesn't ship the ES2023
   // change-by-copy array methods.
   return [...threads].sort(
     (left, right) =>
-      parseTimestampMs(right.createdAt) - parseTimestampMs(left.createdAt) ||
-      left.id.localeCompare(right.id),
+      threadListActivityMs(right) - threadListActivityMs(left) || left.id.localeCompare(right.id),
   );
 }
 

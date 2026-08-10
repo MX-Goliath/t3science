@@ -940,6 +940,51 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         );
       });
 
+      it("keeps Claude plan windows when only the usage probe degrades", () => {
+        const previousProvider = {
+          instanceId: ProviderInstanceId.make("claudeAgent"),
+          driver: ProviderDriverKind.make("claudeAgent"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated", type: "max", email: "user@example.com" },
+          checkedAt: "2026-08-09T00:00:00.000Z",
+          version: "2.1.0",
+          rateLimits: {
+            fiveHour: { remainingPercent: 55, windowDurationMinutes: 300 },
+            weekly: { remainingPercent: 80, windowDurationMinutes: 10_080 },
+          },
+          models: [],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+        const { rateLimits: knownRateLimits, ...providerWithoutRateLimits } = previousProvider;
+
+        // `probeClaudeRateLimits` degrades to `undefined` on its own — a
+        // rejected experimental control request, a timeout, a CLI mid-update —
+        // while the capabilities probe still reports the same account.
+        const degradedUsageProbeProvider = {
+          ...providerWithoutRateLimits,
+          checkedAt: "2026-08-09T00:01:00.000Z",
+        } satisfies ServerProvider;
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, degradedUsageProbeProvider).rateLimits,
+          knownRateLimits,
+        );
+
+        // Bedrock/Vertex sessions bill through the cloud provider and have no
+        // plan windows at all, so the switch drops the cached ones.
+        const bedrockProvider = {
+          ...providerWithoutRateLimits,
+          auth: { status: "authenticated", type: "bedrock", email: "user@example.com" },
+          checkedAt: "2026-08-09T00:02:00.000Z",
+        } satisfies ServerProvider;
+        assert.strictEqual(
+          mergeProviderSnapshot(previousProvider, bedrockProvider).rateLimits,
+          undefined,
+        );
+      });
+
       it.effect("does not run provider probes during layer construction", () =>
         Effect.gen(function* () {
           const codexDriver = ProviderDriverKind.make("codex");

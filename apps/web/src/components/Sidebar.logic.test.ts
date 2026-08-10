@@ -719,12 +719,23 @@ describe("searchSidebarThreadsByTitle", () => {
 });
 
 describe("sortThreadsForSidebar", () => {
-  const sortable = (input: { id: string; createdAt: string }) => ({
+  const sortable = (input: {
+    id: string;
+    createdAt: string;
+    latestUserMessageAt?: string | null;
+    latestTurn?: {
+      requestedAt?: string | null;
+      startedAt?: string | null;
+      completedAt?: string | null;
+    } | null;
+  }) => ({
     id: input.id,
     createdAt: input.createdAt,
+    latestUserMessageAt: input.latestUserMessageAt ?? null,
+    latestTurn: input.latestTurn ?? null,
   });
 
-  it("orders by creation time, newest first, ignoring activity", () => {
+  it("falls back to creation time, newest first, when nothing has activity", () => {
     const sorted = sortThreadsForSidebar([
       sortable({ id: "oldest", createdAt: "2026-03-09T08:00:00.000Z" }),
       sortable({ id: "newest", createdAt: "2026-03-09T12:00:00.000Z" }),
@@ -734,7 +745,55 @@ describe("sortThreadsForSidebar", () => {
     expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "oldest"]);
   });
 
-  it("breaks creation-time ties by id so the order is stable", () => {
+  it("lifts an older thread above newer ones when it has fresher activity", () => {
+    const sorted = sortThreadsForSidebar([
+      sortable({ id: "young-and-quiet", createdAt: "2026-03-09T12:00:00.000Z" }),
+      sortable({
+        id: "old-but-busy",
+        createdAt: "2026-03-09T08:00:00.000Z",
+        latestUserMessageAt: "2026-03-09T13:00:00.000Z",
+      }),
+    ]);
+
+    expect(sorted.map((thread) => thread.id)).toEqual(["old-but-busy", "young-and-quiet"]);
+  });
+
+  it("counts a finished turn as activity even when no user message followed it", () => {
+    const sorted = sortThreadsForSidebar([
+      sortable({
+        id: "messaged",
+        createdAt: "2026-03-09T08:00:00.000Z",
+        latestUserMessageAt: "2026-03-09T09:00:00.000Z",
+      }),
+      sortable({
+        id: "turn-completed",
+        createdAt: "2026-03-09T07:00:00.000Z",
+        latestUserMessageAt: "2026-03-09T08:30:00.000Z",
+        latestTurn: {
+          requestedAt: "2026-03-09T08:30:00.000Z",
+          startedAt: "2026-03-09T08:31:00.000Z",
+          completedAt: "2026-03-09T09:30:00.000Z",
+        },
+      }),
+    ]);
+
+    expect(sorted.map((thread) => thread.id)).toEqual(["turn-completed", "messaged"]);
+  });
+
+  it("ignores malformed activity stamps instead of sinking the row", () => {
+    const sorted = sortThreadsForSidebar([
+      sortable({ id: "quiet", createdAt: "2026-03-09T10:00:00.000Z" }),
+      sortable({
+        id: "broken-stamp",
+        createdAt: "2026-03-09T11:00:00.000Z",
+        latestUserMessageAt: "not-a-date",
+      }),
+    ]);
+
+    expect(sorted.map((thread) => thread.id)).toEqual(["broken-stamp", "quiet"]);
+  });
+
+  it("breaks activity ties by id so the order is stable", () => {
     const sorted = sortThreadsForSidebar([
       sortable({ id: "b", createdAt: "2026-03-09T10:00:00.000Z" }),
       sortable({ id: "a", createdAt: "2026-03-09T10:00:00.000Z" }),

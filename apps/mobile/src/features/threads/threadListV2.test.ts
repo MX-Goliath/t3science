@@ -252,13 +252,34 @@ describe("resolveThreadListV2SnoozeGateExpiryMs", () => {
 });
 
 describe("sortThreadsForListV2", () => {
-  it("orders by creation time, newest first, ignoring activity", () => {
+  it("falls back to creation time, newest first, when nothing has activity", () => {
     const sorted = sortThreadsForListV2([
       { id: "oldest", createdAt: "2026-06-01T08:00:00.000Z" },
       { id: "newest", createdAt: "2026-06-01T12:00:00.000Z" },
       { id: "middle", createdAt: "2026-06-01T10:00:00.000Z" },
     ]);
     expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "oldest"]);
+  });
+
+  it("lifts an older thread above newer ones when it has fresher activity", () => {
+    const sorted = sortThreadsForListV2([
+      { id: "young-and-quiet", createdAt: "2026-06-01T12:00:00.000Z" },
+      {
+        id: "old-but-busy",
+        createdAt: "2026-06-01T08:00:00.000Z",
+        latestUserMessageAt: "2026-06-01T13:00:00.000Z",
+      },
+      {
+        id: "turn-completed",
+        createdAt: "2026-06-01T07:00:00.000Z",
+        latestTurn: { completedAt: "2026-06-01T14:00:00.000Z" },
+      },
+    ]);
+    expect(sorted.map((thread) => thread.id)).toEqual([
+      "turn-completed",
+      "old-but-busy",
+      "young-and-quiet",
+    ]);
   });
 });
 
