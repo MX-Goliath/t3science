@@ -68,6 +68,7 @@ import type {
 } from "../../lib/composerImages";
 import {
   buildModelOptions,
+  canSelectProviderInstanceForThread,
   groupByProvider,
   isModelSelectionUnavailable,
 } from "../../lib/modelOptions";
@@ -517,11 +518,20 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     [props.serverConfig, currentModelSelection],
   );
   const providerGroups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
-  // An existing thread is bound to its harness: sessions can't move between
-  // provider instances, so the picker only offers the thread's own group.
+  const currentSessionInstanceId =
+    props.selectedThread.session?.providerInstanceId ?? currentModelSelection.instanceId;
   const threadProviderGroups = useMemo(
-    () => providerGroups.filter((group) => group.providerKey === currentModelSelection.instanceId),
-    [providerGroups, currentModelSelection.instanceId],
+    () =>
+      providerGroups.filter((group) =>
+        canSelectProviderInstanceForThread({
+          config: props.serverConfig,
+          hasStartedSession: props.selectedThread.session !== null,
+          currentInstanceId: currentSessionInstanceId,
+          currentDriver: props.selectedThread.session?.providerName,
+          targetInstanceId: group.providerKey,
+        }),
+      ),
+    [currentSessionInstanceId, props.selectedThread.session, props.serverConfig, providerGroups],
   );
   const currentModelOption =
     modelOptions.find(

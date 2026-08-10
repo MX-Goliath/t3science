@@ -400,7 +400,6 @@ import {
   type LocalDispatchSnapshot,
   PullRequestDialogState,
   cloneComposerImageForRetry,
-  deriveLockedProvider,
   readFileAsDataUrl,
   resolveFileAttachmentUrl,
   reconcileMountedTerminalThreadIds,
@@ -2312,12 +2311,9 @@ export default function ChatView(props: ChatViewProps) {
     activeThread?.modelSelection.instanceId ??
     activeProjectDefaultModelSelection?.instanceId ??
     null;
-  const lockedProvider = deriveLockedProvider({
-    thread: activeThread,
-    selectedProvider: selectedProviderByThreadId,
-    threadProvider,
-    providers: providerStatuses,
-  });
+  // Cross-driver changes start a fresh native session on the server and carry
+  // the visible transcript forward as portable context.
+  const lockedProvider: ProviderDriverKind | null = null;
   const pullRequestsCapabilityKnown = serverConfig !== null;
   const supportsPullRequests = serverConfig?.environment.capabilities.pullRequests === true;
   const attachmentEnvironmentConfig = environmentById.get(environmentId)?.serverConfig ?? null;
@@ -7785,6 +7781,21 @@ export default function ChatView(props: ChatViewProps) {
       if (!activeThread) {
         return null;
       }
+      const currentInstanceId =
+        activeThread.session?.providerInstanceId ?? activeThread.modelSelection.instanceId;
+      const currentEntry = providerStatuses.find(
+        (snapshot) => snapshot.instanceId === currentInstanceId,
+      );
+      const nextEntry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
+      if (
+        activeThread.session !== null &&
+        currentEntry?.driver === nextEntry?.driver &&
+        currentEntry?.continuation?.groupKey &&
+        nextEntry?.continuation?.groupKey &&
+        currentEntry.continuation.groupKey !== nextEntry.continuation.groupKey
+      ) {
+        return "This provider account does not share conversation history with the current account. Start a new thread to use it.";
+      }
       const reason = getStartedThreadModelChangeBlockReason({
         providers: providerStatuses,
         hasStartedSession: activeThread.session !== null,
@@ -7805,18 +7816,12 @@ export default function ChatView(props: ChatViewProps) {
       // are rejected by returning early; the server remains authoritative too.
       const entry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
       const resolvedDriverKind = entry?.driver ?? null;
-      if (
-        lockedProvider !== null &&
-        resolvedDriverKind !== null &&
-        resolvedDriverKind !== lockedProvider
-      ) {
-        scheduleComposerFocus();
-        return;
-      }
-      if (lockedProvider !== null && activeThread.session?.providerInstanceId) {
-        const currentEntry = providerStatuses.find(
-          (snapshot) => snapshot.instanceId === activeThread.session?.providerInstanceId,
-        );
+      const currentInstanceId =
+        activeThread.session?.providerInstanceId ?? activeThread.modelSelection.instanceId;
+      const currentEntry = providerStatuses.find(
+        (snapshot) => snapshot.instanceId === currentInstanceId,
+      );
+      if (activeThread.session !== null && currentEntry?.driver === resolvedDriverKind) {
         if (
           currentEntry?.continuation?.groupKey &&
           entry?.continuation?.groupKey &&
@@ -7866,7 +7871,6 @@ export default function ChatView(props: ChatViewProps) {
     },
     [
       activeThread,
-      lockedProvider,
       scheduleComposerFocus,
       setComposerDraftModelSelection,
       setStickyComposerModelSelection,

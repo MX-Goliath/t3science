@@ -99,6 +99,10 @@ For provider-specific setup and accounts, see [Codex](./providers-codex.md),
 
 ## Next steps
 
+- To switch provider drivers in an existing chat, choose another provider in the model picker.
+  T3 Science starts a fresh native session and supplies the visible conversation as context. If
+  the prior provider compacted the conversation, only its retained summary and later messages are
+  transferred.
 - [Working with threads](./thread-sidebar.md): start tasks and organize parallel work.
 - [Permission modes](./permission-modes.md): choose when agents ask before acting.
 - [Remote access](./remote-access.md): connect from another device.

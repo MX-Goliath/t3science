@@ -4,6 +4,7 @@ import { ProviderInstanceId, type ModelSelection, type ServerConfig } from "@t3t
 
 import {
   buildModelOptions,
+  canSelectProviderInstanceForThread,
   groupByProvider,
   isModelSelectionUnavailable,
   resolveDefaultableModelSelection,
@@ -407,5 +408,45 @@ describe("mobile model options", () => {
         modelOptions: [unavailable],
       }),
     ).toBeNull();
+  });
+
+  it("allows cross-driver switches while keeping same-driver continuation groups compatible", () => {
+    const config = {
+      providers: [
+        {
+          instanceId: "codex_work",
+          driver: "codex",
+          continuation: { groupKey: "codex:home:shared" },
+        },
+        {
+          instanceId: "codex_personal",
+          driver: "codex",
+          continuation: { groupKey: "codex:home:shared" },
+        },
+        {
+          instanceId: "codex_isolated",
+          driver: "codex",
+          continuation: { groupKey: "codex:home:isolated" },
+        },
+        {
+          instanceId: "claudeAgent",
+          driver: "claudeAgent",
+          continuation: { groupKey: "claude:home:default" },
+        },
+      ],
+    } as unknown as ServerConfig;
+    const canSelect = (targetInstanceId: string) =>
+      canSelectProviderInstanceForThread({
+        config,
+        hasStartedSession: true,
+        currentInstanceId: "codex_work",
+        currentDriver: "codex",
+        targetInstanceId,
+      });
+
+    expect(canSelect("codex_work")).toBe(true);
+    expect(canSelect("codex_personal")).toBe(true);
+    expect(canSelect("codex_isolated")).toBe(false);
+    expect(canSelect("claudeAgent")).toBe(true);
   });
 });
