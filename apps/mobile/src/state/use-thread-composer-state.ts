@@ -74,7 +74,7 @@ export function useThreadDraftForThread(input: {
 }
 
 export function useThreadComposerState() {
-  const { selectedThread: selectedThreadShell } = useThreadSelection();
+  const { selectedThread: selectedThreadShell, selectedThreadProject } = useThreadSelection();
   const selectedThreadDetail = useSelectedThreadDetail();
   const composerDrafts = useAtomValue(composerDraftsAtom);
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
@@ -132,9 +132,14 @@ export function useThreadComposerState() {
   const activeThreadBusy =
     !!selectedThread &&
     (selectedThread.session?.status === "running" || selectedThread.session?.status === "starting");
+  const sendDisabledReason =
+    selectedThreadShell?.worktreePath === null &&
+    selectedThreadProject?.workspaceAvailable === false
+      ? "Project folder is missing. Restore it before sending a message."
+      : null;
 
   const onSendMessage = useCallback(async () => {
-    if (!selectedThreadShell) {
+    if (!selectedThreadShell || sendDisabledReason !== null) {
       return null;
     }
 
@@ -179,7 +184,7 @@ export function useThreadComposerState() {
       );
     });
     return messageId;
-  }, [selectedThreadDetail, selectedThreadShell]);
+  }, [selectedThreadDetail, selectedThreadShell, sendDisabledReason]);
 
   const onChangeDraftMessage = useCallback(
     (value: string) => {
@@ -309,6 +314,7 @@ export function useThreadComposerState() {
     runtimeMode,
     interactionMode,
     activeThreadBusy,
+    sendDisabledReason,
     onChangeDraftMessage,
     onPickDraftImages,
     onPasteIntoDraft,

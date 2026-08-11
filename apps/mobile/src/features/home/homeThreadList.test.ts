@@ -9,6 +9,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildHomeProjectScopes,
   buildHomeThreadGroups,
+  resolveHomeProjectWorkspaceAvailability,
   sortHomeProjectScopes,
 } from "./homeThreadList";
 
@@ -72,6 +73,26 @@ function buildGroups(
 }
 
 describe("buildHomeThreadGroups", () => {
+  it("resolves grouped project workspace availability", () => {
+    const environmentId = EnvironmentId.make("environment-local");
+    const available = makeProject({
+      environmentId,
+      id: ProjectId.make("project-available"),
+      title: "Available",
+      workspaceAvailable: true,
+    });
+    const missing = makeProject({
+      environmentId,
+      id: ProjectId.make("project-missing"),
+      title: "Missing",
+      workspaceAvailable: false,
+    });
+
+    expect(resolveHomeProjectWorkspaceAvailability([available])).toBe("available");
+    expect(resolveHomeProjectWorkspaceAvailability([available, missing])).toBe("partial");
+    expect(resolveHomeProjectWorkspaceAvailability([missing])).toBe("missing");
+  });
+
   it("builds one v2 scope for the same repository across environments", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");

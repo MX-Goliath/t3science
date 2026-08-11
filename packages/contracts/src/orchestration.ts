@@ -447,6 +447,9 @@ export const OrchestrationProjectShell = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
+  // Runtime-only filesystem state. Optional so clients can still consume
+  // cached snapshots and shell events from servers that predate this field.
+  workspaceAvailable: Schema.optional(Schema.Boolean),
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
   defaultThreadEnvMode: Schema.optional(Schema.NullOr(ThreadEnvMode)),

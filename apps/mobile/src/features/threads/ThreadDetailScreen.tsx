@@ -64,6 +64,7 @@ export interface ThreadDetailScreenProps {
   /** Non-null when older turns exist beyond the loaded window. */
   readonly loadEarlier?: { readonly loading: boolean; readonly onLoadEarlier: () => void } | null;
   readonly activeThreadBusy: boolean;
+  readonly sendDisabledReason: string | null;
   readonly environmentId: EnvironmentId;
   readonly projectWorkspaceRoot: string | null;
   readonly threadCwd: string | null;
@@ -433,6 +434,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               serverConfig={props.serverConfig}
               queueCount={props.selectedThreadQueueCount}
               activeThreadBusy={props.activeThreadBusy}
+              sendDisabledReason={props.sendDisabledReason}
               environmentId={props.environmentId}
               projectCwd={props.projectWorkspaceRoot}
               bottomInset={composerBottomInset}

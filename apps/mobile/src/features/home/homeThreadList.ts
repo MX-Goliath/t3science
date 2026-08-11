@@ -28,6 +28,17 @@ import { scopedProjectKey } from "../../lib/scopedEntities";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 
 export type HomeProjectSortOrder = Exclude<SidebarProjectSortOrder, "manual">;
+export type HomeProjectWorkspaceAvailability = "available" | "partial" | "missing";
+
+export function resolveHomeProjectWorkspaceAvailability(
+  projects: ReadonlyArray<EnvironmentProject>,
+): HomeProjectWorkspaceAvailability {
+  const unavailableCount = projects.filter(
+    (project) => project.workspaceAvailable === false,
+  ).length;
+  if (unavailableCount === 0) return "available";
+  return unavailableCount === projects.length ? "missing" : "partial";
+}
 
 export interface HomeProjectScope {
   readonly key: string;

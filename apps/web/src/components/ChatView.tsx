@@ -1685,6 +1685,8 @@ function ChatViewContent(props: ChatViewProps) {
     ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
     : null;
   const activeProject = useProject(activeProjectRef);
+  const activeThreadWorkspaceUnavailable =
+    activeThread?.worktreePath === null && activeProject?.workspaceAvailable === false;
   const handleNewThreadInActiveProject = useCallback(() => {
     startNewThreadForProject(activeProjectRef, handleNewThread);
   }, [activeProjectRef, handleNewThread]);
@@ -4928,6 +4930,16 @@ function ChatViewContent(props: ChatViewProps) {
         }),
       );
     };
+    if (activeThreadWorkspaceUnavailable) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "warning",
+          title: "Project folder is missing",
+          description: "Restore the project folder before sending a message in this chat.",
+        }),
+      );
+      return;
+    }
     if (
       !activeThread ||
       isSendBusy ||
@@ -6411,7 +6423,13 @@ function ChatViewContent(props: ChatViewProps) {
                             phase={phase}
                             isConnecting={isConnecting}
                             isSendBusy={isSendBusy}
-                            sendDisabledReason={threadDetailLoading ? "Messages loading" : null}
+                            sendDisabledReason={
+                              threadDetailLoading
+                                ? "Messages loading"
+                                : activeThreadWorkspaceUnavailable
+                                  ? "Project folder is missing"
+                                  : null
+                            }
                             isPreparingWorktree={isPreparingWorktree}
                             environmentUnavailable={activeEnvironmentUnavailableState}
                             activePendingApproval={activePendingApproval}

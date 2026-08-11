@@ -264,6 +264,7 @@ function SidebarThreadTooltip({
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
+  workspaceUnavailable,
 }: {
   thread: SidebarThreadSummary;
   projectTitle: string | null;
@@ -279,6 +280,7 @@ function SidebarThreadTooltip({
   } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
+  workspaceUnavailable: boolean;
 }) {
   return (
     <TooltipPopup
@@ -321,6 +323,14 @@ function SidebarThreadTooltip({
               <CircleAlertIcon aria-hidden className="mt-0.5 size-3 shrink-0 stroke-current" />
               <div className="min-w-0 flex-1 wrap-break-word leading-5">
                 You're currently checked out on another branch.
+              </div>
+            </div>
+          ) : null}
+          {workspaceUnavailable ? (
+            <div className="flex min-w-0 items-start gap-2 text-warning">
+              <CircleAlertIcon aria-hidden className="mt-0.5 size-3 shrink-0 stroke-current" />
+              <div className="min-w-0 flex-1 wrap-break-word leading-5">
+                Project folder is missing{projectCwd ? `: ${projectCwd}` : "."}
               </div>
             </div>
           ) : null}
@@ -795,6 +805,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   projectCwd: string | null;
   projectFaviconPath: string | null;
   projectTitle: string | null;
+  workspaceUnavailable: boolean;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
   timestampFormat: TimestampFormat;
   onThreadClick: (event: ReactMouseEvent, threadRef: ScopedThreadRef) => void;
@@ -1003,6 +1014,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       branchMismatch={branchMismatch}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
+      workspaceUnavailable={props.workspaceUnavailable}
     />
   );
 
@@ -1156,6 +1168,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       (scheduledSendOverdue
         ? "bg-red-400/[0.06] hover:bg-red-400/[0.1]"
         : "bg-sky-400/[0.06] hover:bg-sky-400/[0.11]"),
+    props.workspaceUnavailable && !props.isActive && !isSelected && "opacity-60 hover:opacity-100",
   );
 
   const title = isRenaming ? (
@@ -1196,6 +1209,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   : "text-secondary-label/70",
             ),
         isRegeneratingTitle && "opacity-[0.55]",
+        props.workspaceUnavailable && !isRenaming && "line-through decoration-current/60",
       )}
     >
       {thread.title}
@@ -1273,6 +1287,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               />
             </span>
             {title}
+            {props.workspaceUnavailable ? (
+              <CircleAlertIcon
+                aria-label="Project folder is missing"
+                className="size-3.5 shrink-0 text-warning"
+              />
+            ) : null}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
@@ -1417,11 +1437,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     shouldRecede ? "font-normal" : "font-medium",
                   )}
                 >
-                  {props.projectTitle}
+                  <span
+                    className={cn(
+                      props.workspaceUnavailable && "line-through decoration-current/60",
+                    )}
+                  >
+                    {props.projectTitle}
+                  </span>
                 </span>
               ) : (
                 <span className="flex-1" />
               )}
+              {props.workspaceUnavailable ? (
+                <CircleAlertIcon
+                  aria-label="Project folder is missing"
+                  className="size-3.5 shrink-0 text-warning"
+                />
+              ) : null}
               {props.isPinned ? (
                 props.pinningSupported ? (
                   <button
@@ -1605,6 +1637,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   projectCwd: string | null;
   projectFaviconPath: string | null;
   projectTitle: string | null;
+  workspaceUnavailable: boolean;
   environmentLabel: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
   isHighlighted: boolean;
@@ -1669,6 +1702,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
                 props.isHighlighted || props.isRouteActive
                   ? "bg-sidebar-row-active text-sidebar-foreground"
                   : "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+                props.workspaceUnavailable && "opacity-60 hover:opacity-100",
               )}
             />
           }
@@ -1680,7 +1714,20 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
             className="size-4 shrink-0"
             fallbackIcon={MessageSquareIcon}
           />
-          <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate",
+              props.workspaceUnavailable && "line-through decoration-current/60",
+            )}
+          >
+            {thread.title}
+          </span>
+          {props.workspaceUnavailable ? (
+            <CircleAlertIcon
+              aria-label="Project folder is missing"
+              className="size-3.5 shrink-0 text-warning"
+            />
+          ) : null}
           <span className="shrink-0 text-xs text-muted-foreground/55 tabular-nums">
             {threadTimeLabel(thread)}
           </span>
@@ -1697,6 +1744,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
           branchMismatch={branchMismatch}
           terminalStatus={terminalStatus}
           terminalProcessCount={runningTerminalIds.length}
+          workspaceUnavailable={props.workspaceUnavailable}
         />
       </Tooltip>
     </li>
@@ -1887,6 +1935,16 @@ export default function Sidebar() {
     () =>
       new Map(
         projects.map((project) => [`${project.environmentId}:${project.id}`, project.faviconPath]),
+      ),
+    [projects],
+  );
+  const projectWorkspaceAvailableByKey = useMemo(
+    () =>
+      new Map(
+        projects.map((project) => [
+          `${project.environmentId}:${project.id}`,
+          project.workspaceAvailable !== false,
+        ]),
       ),
     [projects],
   );
@@ -3441,6 +3499,10 @@ export default function Sidebar() {
   ) => {
     const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
     const isGeneralChat = isGeneralChatsProjectId(thread.projectId);
+    const workspaceUnavailable =
+      !isGeneralChat &&
+      thread.worktreePath === null &&
+      projectWorkspaceAvailableByKey.get(`${thread.environmentId}:${thread.projectId}`) === false;
     const isCard = section === "active" || section === "pinned";
     const rowVariant = isCard ? "card" : "slim";
     return (
@@ -3488,6 +3550,7 @@ export default function Sidebar() {
             ? "General chats"
             : (projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null)
         }
+        workspaceUnavailable={workspaceUnavailable}
         providerEntryByInstanceId={providerEntryByInstanceId}
         timestampFormat={timestampFormat}
         onThreadClick={handleThreadClick}
@@ -3691,8 +3754,26 @@ export default function Sidebar() {
                       <FolderIcon className="size-4 shrink-0" />
                     )}
                     <span className="min-w-0 flex-1 truncate">
-                      {scopedProjectGroup?.displayName ?? "All projects"}
+                      <span
+                        className={cn(
+                          scopedProjectGroup?.workspaceAvailability === "missing" &&
+                            "line-through decoration-current/60",
+                        )}
+                      >
+                        {scopedProjectGroup?.displayName ?? "All projects"}
+                      </span>
                     </span>
+                    {scopedProjectGroup?.workspaceAvailability !== undefined &&
+                    scopedProjectGroup.workspaceAvailability !== "available" ? (
+                      <CircleAlertIcon
+                        aria-label={
+                          scopedProjectGroup.workspaceAvailability === "missing"
+                            ? "Project folder is missing"
+                            : "Some project folders are missing"
+                        }
+                        className="size-3.5 shrink-0 text-warning"
+                      />
+                    ) : null}
                     <ChevronDownIcon className="-mr-px size-4 shrink-0" />
                   </MenuTrigger>
                   <MenuPopup align="start" className="w-(--anchor-width)">
@@ -3712,6 +3793,9 @@ export default function Sidebar() {
                       </MenuRadioItem>
                       {projectGroups.map((project) => {
                         const scopeKey = project.projectKey;
+                        const workspaceUnavailable = project.workspaceAvailability === "missing";
+                        const workspacePartiallyUnavailable =
+                          project.workspaceAvailability === "partial";
                         return (
                           <MenuRadioItem
                             key={scopeKey}
@@ -3725,7 +3809,24 @@ export default function Sidebar() {
                               faviconPath={project.faviconPath}
                               className="size-4 shrink-0"
                             />
-                            <span className="min-w-0 truncate text-sm">{project.displayName}</span>
+                            <span
+                              className={cn(
+                                "min-w-0 truncate text-sm",
+                                workspaceUnavailable && "line-through decoration-current/60",
+                              )}
+                            >
+                              {project.displayName}
+                            </span>
+                            {workspaceUnavailable || workspacePartiallyUnavailable ? (
+                              <CircleAlertIcon
+                                aria-label={
+                                  workspaceUnavailable
+                                    ? "Project folder is missing"
+                                    : "Some project folders are missing"
+                                }
+                                className="size-3.5 shrink-0 text-warning"
+                              />
+                            ) : null}
                             <button
                               type="button"
                               aria-label={`Project actions for ${project.displayName}`}
@@ -3809,6 +3910,13 @@ export default function Sidebar() {
                             : (projectDisplayNameByKey.get(
                                 `${thread.environmentId}:${thread.projectId}`,
                               ) ?? null)
+                        }
+                        workspaceUnavailable={
+                          !isGeneralChatsProjectId(thread.projectId) &&
+                          thread.worktreePath === null &&
+                          projectWorkspaceAvailableByKey.get(
+                            `${thread.environmentId}:${thread.projectId}`,
+                          ) === false
                         }
                         environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
                         providerEntryByInstanceId={providerEntryByInstanceId}

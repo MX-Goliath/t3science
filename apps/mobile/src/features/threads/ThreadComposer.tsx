@@ -106,6 +106,7 @@ export interface ThreadComposerProps {
   readonly serverConfig: T3ServerConfig | null;
   readonly queueCount: number;
   readonly activeThreadBusy: boolean;
+  readonly sendDisabledReason: string | null;
   readonly environmentId: EnvironmentId;
   readonly projectCwd: string | null;
   readonly editorRef?: RefObject<ComposerEditorHandle | null>;
@@ -290,7 +291,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   // Opening and closing count as active so the composer stays expanded while
   // focus moves between its native editor and the settings modal.
   const isExpanded = isFocused || settingsSheetPresentation.isActive;
-  const canSend = hasContent;
+  const canSend = hasContent && props.sendDisabledReason === null;
 
   // Notify the parent from the derived value, not focus events: the parent
   // sizes the feed inset from this, and blur-during-sheet would otherwise
@@ -542,6 +543,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const { onChangeDraftMessage, onUpdateInteractionMode, draftMessage, onSendMessage } = props;
 
   const handleSend = useCallback(async () => {
+    if (props.sendDisabledReason !== null) return;
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
     if (inFlightThreadIdsRef.current.has(threadKey)) return;
     inFlightThreadIdsRef.current.add(threadKey);
@@ -562,6 +564,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     onSendMessage,
     props.environmentId,
     props.environmentLabel,
+    props.sendDisabledReason,
     props.selectedThread.id,
     props.selectedThread.title,
   ]);
@@ -856,8 +859,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           </Animated.View>
         ) : null}
 
-        {/* Queue count */}
-        {props.queueCount > 0 ? (
+        {props.sendDisabledReason !== null ? (
+          <Text className="pt-2 text-xs text-danger-foreground">{props.sendDisabledReason}</Text>
+        ) : props.queueCount > 0 ? (
           <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
             <Text className="pt-2 text-xs text-foreground-muted">
               {props.queueCount} queued message{props.queueCount === 1 ? "" : "s"} will send

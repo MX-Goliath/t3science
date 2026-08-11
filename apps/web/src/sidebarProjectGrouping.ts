@@ -3,6 +3,7 @@ import { buildProjectGroups, type ProjectGroupingSettings } from "./logicalProje
 import type { Project } from "./types";
 
 export type EnvironmentPresence = "local-only" | "remote-only" | "mixed";
+export type WorkspaceAvailability = "available" | "partial" | "missing";
 
 export interface SidebarProjectGroupMember extends Project {
   physicalProjectKey: string;
@@ -14,6 +15,7 @@ export interface SidebarProjectSnapshot extends Project {
   displayName: string;
   groupedProjectCount: number;
   environmentPresence: EnvironmentPresence;
+  workspaceAvailability: WorkspaceAvailability;
   // True iff every non-primary member of this group lives in a
   // desktopLocal env (today: the WSL backend). The sidebar uses this
   // to differentiate "lives on this machine but in a sandbox" from
@@ -98,6 +100,15 @@ export function buildSidebarProjectSnapshots(input: {
     const allRemoteMembersAreDesktopLocal =
       remoteMembers.length > 0 &&
       remoteMembers.every((member) => isDesktopLocal(member.environmentId));
+    const unavailableWorkspaceCount = members.filter(
+      (member) => member.workspaceAvailable === false,
+    ).length;
+    const workspaceAvailability =
+      unavailableWorkspaceCount === 0
+        ? "available"
+        : unavailableWorkspaceCount === members.length
+          ? "missing"
+          : "partial";
 
     return {
       ...representative,
@@ -106,6 +117,7 @@ export function buildSidebarProjectSnapshots(input: {
       groupedProjectCount: members.length,
       environmentPresence:
         hasLocal && hasRemote ? "mixed" : hasRemote ? "remote-only" : "local-only",
+      workspaceAvailability,
       allRemoteMembersAreDesktopLocal,
       memberProjects: members,
       memberProjectRefs: group.memberProjectRefs,

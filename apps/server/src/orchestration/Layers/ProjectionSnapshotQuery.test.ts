@@ -10,7 +10,9 @@ import {
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
@@ -20,6 +22,7 @@ import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQu
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import { ensureTurnWorkspaceAvailable } from "../TurnWorkspaceAvailability.ts";
 import { encodeThreadDetailPageCursor } from "../threadDetailCursor.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
@@ -39,6 +42,163 @@ const projectionSnapshotLayer = it.layer(
 );
 
 projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
+  it.effect("reports whether project workspace directories are available", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const existingWorkspace = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-project-workspace-availability-",
+      });
+      const missingWorkspace = path.join(existingWorkspace, "missing");
+
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id,
+          title,
+          workspace_root,
+          default_model_selection_json,
+          scripts_json,
+          created_at,
+          updated_at,
+          deleted_at
+        )
+        VALUES
+          (
+            'project-existing',
+            'Existing project',
+            ${existingWorkspace},
+            NULL,
+            '[]',
+            '2026-08-11T00:00:00.000Z',
+            '2026-08-11T00:00:00.000Z',
+            NULL
+          ),
+          (
+            'project-missing',
+            'Missing project',
+            ${missingWorkspace},
+            NULL,
+            '[]',
+            '2026-08-11T00:00:01.000Z',
+            '2026-08-11T00:00:01.000Z',
+            NULL
+          )
+      `;
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id,
+          project_id,
+          title,
+          model_selection_json,
+          runtime_mode,
+          interaction_mode,
+          branch,
+          worktree_path,
+          latest_turn_id,
+          latest_user_message_at,
+          pending_approval_count,
+          pending_user_input_count,
+          has_actionable_proposed_plan,
+          pinned_at,
+          pin_order_key,
+          created_at,
+          updated_at,
+          deleted_at
+        )
+        VALUES (
+          'thread-missing-workspace',
+          'project-missing',
+          'Missing workspace thread',
+          '{"instanceId":"codex","model":"gpt-5-codex"}',
+          'full-access',
+          'default',
+          NULL,
+          NULL,
+          NULL,
+          NULL,
+          0,
+          0,
+          0,
+          NULL,
+          NULL,
+          '2026-08-11T00:00:02.000Z',
+          '2026-08-11T00:00:02.000Z',
+          NULL
+        )
+      `;
+
+      const existing = yield* snapshotQuery.getProjectShellById(asProjectId("project-existing"));
+      const missing = yield* snapshotQuery.getProjectShellById(asProjectId("project-missing"));
+
+      assert.equal(existing._tag, "Some");
+      assert.equal(existing._tag === "Some" && existing.value.workspaceAvailable, true);
+      assert.equal(missing._tag, "Some");
+      assert.equal(missing._tag === "Some" && missing.value.workspaceAvailable, false);
+
+      const shell = yield* snapshotQuery.getShellSnapshot();
+      assert.deepStrictEqual(
+        shell.projects.map((project) => [project.id, project.workspaceAvailable]),
+        [
+          [asProjectId("project-existing"), true],
+          [asProjectId("project-missing"), false],
+        ],
+      );
+
+      yield* ensureTurnWorkspaceAvailable({
+        threadId: ThreadId.make("new-existing-thread"),
+        bootstrap: {
+          createThread: {
+            projectId: asProjectId("project-existing"),
+            worktreePath: null,
+          },
+        },
+      });
+
+      const unavailable = yield* ensureTurnWorkspaceAvailable({
+        threadId: ThreadId.make("new-missing-thread"),
+        bootstrap: {
+          createThread: {
+            projectId: asProjectId("project-missing"),
+            worktreePath: null,
+          },
+        },
+      }).pipe(Effect.flip);
+      assert.match(unavailable.message, /workspace folder is unavailable/i);
+
+      const existingThreadUnavailable = yield* ensureTurnWorkspaceAvailable({
+        threadId: ThreadId.make("thread-missing-workspace"),
+      }).pipe(Effect.flip);
+      assert.match(existingThreadUnavailable.message, /workspace folder is unavailable/i);
+
+      yield* sql`
+        UPDATE projection_threads
+        SET worktree_path = ${existingWorkspace}
+        WHERE thread_id = 'thread-missing-workspace'
+      `;
+      yield* ensureTurnWorkspaceAvailable({
+        threadId: ThreadId.make("thread-missing-workspace"),
+      });
+
+      yield* ensureTurnWorkspaceAvailable({
+        threadId: ThreadId.make("new-worktree-thread"),
+        bootstrap: {
+          createThread: {
+            projectId: asProjectId("project-missing"),
+            worktreePath: existingWorkspace,
+          },
+        },
+      });
+
+      yield* sql`
+        DELETE FROM projection_threads
+        WHERE thread_id = 'thread-missing-workspace'
+      `;
+    }),
+  );
+
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
@@ -390,6 +550,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           id: asProjectId("project-1"),
           title: "Project 1",
           workspaceRoot: "/tmp/project-1",
+          workspaceAvailable: false,
           repositoryIdentity: null,
           defaultModelSelection: {
             instanceId: ProviderInstanceId.make("codex"),
@@ -1862,6 +2023,7 @@ it.effect(
         }),
       ),
       Layer.provideMerge(SqlitePersistenceMemory),
+      Layer.provideMerge(NodeServices.layer),
     );
 
     return Effect.gen(function* () {

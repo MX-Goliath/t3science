@@ -86,6 +86,7 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
   /** Project a quick new thread should target; null hides the button. */
   readonly newThreadTarget?: EnvironmentProject | null;
   readonly onNewThread?: (project: EnvironmentProject) => void;
+  readonly workspaceAvailability?: "available" | "partial" | "missing";
 }) {
   const iconMutedColor = useThemeColor("--color-icon-muted");
   const { groupKey, onGroupAction, onNewThread } = props;
@@ -101,6 +102,8 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
     }
   }, [newThreadTarget, onNewThread]);
   const showNewThreadButton = onNewThread !== undefined && newThreadTarget !== null;
+  const workspaceUnavailable = props.workspaceAvailability === "missing";
+  const workspacePartiallyUnavailable = props.workspaceAvailability === "partial";
 
   // The new-thread button is a SIBLING of the collapse toggle, not a child:
   // nested touchables are unreachable to VoiceOver/TalkBack (the parent
@@ -124,7 +127,13 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: !props.collapsed }}
-        accessibilityLabel={`${props.title}, ${props.threadCount} threads`}
+        accessibilityLabel={`${props.title}, ${props.threadCount} threads${
+          workspaceUnavailable
+            ? ", project folder is missing"
+            : workspacePartiallyUnavailable
+              ? ", some project folders are missing"
+              : ""
+        }`}
         accessibilityHint={props.collapsed ? "Expands the project" : "Collapses the project"}
         className={
           compact ? "flex-1 flex-row items-center gap-2.5" : "flex-1 flex-row items-center gap-2"
@@ -147,9 +156,18 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
               : "flex-shrink text-sm font-t3-bold tracking-[0.2px] text-foreground-muted"
           }
           numberOfLines={1}
+          style={workspaceUnavailable ? { textDecorationLine: "line-through" } : undefined}
         >
           {props.title}
         </Text>
+        {workspaceUnavailable || workspacePartiallyUnavailable ? (
+          <SymbolView
+            name="exclamationmark.triangle"
+            size={compact ? 15 : 13}
+            tintColor={iconMutedColor}
+            type="monochrome"
+          />
+        ) : null}
         <Text
           className={
             compact
@@ -420,6 +438,7 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
   readonly thread: EnvironmentThreadShell;
   readonly environmentLabel: string | null;
   readonly projectCwd: string | null;
+  readonly workspaceUnavailable?: boolean;
   readonly searchMatch?: EnvironmentThreadSearchMatch;
   readonly searchQuery?: string;
   readonly isLast: boolean;
@@ -457,7 +476,9 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
   const timestamp = relativeTime(
     thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt,
   );
-  const threadAccessibilityLabel = pr ? `${thread.title}, ${pr.accessibilityLabel}` : thread.title;
+  const threadAccessibilityLabel = `${
+    pr ? `${thread.title}, ${pr.accessibilityLabel}` : thread.title
+  }${props.workspaceUnavailable ? ", project folder is missing" : ""}`;
   const subtitleParts = [props.environmentLabel, thread.branch].filter((part): part is string =>
     Boolean(part),
   );
@@ -561,9 +582,23 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
             }}
           >
             <View className="flex-row items-center justify-between gap-2">
-              <Text className="flex-1 text-lg font-t3-bold text-foreground" numberOfLines={1}>
+              <Text
+                className="flex-1 text-lg font-t3-bold text-foreground"
+                numberOfLines={1}
+                style={
+                  props.workspaceUnavailable ? { textDecorationLine: "line-through" } : undefined
+                }
+              >
                 {thread.title}
               </Text>
+              {props.workspaceUnavailable ? (
+                <SymbolView
+                  name="exclamationmark.triangle"
+                  size={14}
+                  tintColor={iconSubtleColor}
+                  type="monochrome"
+                />
+              ) : null}
               <View className="flex-row items-center gap-2">
                 {statusPill}
                 <Text className="text-base tabular-nums text-foreground-tertiary">{timestamp}</Text>
@@ -620,6 +655,9 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
                 selected ? "text-user-bubble-foreground" : "text-foreground",
               )}
               numberOfLines={1}
+              style={
+                props.workspaceUnavailable ? { textDecorationLine: "line-through" } : undefined
+              }
             >
               {thread.title}
             </Text>

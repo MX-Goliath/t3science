@@ -10,6 +10,15 @@ General chats use an isolated T3 workspace and do not appear in project lists or
 Their chat screen hides project-only controls such as the workspace path, actions, editor
 shortcuts, Git setup, terminal, and right-side panels.
 
+When a project's saved folder is no longer available on the environment that owns it, the project
+and its local-checkout threads appear dimmed, crossed out, and marked with a warning. Conversation
+history remains available, so you can review or remove old threads without recreating the folder.
+Threads backed by a separate worktree are not marked from the main project folder's status.
+
+Messages cannot be sent to a local-checkout thread while its project folder is unavailable. Web
+and mobile disable the send action, mobile keeps queued messages paused, and the server rejects a
+turn if the workspace disappears before it starts. Restore the folder to continue the chat.
+
 Pin a thread from its context menu to keep it above your active work. In the default sidebar,
 pinned threads are shown in one shared section independently of their project, including when you
 connect to more than one environment. In the legacy sidebar, each project's pinned threads stay

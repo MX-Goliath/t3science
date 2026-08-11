@@ -396,6 +396,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   } = props;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
+  const workspaceUnavailable =
+    thread.worktreePath === null && props.project?.workspaceAvailable === false;
 
   const pr = useThreadPr(thread, props.projectCwd ?? props.project?.workspaceRoot ?? null);
   const prState = pr?.state ?? null;
@@ -643,9 +645,18 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             selected ? "text-user-bubble-foreground-muted" : "text-foreground-muted",
           )}
           numberOfLines={1}
+          style={workspaceUnavailable ? { textDecorationLine: "line-through" } : undefined}
         >
           {props.projectTitle ?? props.project?.title ?? ""}
         </Text>
+        {workspaceUnavailable ? (
+          <SymbolView
+            name="exclamationmark.triangle"
+            size={12}
+            tintColor={pinTintColor}
+            type="monochrome"
+          />
+        ) : null}
         {pinnedRow ? (
           <SymbolView name="pin" size={11} tintColor={pinTintColor} type="monochrome" />
         ) : null}
@@ -664,6 +675,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           selected ? "text-user-bubble-foreground" : "text-foreground",
         )}
         numberOfLines={2}
+        style={workspaceUnavailable ? { textDecorationLine: "line-through" } : undefined}
       >
         {thread.title}
       </Text>
@@ -748,7 +760,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     variant === "card" ? (
       <Pressable
         accessibilityHint={swipeAccessibilityHint}
-        accessibilityLabel={thread.title}
+        accessibilityLabel={`${thread.title}${
+          workspaceUnavailable ? ", project folder is missing" : ""
+        }`}
         accessibilityRole="button"
         accessibilityState={{ selected }}
         onPress={() => {
@@ -788,7 +802,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ) : (
       <Pressable
         accessibilityHint={swipeAccessibilityHint}
-        accessibilityLabel={thread.title}
+        accessibilityLabel={`${thread.title}${
+          workspaceUnavailable ? ", project folder is missing" : ""
+        }`}
         accessibilityRole="button"
         accessibilityState={{ selected }}
         className={sidebarPane ? undefined : "bg-screen"}
@@ -834,6 +850,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 selected ? "text-user-bubble-foreground" : "text-foreground-muted",
               )}
               numberOfLines={1}
+              style={workspaceUnavailable ? { textDecorationLine: "line-through" } : undefined}
             >
               {thread.title}
             </Text>

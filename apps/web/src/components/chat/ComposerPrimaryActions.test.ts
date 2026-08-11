@@ -179,6 +179,33 @@ describe("scheduled send action", () => {
     expect(markup).toContain("bg-destructive");
     expect(markup).not.toContain("M7 11.5V2.5");
   });
+
+  it("disables a scheduled message when sending is unavailable", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ComposerPrimaryActions, {
+        compact: true,
+        pendingAction: null,
+        isRunning: false,
+        showPlanFollowUpPrompt: false,
+        promptHasText: true,
+        isSendBusy: false,
+        sendDisabledReason: "Project folder is missing",
+        isConnecting: false,
+        isEnvironmentUnavailable: false,
+        isPreparingWorktree: false,
+        hasSendableContent: true,
+        onPreviousPendingQuestion: () => {},
+        onInterrupt: () => {},
+        onImplementPlanInNewThread: () => {},
+        scheduledSend: true,
+        scheduledSendLabel: "Scheduled for later",
+        onScheduledSendClick: () => {},
+      }),
+    );
+
+    expect(markup).toContain("disabled");
+    expect(markup).toContain('aria-label="Project folder is missing"');
+  });
 });
 
 describe("ComposerPrimaryActions", () => {
