@@ -40,13 +40,16 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
+import * as Predicate from "effect/Predicate";
 import * as Ref from "effect/Ref";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
@@ -54,6 +57,8 @@ import * as Stream from "effect/Stream";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
+import { resolveAttachmentPath } from "../../attachmentStore.ts";
+import { ServerConfig } from "../../config.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -80,6 +85,7 @@ import {
 import {
   antigravityPermissionPlan,
   buildAntigravityTurnArgs,
+  isAntigravityEffort,
   isAntigravityPromptTooLongForPlatform,
   resolveAntigravityLaunchArgs,
   ANTIGRAVITY_WINDOWS_PROMPT_LIMIT,
@@ -125,12 +131,8 @@ interface AntigravitySessionContext {
   stopped: boolean;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function parseAntigravityResumeCursor(raw: unknown): AntigravityResumeCursor | undefined {
-  if (!isRecord(raw)) return undefined;
+  if (!Predicate.isObject(raw)) return undefined;
   if (raw.schemaVersion !== ANTIGRAVITY_RESUME_VERSION) return undefined;
   if (typeof raw.conversationId !== "string" || raw.conversationId.trim().length === 0) {
     return undefined;
@@ -196,8 +198,10 @@ export function makeAntigravityAdapter(
     const boundInstanceId = options?.instanceId ?? ProviderInstanceId.make("antigravity");
     const path = yield* Path.Path;
     const crypto = yield* Crypto.Crypto;
+    const fileSystem = yield* FileSystem.FileSystem;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const hostPlatform = yield* HostProcessPlatform;
+    const serverConfig = yield* ServerConfig;
     const environment = options?.environment ?? process.env;
     const binaryPath = settings.binaryPath || "agy";
     const launchArgs = resolveAntigravityLaunchArgs(settings.launchArgs, environment);
@@ -711,9 +715,7 @@ export function makeAntigravityAdapter(
             provider: PROVIDER,
             providerInstanceId: boundInstanceId,
             threadId: input.threadId,
-            payload: {
-              ...(resume ? { resume: { conversationId: resume.conversationId } } : {}),
-            },
+            payload: resume ? { resume: { conversationId: resume.conversationId } } : {},
           });
           yield* offerRuntimeEvent({
             type: "session.state.changed",
@@ -733,7 +735,9 @@ export function makeAntigravityAdapter(
       readonly turnId: TurnId;
       readonly prompt: string;
       readonly model: string | undefined;
+      readonly effort: "low" | "medium" | "high" | undefined;
       readonly interactionMode: ProviderInteractionMode | undefined;
+      readonly additionalDirectories: ReadonlyArray<string> | undefined;
       readonly state: TurnStreamState;
     }) =>
       Effect.gen(function* () {
@@ -741,9 +745,13 @@ export function makeAntigravityAdapter(
         const args = buildAntigravityTurnArgs({
           prompt: input.prompt,
           ...(input.model ? { model: input.model } : {}),
+          ...(input.effort ? { effort: input.effort } : {}),
           ...(ctx.conversationId ? { conversationId: ctx.conversationId } : {}),
           runtimeMode: ctx.runtimeMode,
           ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
+          ...(input.additionalDirectories
+            ? { additionalDirectories: input.additionalDirectories }
+            : {}),
           launchArgs,
         });
         const spawnCommand = yield* resolveSpawnCommand(binaryPath, [...args], {
@@ -768,6 +776,9 @@ export function makeAntigravityAdapter(
                 cwd: ctx.cwd,
                 env: environment,
                 shell: spawnCommand.shell,
+                // The prompt is an argv value; leaving stdin as an open pipe
+                // makes headless `agy` wait instead of finishing the turn.
+                stdin: "ignore",
                 detached: hostPlatform !== "win32",
               }),
             )
@@ -863,12 +874,40 @@ export function makeAntigravityAdapter(
         input.threadId,
         Effect.gen(function* () {
           const ctx = yield* requireSession(input.threadId);
-          const prompt = input.input?.trim() ?? "";
+          const text = input.input?.trim() ?? "";
+          const attachmentPaths = yield* Effect.forEach(input.attachments ?? [], (attachment) =>
+            Effect.gen(function* () {
+              const attachmentPath = resolveAttachmentPath({
+                attachmentsDir: serverConfig.attachmentsDir,
+                attachment,
+              });
+              if (!attachmentPath) {
+                return yield* new ProviderAdapterRequestError({
+                  provider: PROVIDER,
+                  method: "turn/start",
+                  detail: `Invalid attachment id '${attachment.id}'.`,
+                });
+              }
+              const exists = yield* fileSystem
+                .exists(attachmentPath)
+                .pipe(Effect.orElseSucceed(() => false));
+              if (!exists) {
+                return yield* new ProviderAdapterRequestError({
+                  provider: PROVIDER,
+                  method: "turn/start",
+                  detail: `Attachment file '${attachment.name}' is unavailable.`,
+                });
+              }
+              return attachmentPath;
+            }),
+          );
+          const attachmentPrompt = attachmentPaths.map((attachmentPath) => `@${attachmentPath}`);
+          const prompt = [text, ...attachmentPrompt].filter((part) => part.length > 0).join("\n\n");
           if (prompt.length === 0) {
             return yield* new ProviderAdapterValidationError({
               provider: PROVIDER,
               operation: "sendTurn",
-              issue: "Turn requires non-empty text.",
+              issue: "Turn requires non-empty text or attachments.",
             });
           }
           if (isAntigravityPromptTooLongForPlatform({ prompt, platform: hostPlatform })) {
@@ -884,6 +923,17 @@ export function makeAntigravityAdapter(
             input.modelSelection?.instanceId === boundInstanceId
               ? (input.modelSelection.model ?? ctx.model)
               : ctx.model;
+          const requestedEffort =
+            input.modelSelection?.instanceId === boundInstanceId
+              ? getModelSelectionStringOptionValue(input.modelSelection, "effort")
+              : undefined;
+          if (requestedEffort !== undefined && !isAntigravityEffort(requestedEffort)) {
+            return yield* new ProviderAdapterValidationError({
+              provider: PROVIDER,
+              operation: "sendTurn",
+              issue: `Unsupported Antigravity reasoning effort '${requestedEffort}'.`,
+            });
+          }
           ctx.activeTurnId = turnId;
           ctx.model = model;
           ctx.usage = emptyAntigravityUsageAccumulator;
@@ -900,7 +950,7 @@ export function makeAntigravityAdapter(
             providerInstanceId: boundInstanceId,
             threadId: input.threadId,
             turnId,
-            payload: { ...(model ? { model } : {}) },
+            payload: model ? { model } : {},
           });
 
           const state = makeTurnStreamState();
@@ -909,7 +959,10 @@ export function makeAntigravityAdapter(
             turnId,
             prompt,
             model,
+            effort: requestedEffort,
             interactionMode: input.interactionMode,
+            additionalDirectories:
+              attachmentPaths.length > 0 ? [serverConfig.attachmentsDir] : undefined,
             state,
           }).pipe(Effect.result);
 

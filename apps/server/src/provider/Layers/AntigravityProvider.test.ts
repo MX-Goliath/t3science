@@ -18,6 +18,7 @@ import {
 } from "./AntigravityProvider.ts";
 
 const decodeAntigravitySettings = Schema.decodeSync(AntigravitySettings);
+const encodeUnknownJsonString = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 // Verbatim `agy models` stdout (CLI 1.1.11).
 const MODELS_STDOUT = [
@@ -75,6 +76,18 @@ describe("parseAntigravityModelList", () => {
     expect(models[0]?.subProvider).toBe("Google");
     expect(models[2]?.subProvider).toBe("Anthropic");
     expect(models[3]?.subProvider).toBe("OpenAI");
+    expect(models[0]?.capabilities?.optionDescriptors).toEqual([
+      {
+        id: "effort",
+        label: "Reasoning",
+        type: "select",
+        options: [
+          { id: "low", label: "Low" },
+          { id: "medium", label: "Medium" },
+          { id: "high", label: "High" },
+        ],
+      },
+    ]);
   });
 
   it("ignores help text and blank output", () => {
@@ -143,7 +156,7 @@ describe("parseAntigravitySkills", () => {
 
 describe("parseAntigravityCommandData", () => {
   it("extracts the structured payload of a print-mode command", () => {
-    const stdout = JSON.stringify({
+    const stdout = encodeUnknownJsonString({
       status: "SUCCESS",
       response: "…",
       command: { name: "usage", data: USAGE_DATA },
@@ -236,6 +249,25 @@ it.layer(NodeServices.layer)("checkAntigravityProviderStatus", (it) => {
     }).pipe(Effect.scoped),
   );
 
+  it.effect("closes stdin for non-interactive discovery commands", () =>
+    Effect.gen(function* () {
+      const binaryPath = yield* makeFakeAgy(
+        [
+          'if [ "$1" = "--version" ]; then printf "1.1.12\\n"; exit 0; fi',
+          // Mirrors `agy`: discovery does not finish while stdin stays open.
+          "cat >/dev/null",
+          `if [ "$1" = "models" ]; then printf '${MODELS_STDOUT.trimEnd().replaceAll("\t", "\\t").replaceAll("\n", "\\n")}\\n'; exit 0; fi`,
+          "exit 0",
+        ].join("\n"),
+      );
+      const snapshot = yield* checkAntigravityProviderStatus(
+        decodeAntigravitySettings({ binaryPath, showRateLimits: false }),
+      );
+      expect(snapshot.status).toBe("ready");
+      expect(snapshot.models).toHaveLength(4);
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("marks the provider unauthenticated when the CLI asks for sign-in", () =>
     Effect.gen(function* () {
       const binaryPath = yield* makeFakeAgy(
@@ -258,7 +290,7 @@ it.layer(NodeServices.layer)("checkAntigravityProviderStatus", (it) => {
 
   it.effect("builds a ready snapshot with models, skills, and plan limits", () =>
     Effect.gen(function* () {
-      const skillsPayload = JSON.stringify({
+      const skillsPayload = encodeUnknownJsonString({
         status: "SUCCESS",
         response: "",
         command: {
@@ -266,7 +298,7 @@ it.layer(NodeServices.layer)("checkAntigravityProviderStatus", (it) => {
           data: { skills: [{ name: "guide", description: "d", path: "/tmp/SKILL.md" }] },
         },
       });
-      const usagePayload = JSON.stringify({
+      const usagePayload = encodeUnknownJsonString({
         status: "SUCCESS",
         response: "",
         command: { name: "usage", data: USAGE_DATA },

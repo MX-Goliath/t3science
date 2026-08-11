@@ -164,6 +164,7 @@ export const DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER: Partial<
   [CODEX_DRIVER_KIND]: DEFAULT_TEXT_GENERATION_MODEL,
   [CLAUDE_DRIVER_KIND]: "claude-haiku-4-5",
   [CURSOR_DRIVER_KIND]: "composer-2",
+  [ANTIGRAVITY_DRIVER_KIND]: "gemini-3.6-flash-low",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
 };
 

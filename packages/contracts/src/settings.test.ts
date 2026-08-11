@@ -156,6 +156,7 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     expect(decoded.providers.codex.enabled).toBe(true);
     expect(decoded.providers.codex.showRateLimits).toBe(true);
     expect(decoded.providers.claudeAgent.showRateLimits).toBe(true);
+    expect(decoded.providers.antigravity.showRateLimits).toBe(true);
   });
 
   it("resolves limit visibility per provider instance", () => {
@@ -167,6 +168,10 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
         },
         claude_work: {
           driver: "claudeAgent",
+          config: { showRateLimits: false },
+        },
+        antigravity_work: {
+          driver: "antigravity",
           config: { showRateLimits: false },
         },
       },
@@ -185,6 +190,12 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("claude_work"))).toBe(
       false,
     );
+    expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("antigravity"))).toBe(
+      true,
+    );
+    expect(
+      shouldShowProviderRateLimits(settings, ProviderInstanceId.make("antigravity_work")),
+    ).toBe(false);
   });
 
   it("honours the legacy Claude limit visibility toggle", () => {
@@ -193,6 +204,16 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     });
 
     expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("claudeAgent"))).toBe(
+      false,
+    );
+  });
+
+  it("honours the legacy Antigravity limit visibility toggle", () => {
+    const settings = decodeServerSettings({
+      providers: { antigravity: { showRateLimits: false } },
+    });
+
+    expect(shouldShowProviderRateLimits(settings, ProviderInstanceId.make("antigravity"))).toBe(
       false,
     );
   });

@@ -24,7 +24,7 @@ const decodeAntigravitySettings = Schema.decodeSync(AntigravitySettings);
 const MODEL_SELECTION = createModelSelection(
   ProviderInstanceId.make("antigravity"),
   "gemini-3.1-pro-high",
-  [],
+  [{ id: "effort", value: "high" }],
 );
 
 const testLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
@@ -45,6 +45,8 @@ function makeFakeAgy(dir: string, envelope: string, exitCode = 0): FakeCli {
     [
       "#!/bin/sh",
       `printf '%s' "$*" > ${JSON.stringify(argsFile)}`,
+      // The production spawn must immediately provide EOF to headless `agy`.
+      "cat >/dev/null",
       `printf '%s' ${JSON.stringify(envelope)}`,
       `exit ${exitCode}`,
       "",
@@ -133,6 +135,7 @@ it.layer(testLayer)("AntigravityTextGeneration", (it) => {
           // A diff can start with `/`; slash expansion must stay off.
           expect(argv).toContain("--disable-slash-commands");
           expect(argv).toContain("--model gemini-3.1-pro-high");
+          expect(argv).toContain("--effort high");
           // Text generation must never be able to touch the tree.
           expect(argv).not.toContain("--dangerously-skip-permissions");
         }),

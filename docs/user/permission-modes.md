@@ -44,5 +44,10 @@ with prompting enabled and a restricted workspace while **Full access** disables
 labels above describe what you get; the exact per-provider translation is internal and may
 change.
 
+Antigravity headless sessions cannot pause for an approval. **Supervised** therefore denies tools
+that would ask; **Auto-accept edits** and **Auto** allow edits but deny commands that need review;
+**Full access** passes Antigravity's unrestricted permission flag. T3 Code shows a notice in the
+conversation when a selected mode must be degraded this way.
+
 Mobile offers the same four modes. It labels the first one **Approve actions** rather than
 **Supervised**.

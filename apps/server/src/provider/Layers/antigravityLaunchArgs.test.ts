@@ -95,6 +95,15 @@ describe("buildAntigravityTurnArgs", () => {
     expect(args).toContain("/b");
   });
 
+  it("passes a selected reasoning effort", () => {
+    const args = buildAntigravityTurnArgs({
+      prompt: "hi",
+      effort: "high",
+      runtimeMode: "full-access",
+    });
+    expect(args[args.indexOf("--effort") + 1]).toBe("high");
+  });
+
   it("raises the CLI print timeout past its five-minute default", () => {
     const args = buildAntigravityTurnArgs({ prompt: "hi", runtimeMode: "full-access" });
     expect(args[args.indexOf("--print-timeout") + 1]).toBe("24h");

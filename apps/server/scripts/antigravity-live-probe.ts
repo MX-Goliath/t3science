@@ -20,6 +20,7 @@ import * as ServerConfig from "../src/config.ts";
 import { makeAntigravityAdapter } from "../src/provider/Layers/AntigravityAdapter.ts";
 
 const decodeAntigravitySettings = Schema.decodeSync(AntigravitySettings);
+const encodeUnknownJsonString = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 const [cwd = process.cwd(), model = "claude-sonnet-4-6", ...promptParts] = process.argv.slice(2);
 const prompt = promptParts.join(" ") || "Say exactly: PROBE_OK";
@@ -31,7 +32,7 @@ const program = Effect.gen(function* () {
   const threadId = ThreadId.make("antigravity-live-probe");
   const eventsFiber = yield* Stream.runForEach(adapter.streamEvents, (event) =>
     Console.log(
-      JSON.stringify({
+      encodeUnknownJsonString({
         type: event.type,
         itemId: event.itemId,
         payload: event.payload,
@@ -46,16 +47,16 @@ const program = Effect.gen(function* () {
     runtimeMode: "full-access",
     modelSelection: { instanceId: ProviderInstanceId.make("antigravity"), model },
   });
-  yield* Console.log(`session: ${JSON.stringify(session)}`);
+  yield* Console.log(`session: ${encodeUnknownJsonString(session)}`);
 
   const first = yield* adapter.sendTurn({ threadId, input: prompt });
-  yield* Console.log(`turn 1: ${JSON.stringify(first)}`);
+  yield* Console.log(`turn 1: ${encodeUnknownJsonString(first)}`);
 
   const second = yield* adapter.sendTurn({
     threadId,
     input: "In one short sentence, what did I ask you first?",
   });
-  yield* Console.log(`turn 2: ${JSON.stringify(second)}`);
+  yield* Console.log(`turn 2: ${encodeUnknownJsonString(second)}`);
 
   yield* adapter.stopSession(threadId);
   yield* Fiber.interrupt(eventsFiber);

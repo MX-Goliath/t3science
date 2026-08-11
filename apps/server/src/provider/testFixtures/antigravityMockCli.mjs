@@ -140,6 +140,16 @@ switch (scenario) {
     result({ status: "SUCCESS", response: "Weekly Limit Remaining\t93%\n", num_turns: 0 });
     break;
   }
+  case "stdin-eof": {
+    // Real headless `agy` waits while stdin is an open pipe even though the
+    // prompt is passed through argv. The adapter must connect stdin to EOF.
+    for await (const _chunk of process.stdin) {
+      // No input is expected.
+    }
+    init();
+    result({ status: "SUCCESS", response: "stdin closed\n", num_turns: 1 });
+    break;
+  }
   case "crash": {
     process.stderr.write("agy: fatal: something went wrong\n");
     process.exit(3);

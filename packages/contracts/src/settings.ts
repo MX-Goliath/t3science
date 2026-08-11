@@ -710,11 +710,11 @@ function readConfigBoolean(config: unknown, key: string): boolean | undefined {
 }
 
 /**
- * Driver kinds whose snapshots can carry `ServerProvider.rateLimits`. Both
+ * Driver kinds whose snapshots can carry `ServerProvider.rateLimits`. These
  * report subscription windows the composer renders as usage meters; every
  * other driver never populates the field.
  */
-const RATE_LIMIT_DRIVERS: ReadonlySet<string> = new Set(["codex", "claudeAgent"]);
+const RATE_LIMIT_DRIVERS: ReadonlySet<string> = new Set(["codex", "claudeAgent", "antigravity"]);
 
 export function providerSupportsRateLimits(driver: string | null | undefined): boolean {
   return driver !== null && driver !== undefined && RATE_LIMIT_DRIVERS.has(driver);
@@ -736,6 +736,9 @@ export function shouldShowProviderRateLimits(
   }
   if (String(instanceId) === "claudeAgent") {
     return settings.providers.claudeAgent.showRateLimits;
+  }
+  if (String(instanceId) === "antigravity") {
+    return settings.providers.antigravity.showRateLimits;
   }
   return true;
 }

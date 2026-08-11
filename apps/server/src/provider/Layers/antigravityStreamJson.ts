@@ -27,6 +27,11 @@ import type {
   ThreadTokenUsageSnapshot,
   ToolLifecycleItemType,
 } from "@t3tools/contracts";
+import * as Exit from "effect/Exit";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+
+const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
 /** Terminal statuses reported on `result.status`. */
 export type AntigravityResultStatus = "SUCCESS" | "ERROR" | "CANCELLED" | "UNKNOWN";
@@ -89,10 +94,6 @@ export type AntigravityStreamEvent =
   | { readonly _tag: "error"; readonly message: string; readonly raw: unknown }
   | { readonly _tag: "unknown"; readonly raw: unknown };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function readString(source: Record<string, unknown>, key: string): string | undefined {
   const value = source[key];
   if (typeof value !== "string") return undefined;
@@ -124,7 +125,7 @@ function readNonNegativeInt(
 function readUsage(source: Record<string, unknown> | undefined): AntigravityUsage | undefined {
   if (!source) return undefined;
   const raw = source.usage;
-  if (!isRecord(raw)) return undefined;
+  if (!Predicate.isObject(raw)) return undefined;
   const usage: AntigravityUsage = {
     ...(readNonNegativeInt(raw, "input_tokens") !== undefined
       ? { inputTokens: readNonNegativeInt(raw, "input_tokens") }
@@ -147,9 +148,9 @@ function readUsage(source: Record<string, unknown> | undefined): AntigravityUsag
 
 function readToolInfo(source: Record<string, unknown>): AntigravityToolInfo | undefined {
   const raw = source.tool_info;
-  if (!isRecord(raw)) return undefined;
-  const parameters = isRecord(raw.parameters) ? raw.parameters : undefined;
-  const errorRaw = isRecord(raw.error) ? raw.error : undefined;
+  if (!Predicate.isObject(raw)) return undefined;
+  const parameters = Predicate.isObject(raw.parameters) ? raw.parameters : undefined;
+  const errorRaw = Predicate.isObject(raw.error) ? raw.error : undefined;
   const error: AntigravityToolError | undefined = errorRaw
     ? {
         ...(readString(errorRaw, "type") ? { type: readString(errorRaw, "type") } : {}),
@@ -181,13 +182,9 @@ function readResultStatus(value: unknown): AntigravityResultStatus {
 export function parseAntigravityStreamLine(line: string): AntigravityStreamEvent | undefined {
   const trimmed = line.trim();
   if (trimmed.length === 0 || !trimmed.startsWith("{")) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch {
-    return undefined;
-  }
-  if (!isRecord(parsed)) return undefined;
+  const decoded = decodeUnknownJsonStringExit(trimmed);
+  if (!Exit.isSuccess(decoded) || !Predicate.isObject(decoded.value)) return undefined;
+  const parsed = decoded.value;
   return decodeAntigravityStreamEvent(parsed);
 }
 
@@ -198,7 +195,7 @@ export function decodeAntigravityStreamEvent(
   const topLevelConversationId = readString(payload, "conversation_id");
 
   if (event === "init") {
-    const initRaw = isRecord(payload.init) ? payload.init : {};
+    const initRaw = Predicate.isObject(payload.init) ? payload.init : {};
     const tools = Array.isArray(initRaw.tools)
       ? initRaw.tools.filter((tool): tool is string => typeof tool === "string")
       : undefined;
@@ -222,7 +219,7 @@ export function decodeAntigravityStreamEvent(
   }
 
   if (event === "step_update") {
-    const stepRaw = isRecord(payload.step_update) ? payload.step_update : undefined;
+    const stepRaw = Predicate.isObject(payload.step_update) ? payload.step_update : undefined;
     if (!stepRaw) return { _tag: "unknown", raw: payload };
     const stepIndex = readNumber(stepRaw, "step_index") ?? 0;
     const toolInfo = readToolInfo(stepRaw);
@@ -253,7 +250,7 @@ export function decodeAntigravityStreamEvent(
   }
 
   if (event === "result") {
-    const resultRaw = isRecord(payload.result) ? payload.result : {};
+    const resultRaw = Predicate.isObject(payload.result) ? payload.result : {};
     const usage = readUsage(resultRaw);
     return {
       _tag: "result",
@@ -284,7 +281,7 @@ export function decodeAntigravityStreamEvent(
     const message =
       readString(payload, "error") ??
       readString(payload, "message") ??
-      (isRecord(payload.error) ? readString(payload.error, "message") : undefined);
+      (Predicate.isObject(payload.error) ? readString(payload.error, "message") : undefined);
     return { _tag: "error", message: message ?? "Antigravity reported an error.", raw: payload };
   }
 

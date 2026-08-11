@@ -38,7 +38,11 @@ import type { ThreadSettingsSheetCloseReason } from "./use-thread-settings-sheet
  * catalogs and friends) folds behind its header so a 300-model catalog can't
  * bury the list.
  */
-const PRIMARY_PROVIDER_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "codex"]);
+const PRIMARY_PROVIDER_DRIVERS: ReadonlySet<string> = new Set([
+  "claudeAgent",
+  "codex",
+  "antigravity",
+]);
 
 /**
  * Desktop-oriented effort keywords that don't belong in the phone picker.

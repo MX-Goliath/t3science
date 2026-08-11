@@ -508,4 +508,72 @@ it.layer(adapterTestLayer)("AntigravityAdapter", (it) => {
       yield* adapter.stopSession(threadId);
     }),
   );
+
+  it.effect("passes reasoning effort and image attachments to the CLI", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("antigravity-attachments");
+      const mock = yield* Effect.promise(() => makeMockCli("basic"));
+      const adapter = yield* makeTestAdapter(mock.binaryPath);
+      const serverConfig = yield* ServerConfig;
+      const attachmentId = "antigravity-attachments-00000000-0000-4000-8000-000000000001";
+      const attachmentPath = NodePath.join(serverConfig.attachmentsDir, `${attachmentId}.png`);
+      yield* Effect.promise(() =>
+        NodeFSP.mkdir(serverConfig.attachmentsDir, { recursive: true }).then(() =>
+          NodeFSP.writeFile(attachmentPath, "image"),
+        ),
+      );
+
+      yield* adapter.startSession({
+        threadId,
+        provider: PROVIDER,
+        cwd: mock.dir,
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({
+        threadId,
+        input: "describe this",
+        attachments: [
+          {
+            type: "image",
+            id: attachmentId,
+            name: "sample.png",
+            mimeType: "image/png",
+            sizeBytes: 5,
+          },
+        ],
+        modelSelection: {
+          instanceId: INSTANCE_ID,
+          model: "gemini-3.6-flash-high",
+          options: [{ id: "effort", value: "high" }],
+        },
+      });
+
+      const argv = (yield* Effect.promise(() => readInvocations(mock.argsFile)))[0]?.argv ?? [];
+      assert.equal(argv[argv.indexOf("--effort") + 1], "high");
+      assert.equal(argv[argv.indexOf("--add-dir") + 1], serverConfig.attachmentsDir);
+      assert.equal(argv.at(-1), `describe this\n\n@${attachmentPath}`);
+
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("closes stdin for a headless turn", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("antigravity-stdin-eof");
+      const mock = yield* Effect.promise(() => makeMockCli("stdin-eof"));
+      const adapter = yield* makeTestAdapter(mock.binaryPath);
+
+      yield* adapter.startSession({
+        threadId,
+        provider: PROVIDER,
+        cwd: mock.dir,
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({ threadId, input: "finish after stdin closes" });
+
+      const thread = yield* adapter.readThread(threadId);
+      assert.equal(thread.turns.length, 1);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
 });

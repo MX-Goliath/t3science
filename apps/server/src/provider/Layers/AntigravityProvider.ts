@@ -33,6 +33,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/unstable/http";
@@ -40,6 +41,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { buildAntigravityCommandArgs } from "./antigravityLaunchArgs.ts";
 import {
+  buildSelectOptionDescriptor,
   buildServerProvider,
   isCommandMissingCause,
   parseGenericCliVersion,
@@ -63,11 +65,26 @@ const ANTIGRAVITY_PRESENTATION = {
   showInteractionModeToggle: true,
 } as const;
 
-const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({ optionDescriptors: [] });
+const ANTIGRAVITY_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
+  optionDescriptors: [
+    buildSelectOptionDescriptor({
+      id: "effort",
+      label: "Reasoning",
+      options: [
+        { value: "low", label: "Low" },
+        { value: "medium", label: "Medium" },
+        { value: "high", label: "High" },
+      ],
+    }),
+  ],
+});
 
 const VERSION_PROBE_TIMEOUT_MS = 6_000;
-const MODELS_PROBE_TIMEOUT_MS = 20_000;
-const COMMAND_PROBE_TIMEOUT_MS = 20_000;
+// A cold `agy models`/print-mode invocation starts the language server and can
+// take around 30 seconds even though the same command is fast once warmed up.
+// Keep health discovery comfortably above that cold-start cost.
+const MODELS_PROBE_TIMEOUT_MS = 60_000;
+const COMMAND_PROBE_TIMEOUT_MS = 60_000;
 
 const FIVE_HOUR_WINDOW_MINUTES = 5 * 60;
 const WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
@@ -85,7 +102,7 @@ export const ANTIGRAVITY_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
 ].map((model) => ({
   ...model,
   subProvider: subProviderForAntigravityModel(model.slug),
-  capabilities: EMPTY_CAPABILITIES,
+  capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
 }));
 
 /**
@@ -114,7 +131,11 @@ function antigravityModelsFromSettings(
   customModels: ReadonlyArray<string> | undefined,
   builtInModels: ReadonlyArray<ServerProviderModel> = ANTIGRAVITY_BUILT_IN_MODELS,
 ): ReadonlyArray<ServerProviderModel> {
-  return providerModelsFromSettings(builtInModels, customModels ?? [], EMPTY_CAPABILITIES);
+  return providerModelsFromSettings(
+    builtInModels,
+    customModels ?? [],
+    ANTIGRAVITY_MODEL_CAPABILITIES,
+  );
 }
 
 /**
@@ -138,7 +159,7 @@ export function parseAntigravityModelList(stdout: string): ReadonlyArray<ServerP
       name,
       isCustom: false,
       ...(subProvider ? { subProvider } : {}),
-      capabilities: EMPTY_CAPABILITIES,
+      capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
     });
   }
   return models;
@@ -166,16 +187,12 @@ interface AntigravityUsageGroup {
   readonly buckets: ReadonlyArray<AntigravityUsageBucket>;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function parseUsageGroups(data: unknown): ReadonlyArray<AntigravityUsageGroup> {
-  if (!isRecord(data) || !Array.isArray(data.groups)) return [];
-  return data.groups.filter(isRecord).map((group) => ({
+  if (!Predicate.isObject(data) || !Array.isArray(data.groups)) return [];
+  return data.groups.filter(Predicate.isObject).map((group) => ({
     ...(typeof group.name === "string" ? { name: group.name } : {}),
     buckets: Array.isArray(group.buckets)
-      ? group.buckets.filter(isRecord).map((bucket) => ({
+      ? group.buckets.filter(Predicate.isObject).map((bucket) => ({
           ...(typeof bucket.id === "string" ? { id: bucket.id } : {}),
           ...(typeof bucket.window === "string" ? { window: bucket.window } : {}),
           ...(typeof bucket.remaining_fraction === "number"
@@ -259,22 +276,24 @@ export function normalizeAntigravityRateLimits(
 }
 
 export function parseAntigravitySkills(data: unknown): ReadonlyArray<ServerProviderSkill> {
-  if (!isRecord(data) || !Array.isArray(data.skills)) return [];
-  return data.skills.filter(isRecord).flatMap((skill): ReadonlyArray<ServerProviderSkill> => {
-    const name = typeof skill.name === "string" ? skill.name.trim() : "";
-    const path = typeof skill.path === "string" ? skill.path.trim() : "";
-    if (name.length === 0 || path.length === 0) return [];
-    const description = typeof skill.description === "string" ? skill.description.trim() : "";
-    return [
-      {
-        name,
-        path,
-        enabled: true,
-        ...(description.length > 0 ? { description } : {}),
-        ...(skill.builtin === true ? { scope: "builtin" } : {}),
-      },
-    ];
-  });
+  if (!Predicate.isObject(data) || !Array.isArray(data.skills)) return [];
+  return data.skills
+    .filter(Predicate.isObject)
+    .flatMap((skill): ReadonlyArray<ServerProviderSkill> => {
+      const name = typeof skill.name === "string" ? skill.name.trim() : "";
+      const path = typeof skill.path === "string" ? skill.path.trim() : "";
+      if (name.length === 0 || path.length === 0) return [];
+      const description = typeof skill.description === "string" ? skill.description.trim() : "";
+      return [
+        {
+          name,
+          path,
+          enabled: true,
+          ...(description.length > 0 ? { description } : {}),
+          ...(skill.builtin === true ? { scope: "builtin" } : {}),
+        },
+      ];
+    });
 }
 
 /**
@@ -287,7 +306,7 @@ export function parseAntigravityCommandData(stdout: string): unknown {
   const decoded = decodeUnknownJsonStringExit(trimmed);
   if (!Exit.isSuccess(decoded)) return undefined;
   const parsed = decoded.value;
-  if (!isRecord(parsed) || !isRecord(parsed.command)) return undefined;
+  if (!Predicate.isObject(parsed) || !Predicate.isObject(parsed.command)) return undefined;
   return parsed.command.data;
 }
 
@@ -307,6 +326,9 @@ const runAntigravityCommand = (input: {
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         env: input.environment,
         shell: spawnCommand.shell,
+        // `agy` keeps non-interactive commands alive while stdin is an open
+        // pipe. Health probes never write to it, so connect it to EOF.
+        stdin: "ignore",
         ...(input.cwd ? { cwd: input.cwd } : {}),
       }),
     );
@@ -350,7 +372,7 @@ export const probeAntigravityRateLimits = (input: {
     ...(input.cwd ? { cwd: input.cwd } : {}),
   }).pipe(
     Effect.map((data) =>
-      normalizeAntigravityRateLimits(data, { ...(input.model ? { model: input.model } : {}) }),
+      normalizeAntigravityRateLimits(data, input.model ? { model: input.model } : {}),
     ),
   );
 
@@ -372,7 +394,11 @@ const readAntigravityAccountEmail = (
     const decoded = decodeUnknownJsonStringExit(raw);
     if (!Exit.isSuccess(decoded)) return undefined;
     const parsed = decoded.value;
-    if (isRecord(parsed) && typeof parsed.active === "string" && parsed.active.includes("@")) {
+    if (
+      Predicate.isObject(parsed) &&
+      typeof parsed.active === "string" &&
+      parsed.active.includes("@")
+    ) {
       return parsed.active.trim();
     }
     return undefined;
@@ -548,9 +574,16 @@ export const checkAntigravityProviderStatus = Effect.fn("checkAntigravityProvide
     }
 
     if (discoveredModels.length === 0) {
-      yield* Effect.logWarning("Antigravity model discovery returned no models.", {
-        exitCode: modelsOutput?.code,
-      });
+      const modelsTimedOut = Result.isSuccess(modelsResult) && Option.isNone(modelsResult.success);
+      const modelsFailed = Result.isFailure(modelsResult);
+      yield* Effect.logWarning(
+        modelsTimedOut
+          ? "Antigravity model discovery timed out."
+          : modelsFailed
+            ? "Antigravity model discovery failed."
+            : "Antigravity model discovery returned no models.",
+        { exitCode: modelsOutput?.code },
+      );
       return buildServerProvider({
         presentation: ANTIGRAVITY_PRESENTATION,
         enabled: true,
@@ -561,7 +594,11 @@ export const checkAntigravityProviderStatus = Effect.fn("checkAntigravityProvide
           version,
           status: "warning",
           auth: { status: "unknown" },
-          message: "Antigravity CLI is installed but `agy models` returned no models.",
+          message: modelsTimedOut
+            ? "Antigravity CLI is installed but `agy models` timed out during its cold start."
+            : modelsFailed
+              ? "Antigravity CLI is installed but T3 Code could not run `agy models`."
+              : "Antigravity CLI is installed but `agy models` returned no models.",
         },
       });
     }

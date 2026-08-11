@@ -39,6 +39,12 @@ export const resolveAntigravityLaunchArgs = (
 export const antigravityLaunchArgv = (launchArgs?: string): ReadonlyArray<string> =>
   tokenizeCliArgs(launchArgs);
 
+export type AntigravityEffort = "low" | "medium" | "high";
+
+export function isAntigravityEffort(value: string | undefined): value is AntigravityEffort {
+  return value === "low" || value === "medium" || value === "high";
+}
+
 /** How a T3 permission mode is realized on the `agy` command line. */
 export type AntigravityPermissionPlan = {
   /** `--dangerously-skip-permissions` */
@@ -87,6 +93,7 @@ export function antigravityPermissionPlan(input: {
 export interface AntigravityTurnArgsInput {
   readonly prompt: string;
   readonly model?: string | undefined;
+  readonly effort?: AntigravityEffort | undefined;
   /** Resume target; when absent the turn opens a new conversation. */
   readonly conversationId?: string | undefined;
   readonly runtimeMode: RuntimeMode;
@@ -116,6 +123,9 @@ export function buildAntigravityTurnArgs(input: AntigravityTurnArgsInput): Reado
 
   if (input.model?.trim()) {
     args.push("--model", input.model.trim());
+  }
+  if (input.effort) {
+    args.push("--effort", input.effort);
   }
   if (permission.skipPermissions) {
     args.push("--dangerously-skip-permissions");

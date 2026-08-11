@@ -27,6 +27,7 @@ import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { makeAntigravityTextGeneration } from "../../textGeneration/AntigravityTextGeneration.ts";
+import { makeAntigravityProcessEnvironment } from "../AntigravityProcessEnvironment.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeAntigravityAdapter } from "../Layers/AntigravityAdapter.ts";
 import {
@@ -43,7 +44,6 @@ import {
   type ProviderInstance,
 } from "../ProviderDriver.ts";
 import type { ServerProviderDraft } from "../providerSnapshot.ts";
-import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import {
   makeProviderMaintenanceCapabilities,
   resolveProviderMaintenanceCapabilitiesEffect,
@@ -120,7 +120,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
       const serverSettings = yield* ServerSettingsService;
       const eventLoggers = yield* ProviderEventLoggers;
       const { cwd } = yield* ServerConfig;
-      const processEnv = mergeProviderInstanceEnvironment(environment);
+      const processEnv = makeAntigravityProcessEnvironment(environment);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,

@@ -12,8 +12,10 @@
  * @module textGeneration/AntigravityTextGeneration
  */
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -25,11 +27,13 @@ import {
   TextGenerationError,
 } from "@t3tools/contracts";
 import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@t3tools/shared/git";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { extractJsonObject } from "@t3tools/shared/schemaJson";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 
 import {
   antigravityLaunchArgv,
+  isAntigravityEffort,
   resolveAntigravityLaunchArgs,
 } from "../provider/Layers/antigravityLaunchArgs.ts";
 import * as TextGeneration from "./TextGeneration.ts";
@@ -52,16 +56,13 @@ const ANTIGRAVITY_TIMEOUT_MS = 180_000;
 const ANTIGRAVITY_PRINT_TIMEOUT = "3m";
 
 const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
 type TextGenerationOperation =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
   | "generateThreadTitle";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /**
  * Pull the model's answer out of the print-mode envelope
@@ -73,13 +74,14 @@ export function readAntigravityPrintResponse(
 ): { readonly response: string } | { readonly error: string } {
   const trimmed = stdout.trim();
   if (trimmed.length === 0) return { error: "Antigravity returned no output." };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch {
+  const decoded = decodeUnknownJsonStringExit(trimmed);
+  if (!Exit.isSuccess(decoded)) {
     return { error: "Antigravity returned output that was not JSON." };
   }
-  if (!isRecord(parsed)) return { error: "Antigravity returned an unexpected payload." };
+  const parsed = decoded.value;
+  if (!Predicate.isObject(parsed)) {
+    return { error: "Antigravity returned an unexpected payload." };
+  }
   const status = typeof parsed.status === "string" ? parsed.status.toUpperCase() : "";
   const response = typeof parsed.response === "string" ? parsed.response.trim() : "";
   if (status !== "SUCCESS") {
@@ -153,6 +155,13 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
       ),
     );
     const schemaPath = yield* writeSchemaFile(operation, schemaJson);
+    const requestedEffort = getModelSelectionStringOptionValue(modelSelection, "effort");
+    if (requestedEffort !== undefined && !isAntigravityEffort(requestedEffort)) {
+      return yield* new TextGenerationError({
+        operation,
+        detail: `Unsupported Antigravity reasoning effort '${requestedEffort}'.`,
+      });
+    }
 
     const spawnCommand = yield* resolveSpawnCommand(
       settings.binaryPath || "agy",
@@ -165,6 +174,7 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
         "--json-schema",
         schemaPath,
         ...(modelSelection.model ? ["--model", modelSelection.model] : []),
+        ...(requestedEffort ? ["--effort", requestedEffort] : []),
         ...antigravityLaunchArgv(launchArgs),
         "--print",
         prompt,
@@ -182,6 +192,7 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
           env: environment,
           cwd,
           shell: spawnCommand.shell,
+          stdin: "ignore",
         }),
       )
       .pipe(
