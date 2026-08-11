@@ -85,6 +85,8 @@ function makePoolLayer(
           ensureMain: Effect.die("unexpected window ensure"),
           revealOrCreateMain: Effect.die("unexpected window reveal"),
           activate: Effect.die("unexpected window activate"),
+          configureInitialVisibility: () => Effect.void,
+          setCloseToTrayEnabled: () => Effect.void,
           createMainIfBackendReady: Effect.die("unexpected window create"),
           showConnectingSplash: Effect.void,
           handleBackendReady: () => Effect.void,

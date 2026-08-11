@@ -70,6 +70,8 @@ export class DesktopWindow extends Context.Service<
     readonly ensureMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
     readonly revealOrCreateMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
     readonly activate: Effect.Effect<void, DesktopWindowError>;
+    readonly configureInitialVisibility: (startInTray: boolean) => Effect.Effect<void>;
+    readonly setCloseToTrayEnabled: (enabled: boolean) => Effect.Effect<void>;
     readonly createMainIfBackendReady: Effect.Effect<void, DesktopWindowError>;
     // Show a lightweight "Connecting to WSL" splash window immediately (wsl-only
     // mode), before the WSL backend that serves the renderer is ready. It is
@@ -274,6 +276,8 @@ export const make = Effect.gen(function* () {
   const runFork = Effect.runForkWith(context);
   const runPromise = Effect.runPromiseWith(context);
   let flushMainWindowBounds: Effect.Effect<void> = Effect.void;
+  let closeToTrayEnabled = false;
+  let initialWindowSuppressed = false;
 
   const dismissConnectingSplash = Effect.gen(function* () {
     const splash = yield* Ref.getAndSet(splashWindowRef, Option.none());
@@ -311,6 +315,7 @@ export const make = Effect.gen(function* () {
     const iconOption = getIconOption(iconPaths, environment.platform);
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
     const persistedSettings = yield* desktopSettings.get;
+    closeToTrayEnabled = persistedSettings.closeToTray;
     const persistedBounds = persistedSettings.mainWindowBounds;
     const displayBoundsResult = yield* Effect.sync(() => {
       try {
@@ -549,8 +554,18 @@ export const make = Effect.gen(function* () {
     window.on("move", scheduleBoundsPersist);
     window.on("maximize", scheduleBoundsPersist);
     window.on("unmaximize", scheduleBoundsPersist);
-    window.on("close", () => {
+    let allowWindowClose = false;
+    const allowCloseForAppQuit = () => {
+      allowWindowClose = true;
+    };
+    Electron.app.on("before-quit", allowCloseForAppQuit);
+    window.on("close", (event) => {
       runFork(flushBoundsPersist);
+      if (environment.platform !== "darwin" && closeToTrayEnabled && !allowWindowClose) {
+        event.preventDefault();
+        window.hide();
+        runFork(logWindowInfo("main window hidden to tray"));
+      }
     });
 
     if (environment.platform === "darwin") {
@@ -702,6 +717,7 @@ export const make = Effect.gen(function* () {
     }
 
     window.on("closed", () => {
+      Electron.app.removeListener("before-quit", allowCloseForAppQuit);
       clearDevelopmentLoadRetry();
       clearBoundsPersist();
       void runPromise(electronWindow.clearMain(Option.some(window)));
@@ -733,7 +749,7 @@ export const make = Effect.gen(function* () {
 
   const createMainIfBackendReady = Effect.gen(function* () {
     const backendReady = yield* Ref.get(backendReadyRef);
-    if (!backendReady) return;
+    if (!backendReady || initialWindowSuppressed) return;
     const existingWindow = yield* currentMainWindow;
     if (Option.isSome(existingWindow)) return;
     yield* createMain;
@@ -790,6 +806,7 @@ export const make = Effect.gen(function* () {
     ensureMain,
     revealOrCreateMain,
     activate: Effect.gen(function* () {
+      initialWindowSuppressed = false;
       const existingWindow = yield* currentMainWindow;
       if (Option.isSome(existingWindow)) {
         yield* electronWindow.reveal(existingWindow.value);
@@ -810,6 +827,14 @@ export const make = Effect.gen(function* () {
       }
       yield* createMainIfBackendReady;
     }).pipe(Effect.withSpan("desktop.window.activate")),
+    configureInitialVisibility: (startInTray) =>
+      Effect.sync(() => {
+        initialWindowSuppressed = startInTray;
+      }),
+    setCloseToTrayEnabled: (enabled) =>
+      Effect.sync(() => {
+        closeToTrayEnabled = enabled;
+      }),
     createMainIfBackendReady,
     showConnectingSplash,
     handleBackendReady: Effect.fn("desktop.window.handleBackendReady")(function* (httpBaseUrl) {

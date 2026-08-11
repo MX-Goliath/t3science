@@ -6,6 +6,8 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   type BackgroundActivityProfile,
   type DesktopUpdateChannel,
+  type DesktopSystemIntegrationSettings,
+  type DesktopSystemIntegrationState,
   ProviderDriverKind,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
@@ -434,6 +436,97 @@ function AboutVersionSection() {
         />
       ) : null}
     </>
+  );
+}
+
+function DesktopSystemIntegrationSection() {
+  const bridge = typeof window === "undefined" ? undefined : window.desktopBridge;
+  const [state, setState] = useState<DesktopSystemIntegrationState | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (typeof bridge?.getSystemIntegrationState !== "function") return;
+    let active = true;
+    void bridge
+      .getSystemIntegrationState()
+      .then((nextState) => {
+        if (active) setState(nextState);
+      })
+      .catch(() => {
+        // Older or partially initialized desktop builds simply omit this section.
+      });
+    return () => {
+      active = false;
+    };
+  }, [bridge]);
+
+  const update = useCallback(
+    (patch: Partial<DesktopSystemIntegrationSettings>) => {
+      if (!state || typeof bridge?.setSystemIntegrationSettings !== "function") return;
+      setIsSaving(true);
+      void bridge
+        .setSystemIntegrationSettings({ ...state.settings, ...patch })
+        .then(setState)
+        .catch((error: unknown) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not update desktop integration",
+              description:
+                error instanceof Error ? error.message : "Desktop integration update failed.",
+            }),
+          );
+        })
+        .finally(() => setIsSaving(false));
+    },
+    [bridge, state],
+  );
+
+  if (!state?.supported) return null;
+
+  return (
+    <SettingsSection title="Desktop app">
+      <SettingsRow
+        {...searchableSetting("close-to-tray")}
+        description="Hide the window instead of stopping T3 Science when you close it. Agents and remote connections keep running in the background."
+        control={
+          <Switch
+            checked={state.settings.closeToTray}
+            disabled={isSaving}
+            onCheckedChange={(checked) => update({ closeToTray: Boolean(checked) })}
+            aria-label="Keep running in the system tray"
+          />
+        }
+      />
+      <SettingsRow
+        {...searchableSetting("start-in-tray")}
+        description="Start the desktop app and its local environment without opening the main window. Use the tray icon to open it."
+        control={
+          <Switch
+            checked={state.settings.startInTray}
+            disabled={isSaving}
+            onCheckedChange={(checked) => update({ startInTray: Boolean(checked) })}
+            aria-label="Start in the system tray"
+          />
+        }
+      />
+      <SettingsRow
+        {...searchableSetting("launch-at-login")}
+        description={
+          state.launchAtLoginSupported
+            ? "Launch T3 Science when you sign in to this computer. Combine with start in tray for a quiet background launch."
+            : "Available in an installed desktop build."
+        }
+        control={
+          <Switch
+            checked={state.settings.launchAtLogin}
+            disabled={isSaving || !state.launchAtLoginSupported}
+            onCheckedChange={(checked) => update({ launchAtLogin: Boolean(checked) })}
+            aria-label="Launch at login"
+          />
+        }
+      />
+    </SettingsSection>
   );
 }
 
@@ -2329,6 +2422,8 @@ export function GeneralSettingsPanel() {
           }
         />
       </SettingsSection>
+
+      <DesktopSystemIntegrationSection />
 
       <SettingsSection title="About">
         {isElectron || HOSTED_APP_CHANNEL ? (
