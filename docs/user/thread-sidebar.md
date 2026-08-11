@@ -18,6 +18,8 @@ Threads backed by a separate worktree are not marked from the main project folde
 Messages cannot be sent to a local-checkout thread while its project folder is unavailable. Web
 and mobile disable the send action, mobile keeps queued messages paused, and the server rejects a
 turn if the workspace disappears before it starts. Restore the folder to continue the chat.
+While connected, T3 Code periodically rechecks unavailable folders, so reconnecting a removable
+drive automatically restores the project and its send action without restarting the client.
 
 Pin a thread from its context menu to keep it above your active work. In the default sidebar,
 pinned threads are shown in one shared section independently of their project, including when you

@@ -48,6 +48,28 @@ function shellStatusForSnapshot(
 }
 
 const SHELL_SYNCHRONIZATION_ERROR_MESSAGE = "Could not synchronize environment data.";
+export const MISSING_WORKSPACE_REFRESH_INTERVAL_MS = 5_000;
+
+export function hasUnavailableProjectWorkspace(snapshot: OrchestrationShellSnapshot): boolean {
+  return snapshot.projects.some((project) => project.workspaceAvailable === false);
+}
+
+export function mergeProjectWorkspaceAvailability(
+  current: OrchestrationShellSnapshot,
+  refreshed: OrchestrationShellSnapshot,
+): OrchestrationShellSnapshot | null {
+  const refreshedProjects = new Map(refreshed.projects.map((project) => [project.id, project]));
+  let changed = false;
+  const projects = current.projects.map((project) => {
+    const workspaceAvailable = refreshedProjects.get(project.id)?.workspaceAvailable;
+    if (workspaceAvailable === undefined || workspaceAvailable === project.workspaceAvailable) {
+      return project;
+    }
+    changed = true;
+    return { ...project, workspaceAvailable };
+  });
+  return changed ? { ...current, projects } : null;
+}
 
 export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")(function* () {
   const supervisor = yield* EnvironmentSupervisor;
@@ -265,6 +287,44 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
     }),
     Effect.forkScoped,
   );
+
+  const refreshUnavailableProjectWorkspaces = Effect.gen(function* () {
+    const current = yield* SubscriptionRef.get(state);
+    if (
+      current.status !== "live" ||
+      Option.isNone(current.snapshot) ||
+      !hasUnavailableProjectWorkspace(current.snapshot.value)
+    ) {
+      return;
+    }
+
+    const prepared = yield* SubscriptionRef.get(supervisor.prepared);
+    if (Option.isNone(prepared)) {
+      return;
+    }
+    const refreshed = yield* snapshotLoader.load(prepared.value);
+    if (Option.isNone(refreshed)) {
+      return;
+    }
+
+    // Only merge the derived availability bit into the latest live snapshot.
+    // The HTTP request can race newer stream events, so replacing the whole
+    // snapshot here could otherwise move the shell cursor backwards.
+    const latest = yield* SubscriptionRef.get(state);
+    if (latest.status !== "live" || Option.isNone(latest.snapshot)) {
+      return;
+    }
+    const merged = mergeProjectWorkspaceAvailability(latest.snapshot.value, refreshed.value);
+    if (merged !== null) {
+      yield* applyItem({ kind: "snapshot", snapshot: merged });
+    }
+  });
+
+  yield* Effect.forever(
+    Effect.sleep(`${MISSING_WORKSPACE_REFRESH_INTERVAL_MS} millis`).pipe(
+      Effect.andThen(refreshUnavailableProjectWorkspaces),
+    ),
+  ).pipe(Effect.forkScoped);
 
   return state;
 });

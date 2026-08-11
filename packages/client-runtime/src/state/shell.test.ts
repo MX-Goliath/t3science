@@ -1,4 +1,4 @@
-import type { ServerConfig } from "@t3tools/contracts";
+import type { OrchestrationShellSnapshot, ServerConfig } from "@t3tools/contracts";
 import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
@@ -6,7 +6,12 @@ import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 
 import { PrimaryConnectionTarget } from "../connection/model.ts";
 import type { EnvironmentShellState } from "./shell.ts";
-import { createEnvironmentServerConfigsAtom, createEnvironmentShellSummaryAtom } from "./shell.ts";
+import {
+  createEnvironmentServerConfigsAtom,
+  createEnvironmentShellSummaryAtom,
+  hasUnavailableProjectWorkspace,
+  mergeProjectWorkspaceAvailability,
+} from "./shell.ts";
 
 const ENVIRONMENT_ID = EnvironmentId.make("environment-1");
 const OTHER_ENVIRONMENT_ID = EnvironmentId.make("environment-2");
@@ -88,6 +93,32 @@ function makeHarness() {
 }
 
 describe("environment shell projections", () => {
+  it("merges refreshed workspace availability without replacing live shell data", () => {
+    const thread = { id: "thread-1" } as never;
+    const availableProject = { id: "project-available", workspaceAvailable: true } as never;
+    const missingProject = { id: "project-missing", workspaceAvailable: false } as never;
+    const current: OrchestrationShellSnapshot = {
+      snapshotSequence: 7,
+      projects: [availableProject, missingProject],
+      threads: [thread],
+      updatedAt: "2026-08-11T00:00:00.000Z",
+    };
+    const refreshed: OrchestrationShellSnapshot = {
+      ...current,
+      snapshotSequence: 6,
+      projects: [availableProject, { id: "project-missing", workspaceAvailable: true } as never],
+      threads: [],
+    };
+
+    expect(hasUnavailableProjectWorkspace(current)).toBe(true);
+    const merged = mergeProjectWorkspaceAvailability(current, refreshed);
+    expect(merged?.snapshotSequence).toBe(7);
+    expect(merged?.threads).toEqual([thread]);
+    expect(merged?.projects.map((project) => project.workspaceAvailable)).toEqual([true, true]);
+    expect(merged && hasUnavailableProjectWorkspace(merged)).toBe(false);
+    expect(mergeProjectWorkspaceAvailability(merged ?? current, refreshed)).toBeNull();
+  });
+
   it("summarizes shell state and preserves identity when only irrelevant snapshot data changes", () => {
     const harness = makeHarness();
     const summary = harness.registry.get(harness.summaryAtom);
