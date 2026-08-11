@@ -152,6 +152,30 @@ export type DesktopTheme = "light" | "dark" | "system";
 export type DesktopUpdateChannel = "latest" | "nightly";
 export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
 
+export interface DesktopSystemIntegrationSettings {
+  closeToTray: boolean;
+  launchAtLogin: boolean;
+  startInTray: boolean;
+}
+
+export interface DesktopSystemIntegrationState {
+  supported: boolean;
+  launchAtLoginSupported: boolean;
+  settings: DesktopSystemIntegrationSettings;
+}
+
+export const DesktopSystemIntegrationSettingsSchema = Schema.Struct({
+  closeToTray: Schema.Boolean,
+  launchAtLogin: Schema.Boolean,
+  startInTray: Schema.Boolean,
+});
+
+export const DesktopSystemIntegrationStateSchema = Schema.Struct({
+  supported: Schema.Boolean,
+  launchAtLoginSupported: Schema.Boolean,
+  settings: DesktopSystemIntegrationSettingsSchema,
+});
+
 export const DesktopUpdateStatusSchema = Schema.Literals([
   "disabled",
   "idle",
@@ -1040,6 +1064,12 @@ export interface DesktopBridge {
   setWslBackendEnabled: (enabled: boolean) => Promise<DesktopWslState>;
   setWslDistro: (distro: string | null) => Promise<DesktopWslState>;
   setWslOnly: (enabled: boolean) => Promise<DesktopWslState>;
+  /** Available in desktop builds that support Windows/Linux system tray integration. */
+  getSystemIntegrationState?: () => Promise<DesktopSystemIntegrationState>;
+  /** Available in desktop builds that support Windows/Linux system tray integration. */
+  setSystemIntegrationSettings?: (
+    settings: DesktopSystemIntegrationSettings,
+  ) => Promise<DesktopSystemIntegrationState>;
   pickFolder: (options?: PickFolderOptions) => Promise<string | null>;
   /**
    * Multi-select JSON file picker that opens in the VS Code extensions

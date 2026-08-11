@@ -52,7 +52,11 @@ import {
   type HomeGroupDisplayState,
   type HomeListItem,
 } from "../home/homeListItems";
-import { buildHomeProjectScopes, buildHomeThreadGroups } from "../home/homeThreadList";
+import {
+  buildHomeProjectScopes,
+  buildHomeThreadGroups,
+  resolveHomeProjectWorkspaceAvailability,
+} from "../home/homeThreadList";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "../home/thread-swipe-actions";
 import { usePendingTaskListActions } from "../home/usePendingTaskListActions";
 import { useThreadListActions } from "../home/useThreadListActions";
@@ -1022,6 +1026,7 @@ function ThreadNavigationSidebarPane(
               newThreadTarget={item.group.newThreadTarget}
               onNewThread={props.onNewThreadInProject}
               project={item.group.representative}
+              workspaceAvailability={resolveHomeProjectWorkspaceAvailability(item.group.projects)}
               threadCount={item.group.threads.length + item.group.pendingTasks.length}
               title={item.group.title}
             />
@@ -1052,6 +1057,11 @@ function ThreadNavigationSidebarPane(
               projectCwd={
                 projectCwdByKey.get(scopedProjectKey(thread.environmentId, thread.projectId)) ??
                 null
+              }
+              workspaceUnavailable={
+                thread.worktreePath === null &&
+                projectByKey.get(scopedProjectKey(thread.environmentId, thread.projectId))
+                  ?.workspaceAvailable === false
               }
               isLast={item.isLast}
               searchMatch={threadSearchMatchByKey.get(

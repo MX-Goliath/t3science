@@ -5,7 +5,8 @@
 When you sign in with a Claude subscription, the composer shows the remaining
 5-hour and weekly percentages beside the model controls. The ring is green above
 50%, orange from 20% through 50%, and red below 20%. Limits refresh when you open
-a thread and after an agent response finishes.
+a thread, every five minutes while it remains open, and after an agent response
+finishes.
 
 The percentages come from the same plan windows `/usage` reports in Claude Code.
 API key, Amazon Bedrock, and Vertex sessions have no plan limits, so nothing is

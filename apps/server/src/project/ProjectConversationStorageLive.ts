@@ -7,6 +7,7 @@ import {
   type OrchestrationEvent,
   type OrchestrationProject,
   type OrchestrationThread,
+  ProjectScript,
   type ProjectId,
   ProviderDriverKind,
   type ThreadId,
@@ -43,14 +44,19 @@ const Manifest = Schema.Struct({
   schemaVersion: Schema.Literal(PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION),
   enabled: Schema.Boolean,
   updatedAt: Schema.String,
+  scripts: Schema.optionalKey(Schema.Array(ProjectScript)),
 });
 const ManifestJson = Schema.fromJsonString(Manifest);
 const PortableConversationJson = Schema.fromJsonString(PortableConversationDocument);
+const ProjectScriptsJson = Schema.fromJsonString(Schema.Array(ProjectScript));
 const decodeManifest = Schema.decodeUnknownEffect(ManifestJson);
 const decodePortableConversation = Schema.decodeUnknownEffect(PortableConversationJson);
 const encodeManifest = Schema.encodeEffect(ManifestJson);
 const encodePortableConversation = Schema.encodeEffect(PortableConversationJson);
+const encodeProjectScripts = Schema.encodeEffect(ProjectScriptsJson);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
+
+type PortableProject = Pick<OrchestrationProject, "id" | "workspaceRoot" | "scripts">;
 
 function storageError(message: string): ProjectConversationStorageError {
   return new ProjectConversationStorageError({ message });
@@ -219,11 +225,13 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   const writeManifest = Effect.fn("ProjectConversationStorage.writeManifest")(function* (
     workspaceRoot: string,
     enabled: boolean,
+    scripts: OrchestrationProject["scripts"],
   ) {
     const manifest = {
       schemaVersion: PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION,
       enabled,
       updatedAt: yield* nowIso,
+      scripts,
     } as const;
     yield* writeAtomically({
       filePath: manifestPath(workspaceRoot),
@@ -232,7 +240,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   });
 
   const exportProject = Effect.fn("ProjectConversationStorage.exportProject")(function* (
-    project: Pick<OrchestrationProject, "id" | "workspaceRoot">,
+    project: PortableProject,
   ) {
     const snapshot = yield* snapshots.getSnapshot();
     const projectThreads = snapshot.threads.filter(
@@ -241,7 +249,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
     yield* Effect.forEach(projectThreads, (thread) => exportThread(project.workspaceRoot, thread), {
       concurrency: 1,
     });
-    yield* writeManifest(project.workspaceRoot, true);
+    yield* writeManifest(project.workspaceRoot, true, project.scripts);
     yield* Ref.update(enabledProjects, (current) =>
       new Map(current).set(project.id, project.workspaceRoot),
     );
@@ -252,6 +260,27 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
     });
     return projectThreads.length;
   });
+
+  const importProjectScripts = Effect.fn("ProjectConversationStorage.importProjectScripts")(
+    function* (project: PortableProject) {
+      const manifest = yield* readManifest(project.workspaceRoot);
+      const scripts = Option.isSome(manifest) ? manifest.value.scripts : undefined;
+      if (
+        scripts === undefined ||
+        (yield* encodeProjectScripts(scripts)) === (yield* encodeProjectScripts(project.scripts))
+      ) {
+        return project;
+      }
+      const uuid = yield* crypto.randomUUIDv4;
+      yield* engine.dispatch({
+        type: "project.meta.update",
+        commandId: CommandId.make(`server:portable-project-scripts:${uuid}`),
+        projectId: project.id,
+        scripts: Array.from(scripts),
+      });
+      return { ...project, scripts: Array.from(scripts) };
+    },
+  );
 
   const remapImportedThread = Effect.fn("ProjectConversationStorage.remapImportedThread")(
     function* (
@@ -383,10 +412,11 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
         yield* requireDesktop();
         const project = yield* resolveProject(input.projectId);
         if (input.enabled) {
-          yield* importProject(project);
-          yield* exportProject(project);
+          const importedProject = yield* importProjectScripts(project);
+          yield* importProject(importedProject);
+          yield* exportProject(importedProject);
         } else {
-          yield* writeManifest(project.workspaceRoot, false);
+          yield* writeManifest(project.workspaceRoot, false, project.scripts);
           yield* Ref.update(enabledProjects, (current) => {
             const next = new Map(current);
             next.delete(project.id);
@@ -398,22 +428,39 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
     );
 
   const scanProject = Effect.fn("ProjectConversationStorage.scanProject")(function* (
-    project: Pick<OrchestrationProject, "id" | "workspaceRoot">,
+    project: PortableProject,
   ) {
     const manifest = yield* readManifest(project.workspaceRoot);
     if (Option.isNone(manifest) || !manifest.value.enabled) return;
     yield* Ref.update(enabledProjects, (current) =>
       new Map(current).set(project.id, project.workspaceRoot),
     );
-    yield* importProject(project);
+    const importedProject = yield* importProjectScripts(project);
+    yield* importProject(importedProject);
   });
 
   const handleEvent = Effect.fn("ProjectConversationStorage.handleEvent")(function* (
     event: OrchestrationEvent,
   ) {
-    if (event.type === "project.created" || event.type === "project.meta-updated") {
+    if (event.type === "project.created") {
       const project = yield* snapshots.getProjectShellById(event.payload.projectId);
       if (Option.isSome(project)) yield* scanProject(project.value);
+      return;
+    }
+    if (event.type === "project.meta-updated") {
+      const project = yield* snapshots.getProjectShellById(event.payload.projectId);
+      if (Option.isNone(project)) return;
+      if (
+        event.payload.scripts !== undefined &&
+        (yield* Ref.get(enabledProjects)).has(event.payload.projectId)
+      ) {
+        yield* writeManifest(project.value.workspaceRoot, true, project.value.scripts);
+        yield* Ref.update(enabledProjects, (current) =>
+          new Map(current).set(project.value.id, project.value.workspaceRoot),
+        );
+      } else {
+        yield* scanProject(project.value);
+      }
       return;
     }
     if (event.type === "project.deleted") {

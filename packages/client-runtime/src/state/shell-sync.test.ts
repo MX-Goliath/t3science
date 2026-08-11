@@ -11,6 +11,7 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as TestClock from "effect/testing/TestClock";
 
 import {
   AVAILABLE_CONNECTION_STATE,
@@ -22,7 +23,11 @@ import * as ConnectionWakeups from "../connection/wakeups.ts";
 import * as Persistence from "../platform/persistence.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
-import { makeEnvironmentShellState, ShellSnapshotLoader } from "./shell.ts";
+import {
+  makeEnvironmentShellState,
+  MISSING_WORKSPACE_REFRESH_INTERVAL_MS,
+  ShellSnapshotLoader,
+} from "./shell.ts";
 
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
@@ -58,6 +63,79 @@ function session(client: WsRpcProtocolClient): RpcSession.RpcSession {
 }
 
 describe("environment shell synchronization", () => {
+  it.effect("refreshes a missing project workspace until it becomes available", () =>
+    Effect.gen(function* () {
+      const missingSnapshot: OrchestrationShellSnapshot = {
+        ...LIVE_SHELL_SNAPSHOT,
+        projects: [{ id: "project-1", workspaceAvailable: false } as never],
+      };
+      const restoredSnapshot: OrchestrationShellSnapshot = {
+        ...missingSnapshot,
+        projects: [{ id: "project-1", workspaceAvailable: true } as never],
+      };
+      const events = yield* Queue.unbounded<OrchestrationShellStreamItem>();
+      const client = {
+        [ORCHESTRATION_WS_METHODS.subscribeShell]: () => Stream.fromQueue(events),
+      } as unknown as WsRpcProtocolClient;
+      const supervisorState = yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE);
+      const activeSession = yield* SubscriptionRef.make(Option.some(session(client)));
+      const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
+        target: TARGET,
+        state: supervisorState,
+        session: activeSession,
+        prepared: yield* SubscriptionRef.make(Option.some(PREPARED)),
+        connect: Effect.void,
+        disconnect: Effect.void,
+        retryNow: Effect.void,
+      } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+      const cache = Persistence.EnvironmentCacheStore.of({
+        loadShell: () => Effect.succeed(Option.none()),
+        saveShell: () => Effect.void,
+        loadThread: () => Effect.succeed(Option.none()),
+        saveThread: () => Effect.void,
+        removeThread: () => Effect.void,
+        loadServerConfig: () => Effect.succeed(Option.none()),
+        saveServerConfig: () => Effect.void,
+        loadVcsRefs: () => Effect.succeed(Option.none()),
+        saveVcsRefs: () => Effect.void,
+        removeVcsRefs: () => Effect.void,
+        clearVcsRefs: () => Effect.void,
+        clear: () => Effect.void,
+      });
+      const loaderCalls = yield* Ref.make(0);
+      const snapshotLoader = ShellSnapshotLoader.of({
+        load: () =>
+          Ref.updateAndGet(loaderCalls, (count) => count + 1).pipe(
+            Effect.map((count) => Option.some(count === 1 ? missingSnapshot : restoredSnapshot)),
+          ),
+      });
+      const shellState = yield* makeEnvironmentShellState().pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.provideService(Persistence.EnvironmentCacheStore, cache),
+        Effect.provideService(ShellSnapshotLoader, snapshotLoader),
+      );
+
+      yield* Queue.offer(events, { kind: "synchronized" });
+      yield* SubscriptionRef.changes(shellState).pipe(
+        Stream.filter((state) => state.status === "live"),
+        Stream.runHead,
+      );
+      expect(yield* Ref.get(loaderCalls)).toBe(1);
+
+      yield* TestClock.adjust(`${MISSING_WORKSPACE_REFRESH_INTERVAL_MS} millis`);
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if ((yield* Ref.get(loaderCalls)) === 2) break;
+        yield* Effect.yieldNow;
+      }
+      const restored = yield* SubscriptionRef.get(shellState);
+      expect(yield* Ref.get(loaderCalls)).toBe(2);
+      expect(Option.getOrThrow(restored.snapshot).projects[0]?.workspaceAvailable).toBe(true);
+
+      yield* TestClock.adjust(`${MISSING_WORKSPACE_REFRESH_INTERVAL_MS * 2} millis`);
+      expect(yield* Ref.get(loaderCalls)).toBe(2);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+
   it.effect("publishes live state before persistence and preserves it when ready", () =>
     Effect.gen(function* () {
       const events = yield* Queue.unbounded<OrchestrationShellStreamItem>();

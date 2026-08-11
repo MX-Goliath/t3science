@@ -14,6 +14,7 @@ import { createAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts
 import { ServerConfig } from "../config.ts";
 import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
+import { ensureTurnWorkspaceAvailable } from "./TurnWorkspaceAvailability.ts";
 
 export const canonicalizeClientCommandTimestamps = (
   command: ClientOrchestrationCommand,
@@ -103,6 +104,8 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
     if (canonicalCommand.type !== "thread.turn.start") {
       return canonicalCommand as OrchestrationCommand;
     }
+
+    yield* ensureTurnWorkspaceAvailable(canonicalCommand);
 
     const normalizedAttachments = yield* Effect.forEach(
       canonicalCommand.message.attachments,

@@ -28,6 +28,7 @@ import {
 } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
@@ -309,11 +310,13 @@ function mapSessionRow(
 function mapProjectShellRow(
   row: Schema.Schema.Type<typeof ProjectionProjectDbRowSchema>,
   repositoryIdentity: OrchestrationProject["repositoryIdentity"],
+  workspaceAvailable: boolean,
 ): OrchestrationProjectShell {
   return {
     id: row.projectId,
     title: row.title,
     workspaceRoot: row.workspaceRoot,
+    workspaceAvailable,
     repositoryIdentity,
     defaultModelSelection: row.defaultModelSelection,
     defaultThreadEnvMode: row.defaultThreadEnvMode,
@@ -346,11 +349,40 @@ function toPersistenceSqlOrDecodeError(sqlOperation: string, decodeOperation: st
 }
 
 const makeProjectionSnapshotQuery = Effect.gen(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const threadPlanProgress = yield* ThreadPlanProgressService;
   const sql = yield* SqlClient.SqlClient;
   const repositoryIdentityResolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
   const repositoryIdentityResolutionConcurrency = 4;
+  const workspaceAvailabilityConcurrency = 8;
+  const resolveWorkspaceAvailability = Effect.fn(
+    "ProjectionSnapshotQuery.resolveWorkspaceAvailability",
+  )(function* (workspaceRoot: string) {
+    const info = yield* fileSystem.stat(workspaceRoot).pipe(Effect.option);
+    return Option.isSome(info) && info.value.type === "Directory";
+  });
+  const resolveWorkspaceAvailabilityForProjects = Effect.fn(
+    "ProjectionSnapshotQuery.resolveWorkspaceAvailabilityForProjects",
+  )(function* (
+    projectRows: ReadonlyArray<Schema.Schema.Type<typeof ProjectionProjectDbRowSchema>>,
+  ) {
+    const workspaceRoots = [
+      ...new Set(
+        projectRows.filter((row) => row.deletedAt === null).map((row) => row.workspaceRoot),
+      ),
+    ];
+    return new Map(
+      yield* Effect.forEach(
+        workspaceRoots,
+        (workspaceRoot) =>
+          resolveWorkspaceAvailability(workspaceRoot).pipe(
+            Effect.map((available) => [workspaceRoot, available] as const),
+          ),
+        { concurrency: workspaceAvailabilityConcurrency },
+      ),
+    );
+  });
   const resolveRepositoryIdentitiesForProjects = Effect.fn(
     "ProjectionSnapshotQuery.resolveRepositoryIdentitiesForProjects",
   )(function* (
@@ -1882,7 +1914,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               updatedAt = maxIso(updatedAt, row.updatedAt);
             }
 
-            const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(projectRows);
+            const [repositoryIdentities, workspaceAvailability] = yield* Effect.all([
+              resolveRepositoryIdentitiesForProjects(projectRows),
+              resolveWorkspaceAvailabilityForProjects(projectRows),
+            ]);
             const latestTurnByThread = new Map(
               latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
             );
@@ -1895,7 +1930,11 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               projects: Arr.filterMap(projectRows, (row) =>
                 row.deletedAt === null
                   ? Result.succeed(
-                      mapProjectShellRow(row, repositoryIdentities.get(row.projectId) ?? null),
+                      mapProjectShellRow(
+                        row,
+                        repositoryIdentities.get(row.projectId) ?? null,
+                        workspaceAvailability.get(row.workspaceRoot) ?? false,
+                      ),
                     )
                   : Result.failVoid,
               ),
@@ -2026,9 +2065,13 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             }
 
             const activeProjectIds = new Set(threadRows.map((row) => row.projectId));
-            const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(
-              projectRows.filter((row) => activeProjectIds.has(row.projectId)),
+            const activeProjectRows = projectRows.filter((row) =>
+              activeProjectIds.has(row.projectId),
             );
+            const [repositoryIdentities, workspaceAvailability] = yield* Effect.all([
+              resolveRepositoryIdentitiesForProjects(activeProjectRows),
+              resolveWorkspaceAvailabilityForProjects(activeProjectRows),
+            ]);
             const latestTurnByThread = new Map(
               latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
             );
@@ -2041,7 +2084,11 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               projects: Arr.filterMap(projectRows, (row) =>
                 row.deletedAt === null && activeProjectIds.has(row.projectId)
                   ? Result.succeed(
-                      mapProjectShellRow(row, repositoryIdentities.get(row.projectId) ?? null),
+                      mapProjectShellRow(
+                        row,
+                        repositoryIdentities.get(row.projectId) ?? null,
+                        workspaceAvailability.get(row.workspaceRoot) ?? false,
+                      ),
                     )
                   : Result.failVoid,
               ),
@@ -2200,8 +2247,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           : repositoryIdentityResolver
               .resolve(option.value.workspaceRoot)
               .pipe(
-                Effect.map((repositoryIdentity) =>
-                  Option.some(mapProjectShellRow(option.value, repositoryIdentity)),
+                Effect.flatMap((repositoryIdentity) =>
+                  resolveWorkspaceAvailability(option.value.workspaceRoot).pipe(
+                    Effect.map((workspaceAvailable) =>
+                      Option.some(
+                        mapProjectShellRow(option.value, repositoryIdentity, workspaceAvailable),
+                      ),
+                    ),
+                  ),
                 ),
               ),
       ),

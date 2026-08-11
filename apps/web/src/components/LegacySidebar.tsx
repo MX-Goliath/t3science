@@ -418,6 +418,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     ),
   );
   const threadProjectCwd = threadProject?.workspaceRoot ?? null;
+  const workspaceUnavailable =
+    thread.worktreePath === null && threadProject?.workspaceAvailable === false;
   const gitCwd = thread.worktreePath ?? threadProjectCwd ?? props.projectCwd;
   const gitStatus = useEnvironmentQuery(
     thread.branch != null && gitCwd !== null
@@ -690,7 +692,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
         className={`${resolveThreadRowClassName({
           isActive,
           isSelected,
-        })} relative isolate`}
+        })} relative isolate ${workspaceUnavailable ? "opacity-60 hover:opacity-100" : ""}`}
         onClick={handleRowClick}
         onDoubleClick={handleRowDoubleClick}
         onKeyDown={handleRowKeyDown}
@@ -723,6 +725,24 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
               className="size-3 shrink-0 text-sidebar-muted-foreground"
             />
           )}
+          {workspaceUnavailable ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    role="img"
+                    aria-label="Project folder is missing"
+                    className="inline-flex shrink-0 text-warning"
+                  />
+                }
+              >
+                <TriangleAlertIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                Project folder is missing{threadProjectCwd ? `: ${threadProjectCwd}` : "."}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
           {renamingThreadKey === threadKey ? (
             <input
               ref={handleRenameInputRef}
@@ -739,7 +759,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
               <TooltipTrigger
                 render={
                   <span
-                    className="min-w-0 flex-1 truncate text-sm"
+                    className={`min-w-0 flex-1 truncate text-sm ${
+                      workspaceUnavailable ? "line-through decoration-current/60" : ""
+                    }`}
                     data-testid={`thread-title-${thread.id}`}
                   >
                     {thread.title}
@@ -1131,6 +1153,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     dragHandleProps,
   } = props;
   const isGeneralChats = variant === "general";
+  const workspaceUnavailable = !isGeneralChats && project.workspaceAvailability === "missing";
+  const workspacePartiallyUnavailable =
+    !isGeneralChats && project.workspaceAvailability === "partial";
   const threadSortOrder = useClientSettings<SidebarThreadSortOrder>(
     (settings) => settings.sidebarThreadSortOrder,
   );
@@ -2322,7 +2347,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           }
           className={`pr-8 group-hover/project-header:bg-sidebar-row-hover group-hover/project-header:text-sidebar-foreground max-sm:pr-14 ${
             isManualProjectSorting && !isGeneralChats ? "cursor-grab active:cursor-grabbing" : ""
-          }`}
+          } ${workspaceUnavailable ? "opacity-60 hover:opacity-100" : ""}`}
           {...(isManualProjectSorting && !isGeneralChats && dragHandleProps
             ? dragHandleProps.attributes
             : {})}
@@ -2372,9 +2397,37 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             />
           )}
           <span className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="truncate text-sm font-medium text-sidebar-foreground/90">
+            <span
+              className={`truncate text-sm font-medium text-sidebar-foreground/90 ${
+                workspaceUnavailable ? "line-through decoration-current/60" : ""
+              }`}
+            >
               {project.displayName}
             </span>
+            {workspaceUnavailable || workspacePartiallyUnavailable ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      role="img"
+                      aria-label={
+                        workspaceUnavailable
+                          ? "Project folder is missing"
+                          : "Some project folders are missing"
+                      }
+                      className="inline-flex shrink-0 text-warning"
+                    />
+                  }
+                >
+                  <TriangleAlertIcon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {workspaceUnavailable
+                    ? `Project folder is missing: ${project.workspaceRoot}`
+                    : "Some grouped project folders are missing."}
+                </TooltipPopup>
+              </Tooltip>
+            ) : null}
             {!isGeneralChats && project.groupedProjectCount > 1 ? (
               <span className="shrink-0 text-secondary-label text-[10px]">
                 {project.groupedProjectCount} projects

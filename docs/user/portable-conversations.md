@@ -7,9 +7,9 @@ turn on **Portable local conversations**. In the legacy sidebar, right-click the
 only to that project.
 
 When you turn it on, T3 Code immediately exports the project's existing conversations and image
-attachments. It then keeps the copies current as you continue working. The files live in the
-hidden `.t3/conversations` directory and are not encrypted, so treat the copied project directory
-as sensitive data.
+attachments, along with its project actions. It then keeps the copies current as you continue
+working. The files live in the hidden `.t3/conversations` directory and are not encrypted, so
+treat the copied project directory as sensitive data.
 
 ## Move a project to another device
 
@@ -23,7 +23,8 @@ T3 Code detects the enabled manifest and restores the conversations automaticall
 restored conversation preserves its messages and attachments. The first new message starts a fresh
 native provider session and supplies the previous conversation as context, so the agent can
 continue the same task using the destination device's project root. The corresponding provider
-must be configured on the destination device.
+must be configured on the destination device. Project actions are restored from the same manifest
+and remain synchronized while portable conversations are enabled.
 
 If you later copy a more recently updated project directory back to another device, the newer
 portable version replaces the older local copy of the same conversation. Do not edit the same

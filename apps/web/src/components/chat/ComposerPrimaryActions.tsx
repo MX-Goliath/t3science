@@ -169,8 +169,12 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         )}
         {...pointerFocusProps}
         onClick={onScheduledSendClick}
-        aria-label={scheduledSendOverdue ? "Scheduled send overdue" : "Scheduled message"}
-        title={scheduledSendLabel ?? undefined}
+        disabled={isSendDisabled}
+        aria-label={
+          sendDisabledReason ??
+          (scheduledSendOverdue ? "Scheduled send overdue" : "Scheduled message")
+        }
+        title={sendDisabledReason ?? scheduledSendLabel ?? undefined}
       >
         <TimerIcon className="size-4" aria-hidden="true" />
       </button>

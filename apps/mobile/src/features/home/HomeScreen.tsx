@@ -68,6 +68,7 @@ import {
 import {
   buildHomeProjectScopes,
   buildHomeThreadGroups,
+  resolveHomeProjectWorkspaceAvailability,
   sortHomeProjectScopes,
   type HomeProjectSortOrder,
 } from "./homeThreadList";
@@ -926,6 +927,7 @@ export function HomeScreen(props: HomeScreenProps) {
               newThreadTarget={item.group.newThreadTarget}
               onNewThread={props.onNewThreadInProject}
               project={item.group.representative}
+              workspaceAvailability={resolveHomeProjectWorkspaceAvailability(item.group.projects)}
               threadCount={item.group.threads.length + item.group.pendingTasks.length}
               title={item.group.title}
             />
@@ -956,6 +958,11 @@ export function HomeScreen(props: HomeScreenProps) {
               projectCwd={
                 projectCwdByKey.get(scopedProjectKey(thread.environmentId, thread.projectId)) ??
                 null
+              }
+              workspaceUnavailable={
+                thread.worktreePath === null &&
+                projectByKey.get(scopedProjectKey(thread.environmentId, thread.projectId))
+                  ?.workspaceAvailable === false
               }
               isLast={item.isLast}
               searchMatch={threadSearchMatchByKey.get(

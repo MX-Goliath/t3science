@@ -97,3 +97,4 @@ older messages.
 - [Remote access](./remote-access.md): connect from a phone, tablet, or another desktop
 - [Keeping T3 Code in sync](./updating.md): client and server version skew
 - [Running in the background](./background-service.md): Linux background service
+- [Desktop tray and startup](./desktop-tray.md): Windows and Linux tray behavior and launch at login

@@ -81,6 +81,27 @@ describe("environment grouping", () => {
     expect(projectGroupCount).toBe(1);
   });
 
+  it("distinguishes available, partially missing, and missing grouped workspaces", () => {
+    const primary = makeProject({ repositoryIdentity, workspaceAvailable: false });
+    const remote = makeProject({
+      id: ProjectId.make("project-remote"),
+      environmentId: remoteEnvironmentId,
+      repositoryIdentity,
+      workspaceAvailable: true,
+    });
+    const buildAvailability = (projects: Project[]) =>
+      buildSidebarProjectSnapshots({
+        projects,
+        settings: defaultGroupingSettings,
+        primaryEnvironmentId,
+        resolveEnvironmentLabel: () => null,
+      })[0]?.workspaceAvailability;
+
+    expect(buildAvailability([makeProject({ repositoryIdentity })])).toBe("available");
+    expect(buildAvailability([primary, remote])).toBe("partial");
+    expect(buildAvailability([primary, { ...remote, workspaceAvailable: false }])).toBe("missing");
+  });
+
   it("keeps projects without repository identity physically scoped", () => {
     const primary = makeProject();
     const remote = makeProject({

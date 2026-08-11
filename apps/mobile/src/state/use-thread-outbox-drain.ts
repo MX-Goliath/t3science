@@ -305,6 +305,17 @@ export function useThreadOutboxDrain(): void {
       }
 
       const creation = nextQueuedMessage.creation;
+      const project = projects.find(
+        (candidate) =>
+          candidate.environmentId === nextQueuedMessage.environmentId &&
+          candidate.id === (creation?.projectId ?? thread?.projectId),
+      );
+      const workspacePath =
+        creation !== undefined ? creation.worktreePath : (thread?.worktreePath ?? null);
+      const workspaceUnavailable = workspacePath === null && project?.workspaceAvailable === false;
+      if (workspaceUnavailable) {
+        continue;
+      }
       const environment = connectedEnvironments.find(
         (candidate) => candidate.environmentId === nextQueuedMessage.environmentId,
       );

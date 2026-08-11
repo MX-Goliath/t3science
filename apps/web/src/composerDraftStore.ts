@@ -2,7 +2,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
   defaultInstanceIdForDriver,
-  type EnvironmentId,
+  EnvironmentId,
   ModelSelection,
   ProjectId,
   ProviderInstanceId,
@@ -16,6 +16,7 @@ import {
   type ScopedProjectRef,
   type ScopedThreadRef,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 import {
   parseScopedProjectKey,
@@ -151,8 +152,16 @@ const PersistedComposerThreadDraftState = Schema.Struct({
   scheduledSend: Schema.optionalKey(
     Schema.Struct({
       scheduledAt: Schema.String,
-      source: Schema.Literals(["custom", "rate-limit"]),
+      source: Schema.Literals(["custom", "rate-limit", "agent-completion"]),
       limitWindow: Schema.optionalKey(Schema.Literals(["fiveHour", "weekly"])),
+      waitingForAgent: Schema.optionalKey(
+        Schema.Struct({
+          environmentId: EnvironmentId,
+          threadId: ThreadId,
+          turnId: TurnId,
+          threadTitle: Schema.String,
+        }),
+      ),
     }),
   ),
 });
@@ -1728,7 +1737,8 @@ function normalizePersistedDraftsByThreadId(
       scheduledSendCandidate &&
       typeof scheduledSendCandidate.scheduledAt === "string" &&
       (scheduledSendCandidate.source === "custom" ||
-        scheduledSendCandidate.source === "rate-limit") &&
+        scheduledSendCandidate.source === "rate-limit" ||
+        scheduledSendCandidate.source === "agent-completion") &&
       Number.isFinite(Date.parse(scheduledSendCandidate.scheduledAt))
         ? {
             scheduledAt: scheduledSendCandidate.scheduledAt,
@@ -1736,6 +1746,10 @@ function normalizePersistedDraftsByThreadId(
             ...(scheduledSendCandidate.limitWindow === "fiveHour" ||
             scheduledSendCandidate.limitWindow === "weekly"
               ? { limitWindow: scheduledSendCandidate.limitWindow }
+              : {}),
+            ...(scheduledSendCandidate.source === "agent-completion" &&
+            scheduledSendCandidate.waitingForAgent
+              ? { waitingForAgent: scheduledSendCandidate.waitingForAgent }
               : {}),
           }
         : null;

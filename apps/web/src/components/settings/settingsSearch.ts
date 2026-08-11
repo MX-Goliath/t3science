@@ -99,6 +99,21 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
+    id: "close-to-tray",
+    title: "Keep running in the system tray",
+    to: "/settings/general",
+  },
+  {
+    id: "start-in-tray",
+    title: "Start in the system tray",
+    to: "/settings/general",
+  },
+  {
+    id: "launch-at-login",
+    title: "Launch at login",
+    to: "/settings/general",
+  },
+  {
     id: "web-chat-provider",
     title: "Web chat provider",
     to: "/settings/general",

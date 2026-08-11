@@ -72,6 +72,8 @@ describe("DesktopLifecycle", () => {
         ensureMain: Effect.die("unexpected window creation"),
         revealOrCreateMain: Effect.die("unexpected window creation"),
         activate: Effect.void,
+        configureInitialVisibility: () => Effect.void,
+        setCloseToTrayEnabled: () => Effect.void,
         createMainIfBackendReady: Effect.void,
         showConnectingSplash: Effect.void,
         handleBackendReady: () => Effect.void,

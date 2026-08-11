@@ -231,8 +231,10 @@ import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
 import { readLocalApi } from "../../localApi";
+import { readThreadShells } from "../../state/entities";
 import {
   isScheduledSendOverdue,
+  resolveRunningAgentScheduleTargets,
   resolveRateLimitSchedule,
   type ScheduledSendState,
 } from "../../scheduledSend";
@@ -1952,9 +1954,25 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ) {
         return;
       }
+      const runningAgentTargets = resolveRunningAgentScheduleTargets(readThreadShells(), {
+        environmentId: routeThreadRef.environmentId,
+        threadId: routeThreadRef.threadId,
+      });
       const clicked = await readLocalApi()?.contextMenu.show(
         [
           { id: "custom", label: "Send later…" },
+          ...(runningAgentTargets.length > 0
+            ? [
+                {
+                  id: "agent-completion",
+                  label: "Send after agent finishes",
+                  children: runningAgentTargets.map((target, index) => ({
+                    id: `agent-completion:${index}`,
+                    label: target.threadTitle,
+                  })),
+                },
+              ]
+            : []),
           ...(rateLimitSchedule
             ? ([
                 {
@@ -1968,6 +1986,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       );
       if (clicked === "custom") {
         setScheduleDialogOpen(true);
+      } else if (clicked?.startsWith("agent-completion:")) {
+        const targetIndex = Number.parseInt(clicked.slice("agent-completion:".length), 10);
+        const target = runningAgentTargets[targetIndex];
+        if (target) {
+          scheduleCurrentMessage({
+            scheduledAt: new Date().toISOString(),
+            source: "agent-completion",
+            waitingForAgent: target,
+          });
+        }
       } else if (clicked === "rate-limit" && rateLimitSchedule) {
         scheduleCurrentMessage(rateLimitSchedule.scheduledSend);
       }
@@ -1982,6 +2010,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       phase,
       projectSelectionRequired,
       rateLimitSchedule,
+      routeThreadRef.environmentId,
+      routeThreadRef.threadId,
       scheduleCurrentMessage,
       scheduledSend,
     ],
@@ -2012,6 +2042,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const scheduledSendLabel = useMemo(() => {
     if (!scheduledSend) return null;
+    if (scheduledSend.source === "agent-completion") {
+      return scheduledSend.waitingForAgent
+        ? `Waiting for agent in ${scheduledSend.waitingForAgent.threadTitle}`
+        : "Waiting for agent to finish";
+    }
     const scheduledAt = new Date(scheduledSend.scheduledAt);
     if (!Number.isFinite(scheduledAt.getTime())) return "Scheduled send has an invalid time";
     const formatted = new Intl.DateTimeFormat(undefined, {

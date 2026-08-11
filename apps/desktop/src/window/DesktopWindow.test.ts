@@ -12,25 +12,45 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as Electron from "electron";
-import { vi } from "vite-plus/test";
+import { beforeEach, vi } from "vite-plus/test";
 
-vi.mock("electron", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("electron")>()),
-  session: {
-    fromPartition: vi.fn(() => ({
-      getUserAgent: vi.fn(() => "Mozilla/5.0 Electron/41.5.0 t3science/1.2.3"),
-      setPermissionRequestHandler: vi.fn(),
-      setUserAgent: vi.fn(),
-    })),
-  },
-  screen: {
-    getAllDisplays: vi.fn(() => [
-      {
-        bounds: { x: 0, y: 0, width: 1920, height: 1080 },
-      },
-    ]),
-  },
-}));
+const electronAppListeners = vi.hoisted(
+  () => new Map<string, (...args: readonly unknown[]) => void>(),
+);
+
+vi.mock("electron", async (importOriginal) => {
+  const original = await importOriginal<typeof import("electron")>();
+  return {
+    ...original,
+    app: {
+      ...original.app,
+      on: vi.fn((eventName: string, listener: (...args: readonly unknown[]) => void) => {
+        electronAppListeners.set(eventName, listener);
+      }),
+      removeListener: vi.fn(
+        (eventName: string, listener: (...args: readonly unknown[]) => void) => {
+          if (electronAppListeners.get(eventName) === listener) {
+            electronAppListeners.delete(eventName);
+          }
+        },
+      ),
+    },
+    session: {
+      fromPartition: vi.fn(() => ({
+        getUserAgent: vi.fn(() => "Mozilla/5.0 Electron/41.5.0 t3science/1.2.3"),
+        setPermissionRequestHandler: vi.fn(),
+        setUserAgent: vi.fn(),
+      })),
+    },
+    screen: {
+      getAllDisplays: vi.fn(() => [
+        {
+          bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+        },
+      ]),
+    },
+  };
+});
 
 import * as DesktopAssets from "../app/DesktopAssets.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
@@ -79,6 +99,7 @@ function makeFakeBrowserWindow() {
   const window = {
     close: vi.fn(),
     focus: vi.fn(),
+    hide: vi.fn(),
     getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1100, height: 780 })),
     getNormalBounds: vi.fn(() => ({ x: 0, y: 0, width: 1100, height: 780 })),
     isDestroyed: vi.fn(() => false),
@@ -111,6 +132,7 @@ function makeFakeBrowserWindow() {
     isFullScreen: window.isFullScreen,
     isMaximized: window.isMaximized,
     isMinimized: window.isMinimized,
+    hide: window.hide,
     loadURL: window.loadURL,
     maximize: window.maximize,
     openDevTools: webContents.openDevTools,
@@ -158,17 +180,20 @@ const electronThemeLayer = Layer.succeed(ElectronTheme.ElectronTheme, {
   onUpdated: () => Effect.void,
 } satisfies ElectronTheme.ElectronTheme["Service"]);
 
-const desktopEnvironmentLayer = DesktopEnvironment.layer(environmentInput).pipe(
-  Layer.provide(
-    Layer.mergeAll(
-      NodeServices.layer,
-      DesktopConfig.layerTest({
-        T3CODE_PORT: "3773",
-        VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
-      }),
+const makeDesktopEnvironmentLayer = (platform: NodeJS.Platform = environmentInput.platform) =>
+  DesktopEnvironment.layer({ ...environmentInput, platform }).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        NodeServices.layer,
+        DesktopConfig.layerTest({
+          T3CODE_PORT: "3773",
+          VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
+        }),
+      ),
     ),
-  ),
-);
+  );
+
+const desktopEnvironmentLayer = makeDesktopEnvironmentLayer();
 
 const desktopWindowBoundsEquivalence = Schema.toEquivalence(
   DesktopAppSettings.DesktopWindowBoundsSchema,
@@ -186,6 +211,7 @@ function makeTestLayer(input: {
     bounds: DesktopAppSettings.DesktopWindowBounds,
   ) => Effect.Effect<void>;
   readonly openedExternalUrls?: unknown[];
+  readonly platform?: NodeJS.Platform;
 }) {
   let desktopSettings = input.desktopSettings ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS;
   const desktopAppSettingsLayer = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
@@ -211,6 +237,7 @@ function makeTestLayer(input: {
         }
         return { settings: desktopSettings, changed };
       }),
+    setSystemIntegration: () => Effect.die("unexpected system integration update"),
     setServerExposureMode: () => Effect.die("unexpected server exposure update"),
     setTailscaleServe: () => Effect.die("unexpected Tailscale Serve update"),
     setUpdateChannel: () => Effect.die("unexpected update channel change"),
@@ -244,7 +271,9 @@ function makeTestLayer(input: {
     Layer.provide(
       Layer.mergeAll(
         desktopAssetsLayer,
-        desktopEnvironmentLayer,
+        input.platform === undefined
+          ? desktopEnvironmentLayer
+          : makeDesktopEnvironmentLayer(input.platform),
         desktopAppSettingsLayer,
         desktopServerExposureLayer,
         DesktopState.layer,
@@ -367,6 +396,8 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
   });
 
 describe("DesktopWindow", () => {
+  beforeEach(() => electronAppListeners.clear());
+
   it("restores bounds only when the window fits within a connected display", () => {
     const persistedBounds = { x: 2040, y: 80, width: 1320, height: 880 };
     const displays = [
@@ -437,6 +468,69 @@ describe("DesktopWindow", () => {
       }).pipe(Effect.provide(layer));
     }),
   );
+
+  it.effect("keeps the initial window suppressed until tray activation", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.configureInitialVisibility(true);
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+        assert.equal(yield* Ref.get(createCount), 0);
+
+        yield* desktopWindow.activate;
+        assert.equal(yield* Ref.get(createCount), 1);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  for (const platform of ["win32", "linux"] satisfies readonly NodeJS.Platform[]) {
+    it.effect(`hides the main window to the tray on close on ${platform}`, () =>
+      Effect.gen(function* () {
+        const fakeWindow = makeFakeBrowserWindow();
+        const createCount = yield* Ref.make(0);
+        const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+        const layer = makeTestLayer({
+          window: fakeWindow.window,
+          createCount,
+          mainWindow,
+          platform,
+          desktopSettings: {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            closeToTray: true,
+          },
+        });
+
+        yield* Effect.gen(function* () {
+          const desktopWindow = yield* DesktopWindow.DesktopWindow;
+          yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+          const close = fakeWindow.windowListeners.get("close");
+          if (!close) {
+            return yield* Effect.die("window close listener was not registered");
+          }
+
+          let prevented = false;
+          close({ preventDefault: () => (prevented = true) });
+          assert.isTrue(prevented);
+          assert.equal(fakeWindow.hide.mock.calls.length, 1);
+
+          electronAppListeners.get("before-quit")?.();
+          prevented = false;
+          close({ preventDefault: () => (prevented = true) });
+          assert.isFalse(prevented);
+          assert.equal(fakeWindow.hide.mock.calls.length, 1);
+        }).pipe(Effect.provide(layer));
+      }),
+    );
+  }
 
   it.effect("blocks only repeated Cmd+W input before it reaches the native window menu", () =>
     Effect.gen(function* () {

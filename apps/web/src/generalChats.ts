@@ -37,6 +37,7 @@ export function buildGeneralChatsProjectSnapshot(input: {
     displayName: "General chats",
     groupedProjectCount: members.length,
     environmentPresence: hasLocal && hasRemote ? "mixed" : hasRemote ? "remote-only" : "local-only",
+    workspaceAvailability: "available",
     allRemoteMembersAreDesktopLocal:
       remoteMembers.length > 0 &&
       remoteMembers.every((project) => isDesktopLocal(project.environmentId)),
