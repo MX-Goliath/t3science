@@ -48,7 +48,7 @@ function shellStatusForSnapshot(
 }
 
 const SHELL_SYNCHRONIZATION_ERROR_MESSAGE = "Could not synchronize environment data.";
-export const MISSING_WORKSPACE_REFRESH_INTERVAL_MS = 5_000;
+export const MISSING_WORKSPACE_REFRESH_INTERVAL_MS = 30_000;
 
 export function hasUnavailableProjectWorkspace(snapshot: OrchestrationShellSnapshot): boolean {
   return snapshot.projects.some((project) => project.workspaceAvailable === false);
