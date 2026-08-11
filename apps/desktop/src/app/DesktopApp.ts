@@ -28,6 +28,7 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
 import * as DesktopState from "./DesktopState.ts";
 import * as DesktopRemoteUpdates from "../updates/DesktopRemoteUpdates.ts";
+import * as DesktopSystemIntegration from "./DesktopSystemIntegration.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 
@@ -151,6 +152,7 @@ const bootstrap = Effect.gen(function* () {
   const wslBackend = yield* DesktopWslBackend.DesktopWslBackend;
   const desktopWindow = yield* DesktopWindow.DesktopWindow;
   const appActivation = yield* DesktopAppActivation.DesktopAppActivation;
+  const systemIntegration = yield* DesktopSystemIntegration.DesktopSystemIntegration;
   yield* logBootstrapInfo("bootstrap start");
 
   if (environment.isDevelopment && Option.isNone(environment.configuredBackendPort)) {
@@ -170,6 +172,8 @@ const bootstrap = Effect.gen(function* () {
   );
 
   const settings = yield* desktopSettings.get;
+  const startInTray = yield* systemIntegration.shouldStartInTray;
+  yield* desktopWindow.configureInitialVisibility(startInTray);
   if (settings.serverExposureMode !== environment.defaultDesktopSettings.serverExposureMode) {
     yield* logBootstrapInfo("bootstrap restoring persisted server exposure mode", {
       mode: settings.serverExposureMode,
@@ -211,7 +215,7 @@ const bootstrap = Effect.gen(function* () {
     // slow to cold-boot — show a "Connecting to WSL" splash immediately so the
     // app feels responsive instead of presenting no window until WSL is ready.
     // (Dual mode opens fast off the Windows primary, so no splash there.)
-    if (settings.wslOnly === true && settings.wslBackendEnabled === true) {
+    if (!startInTray && settings.wslOnly === true && settings.wslBackendEnabled === true) {
       yield* desktopWindow.showConnectingSplash;
     }
     yield* primaryBackend.start;
@@ -236,6 +240,7 @@ const startup = Effect.gen(function* () {
   const linuxUrlHandler = yield* DesktopLinuxUrlHandler.DesktopLinuxUrlHandler;
   const clerk = yield* DesktopClerk.DesktopClerk;
   const shellEnvironment = yield* DesktopShellEnvironment.DesktopShellEnvironment;
+  const systemIntegration = yield* DesktopSystemIntegration.DesktopSystemIntegration;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const preReadyElectronOptions = yield* DesktopPreReadyPlatform.DesktopPreReadyElectronOptions;
   const safeStorage = yield* ElectronSafeStorage.ElectronSafeStorage;
@@ -295,6 +300,7 @@ const startup = Effect.gen(function* () {
   }
   yield* appIdentity.configure;
   yield* applicationMenu.configure;
+  yield* systemIntegration.configure;
   yield* updates.configure;
   yield* DesktopRemoteUpdates.listen;
   yield* linuxUrlHandler.register;

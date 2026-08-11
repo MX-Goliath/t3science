@@ -82,6 +82,7 @@ Full docs live in [docs/](./docs). There's no docs site yet.
 - [Project settings](./docs/user/project-settings.md)
 - [Remote access from a phone or another machine](./docs/user/remote-access.md)
 - [Keeping app and server in sync](./docs/user/updating.md)
+- [Desktop tray and startup](./docs/user/desktop-tray.md)
 - [Source control integrations](./docs/user/source-control.md)
 - Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)
 - [Run T3 Code as a background service](./docs/user/background-service.md)

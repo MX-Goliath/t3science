@@ -1,4 +1,5 @@
 import {
+  type DesktopSystemIntegrationSettings,
   DesktopServerExposureModeSchema,
   DesktopUpdateChannelSchema,
   type DesktopServerExposureMode,
@@ -25,10 +26,13 @@ import { resolveDefaultDesktopUpdateChannel } from "../updates/updateChannels.ts
 import { isValidDistroName } from "../wsl/wslPathParsing.ts";
 
 export interface DesktopSettings {
+  readonly closeToTray: boolean;
+  readonly launchAtLogin: boolean;
   readonly linuxPasswordStore: LinuxPasswordStorePreference;
   readonly mainWindowBounds: DesktopWindowBounds | null;
   readonly mainWindowMaximized: boolean;
   readonly serverExposureMode: DesktopServerExposureMode;
+  readonly startInTray: boolean;
   readonly tailscaleServeEnabled: boolean;
   readonly tailscaleServePort: number;
   readonly updateChannel: DesktopUpdateChannel;
@@ -73,10 +77,13 @@ export const DEFAULT_MAIN_WINDOW_SIZE = {
 } as const;
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
+  closeToTray: false,
+  launchAtLogin: false,
   linuxPasswordStore: DEFAULT_LINUX_PASSWORD_STORE,
   mainWindowBounds: null,
   mainWindowMaximized: false,
   serverExposureMode: "local-only",
+  startInTray: false,
   tailscaleServeEnabled: false,
   tailscaleServePort: DEFAULT_TAILSCALE_SERVE_PORT,
   updateChannel: "latest",
@@ -94,10 +101,13 @@ const DesktopWindowBoundsDocument = Schema.Struct({
 });
 
 const DesktopSettingsDocument = Schema.Struct({
+  closeToTray: Schema.optionalKey(Schema.Boolean),
+  launchAtLogin: Schema.optionalKey(Schema.Boolean),
   linuxPasswordStore: Schema.optionalKey(Schema.Unknown),
   mainWindowBounds: Schema.optionalKey(Schema.NullOr(DesktopWindowBoundsDocument)),
   mainWindowMaximized: Schema.optionalKey(Schema.Boolean),
   serverExposureMode: Schema.optionalKey(DesktopServerExposureModeSchema),
+  startInTray: Schema.optionalKey(Schema.Boolean),
   tailscaleServeEnabled: Schema.optionalKey(Schema.Boolean),
   tailscaleServePort: Schema.optionalKey(Schema.Number),
   updateChannel: Schema.optionalKey(DesktopUpdateChannelSchema),
@@ -155,6 +165,9 @@ export class DesktopAppSettings extends Context.Service<
     readonly setMainWindowBounds: (
       bounds: DesktopWindowBounds,
       isMaximized: boolean,
+    ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
+    readonly setSystemIntegration: (
+      settings: DesktopSystemIntegrationSettings,
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
     readonly setServerExposureMode: (
       mode: DesktopServerExposureMode,
@@ -224,11 +237,14 @@ function normalizeDesktopSettingsDocument(
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
 
   return {
+    closeToTray: parsed.closeToTray === true,
+    launchAtLogin: parsed.launchAtLogin === true,
     linuxPasswordStore: normalizeLinuxPasswordStorePreference(parsed.linuxPasswordStore),
     mainWindowBounds,
     mainWindowMaximized: mainWindowBounds !== null && parsed.mainWindowMaximized === true,
     serverExposureMode:
       parsed.serverExposureMode === "network-accessible" ? "network-accessible" : "local-only",
+    startInTray: parsed.startInTray === true,
     tailscaleServeEnabled: parsed.tailscaleServeEnabled === true,
     tailscaleServePort: normalizeTailscaleServePort(parsed.tailscaleServePort),
     updateChannel: updateChannelConfiguredByUser
@@ -247,6 +263,12 @@ function toDesktopSettingsDocument(
 ): DesktopSettingsDocument {
   const document: Mutable<DesktopSettingsDocument> = {};
 
+  if (settings.closeToTray !== defaults.closeToTray) {
+    document.closeToTray = settings.closeToTray;
+  }
+  if (settings.launchAtLogin !== defaults.launchAtLogin) {
+    document.launchAtLogin = settings.launchAtLogin;
+  }
   if (settings.linuxPasswordStore !== defaults.linuxPasswordStore) {
     document.linuxPasswordStore = settings.linuxPasswordStore;
   }
@@ -258,6 +280,9 @@ function toDesktopSettingsDocument(
   }
   if (settings.serverExposureMode !== defaults.serverExposureMode) {
     document.serverExposureMode = settings.serverExposureMode;
+  }
+  if (settings.startInTray !== defaults.startInTray) {
+    document.startInTray = settings.startInTray;
   }
   if (settings.tailscaleServeEnabled !== defaults.tailscaleServeEnabled) {
     document.tailscaleServeEnabled = settings.tailscaleServeEnabled;
@@ -293,6 +318,22 @@ function setServerExposureMode(
     : {
         ...settings,
         serverExposureMode: requestedMode,
+      };
+}
+
+function setSystemIntegration(
+  settings: DesktopSettings,
+  requested: DesktopSystemIntegrationSettings,
+): DesktopSettings {
+  return settings.closeToTray === requested.closeToTray &&
+    settings.launchAtLogin === requested.launchAtLogin &&
+    settings.startInTray === requested.startInTray
+    ? settings
+    : {
+        ...settings,
+        closeToTray: requested.closeToTray,
+        launchAtLogin: requested.launchAtLogin,
+        startInTray: requested.startInTray,
       };
 }
 
@@ -518,6 +559,16 @@ export const make = Effect.gen(function* () {
           },
         }),
       ),
+    setSystemIntegration: (settings) =>
+      persist((current) => setSystemIntegration(current, settings)).pipe(
+        Effect.withSpan("desktop.settings.setSystemIntegration", {
+          attributes: {
+            closeToTray: settings.closeToTray,
+            launchAtLogin: settings.launchAtLogin,
+            startInTray: settings.startInTray,
+          },
+        }),
+      ),
     setServerExposureMode: (mode) =>
       persist((settings) => setServerExposureMode(settings, mode)).pipe(
         Effect.withSpan("desktop.settings.setServerExposureMode", { attributes: { mode } }),
@@ -577,6 +628,8 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
         load: SynchronizedRef.get(settingsRef),
         setMainWindowBounds: (bounds, isMaximized) =>
           update((settings) => setMainWindowBounds(settings, bounds, isMaximized)),
+        setSystemIntegration: (requested) =>
+          update((settings) => setSystemIntegration(settings, requested)),
         setServerExposureMode: (mode) =>
           update((settings) => setServerExposureMode(settings, mode)),
         setTailscaleServe: (input) => update((settings) => setTailscaleServe(settings, input)),

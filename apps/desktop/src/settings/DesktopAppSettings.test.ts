@@ -11,6 +11,8 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopAppSettings from "./DesktopAppSettings.ts";
 
 const DesktopSettingsPatch = Schema.Struct({
+  closeToTray: Schema.optionalKey(Schema.Boolean),
+  launchAtLogin: Schema.optionalKey(Schema.Boolean),
   linuxPasswordStore: Schema.optionalKey(
     Schema.Literals(["auto", "gnome-libsecret", "kwallet", "kwallet5", "kwallet6"]),
   ),
@@ -26,6 +28,7 @@ const DesktopSettingsPatch = Schema.Struct({
   ),
   mainWindowMaximized: Schema.optionalKey(Schema.Boolean),
   serverExposureMode: Schema.optionalKey(Schema.Literals(["local-only", "network-accessible"])),
+  startInTray: Schema.optionalKey(Schema.Boolean),
   tailscaleServeEnabled: Schema.optionalKey(Schema.Boolean),
   tailscaleServePort: Schema.optionalKey(Schema.Number),
   updateChannel: Schema.optionalKey(Schema.Literals(["latest", "nightly"])),
@@ -105,10 +108,13 @@ describe("DesktopSettings", () => {
     assert.deepEqual(
       DesktopAppSettings.resolveDefaultDesktopSettings("0.0.17-nightly.20260415.1"),
       {
+        closeToTray: false,
+        launchAtLogin: false,
         linuxPasswordStore: "auto",
         mainWindowBounds: null,
         mainWindowMaximized: false,
         serverExposureMode: "local-only",
+        startInTray: false,
         tailscaleServeEnabled: false,
         tailscaleServePort: 443,
         updateChannel: "nightly",
@@ -125,19 +131,25 @@ describe("DesktopSettings", () => {
       Effect.gen(function* () {
         const settings = yield* DesktopAppSettings.DesktopAppSettings;
         yield* writeSettingsPatch({
+          closeToTray: true,
+          launchAtLogin: true,
           linuxPasswordStore: "gnome-libsecret",
           serverExposureMode: "network-accessible",
           tailscaleServeEnabled: true,
           tailscaleServePort: 8443,
           updateChannel: "latest",
           updateChannelConfiguredByUser: true,
+          startInTray: true,
         });
 
         assert.deepEqual(yield* settings.load, {
+          closeToTray: true,
+          launchAtLogin: true,
           linuxPasswordStore: "gnome-libsecret",
           mainWindowBounds: null,
           mainWindowMaximized: false,
           serverExposureMode: "network-accessible",
+          startInTray: true,
           tailscaleServeEnabled: true,
           tailscaleServePort: 8443,
           updateChannel: "latest",
@@ -183,6 +195,42 @@ describe("DesktopSettings", () => {
           error.message,
           `Desktop settings write failed during replace-settings-file at ${environment.desktopSettingsPath}.`,
         );
+      }),
+    ),
+  );
+
+  it.effect("persists desktop tray and login settings as one atomic update", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+
+        const change = yield* settings.setSystemIntegration({
+          closeToTray: true,
+          launchAtLogin: true,
+          startInTray: true,
+        });
+        assert.isTrue(change.changed);
+        assert.isTrue(change.settings.closeToTray);
+        assert.isTrue(change.settings.launchAtLogin);
+        assert.isTrue(change.settings.startInTray);
+
+        const persisted = yield* decodeDesktopSettingsPatch(
+          yield* fileSystem.readFileString(environment.desktopSettingsPath),
+        );
+        assert.deepEqual(persisted, {
+          closeToTray: true,
+          launchAtLogin: true,
+          startInTray: true,
+        } satisfies typeof DesktopSettingsPatch.Type);
+
+        const noop = yield* settings.setSystemIntegration({
+          closeToTray: true,
+          launchAtLogin: true,
+          startInTray: true,
+        });
+        assert.isFalse(noop.changed);
       }),
     ),
   );
@@ -241,10 +289,13 @@ describe("DesktopSettings", () => {
         );
 
         assert.deepEqual(yield* settings.load, {
+          closeToTray: false,
+          launchAtLogin: false,
           linuxPasswordStore: "auto",
           mainWindowBounds: { x: 120, y: 80, width: 1280, height: 900 },
           mainWindowMaximized: false,
           serverExposureMode: "network-accessible",
+          startInTray: false,
           tailscaleServeEnabled: true,
           tailscaleServePort: 8443,
           updateChannel: "latest",
@@ -297,10 +348,13 @@ describe("DesktopSettings", () => {
           );
 
           assert.deepEqual(yield* settings.load, {
+            closeToTray: false,
+            launchAtLogin: false,
             linuxPasswordStore: "auto",
             mainWindowBounds: null,
             mainWindowMaximized: false,
             serverExposureMode: "network-accessible",
+            startInTray: false,
             tailscaleServeEnabled: true,
             tailscaleServePort: 8443,
             updateChannel: "nightly",
@@ -345,10 +399,13 @@ describe("DesktopSettings", () => {
         });
 
         assert.deepEqual(yield* settings.load, {
+          closeToTray: false,
+          launchAtLogin: false,
           linuxPasswordStore: "auto",
           mainWindowBounds: null,
           mainWindowMaximized: false,
           serverExposureMode: "local-only",
+          startInTray: false,
           tailscaleServeEnabled: false,
           tailscaleServePort: 443,
           updateChannel: "nightly",
@@ -373,10 +430,13 @@ describe("DesktopSettings", () => {
         });
 
         assert.deepEqual(yield* settings.load, {
+          closeToTray: false,
+          launchAtLogin: false,
           linuxPasswordStore: "auto",
           mainWindowBounds: null,
           mainWindowMaximized: false,
           serverExposureMode: "local-only",
+          startInTray: false,
           tailscaleServeEnabled: false,
           tailscaleServePort: 443,
           updateChannel: "latest",
@@ -400,10 +460,13 @@ describe("DesktopSettings", () => {
         });
 
         assert.deepEqual(yield* settings.load, {
+          closeToTray: false,
+          launchAtLogin: false,
           linuxPasswordStore: "auto",
           mainWindowBounds: null,
           mainWindowMaximized: false,
           serverExposureMode: "local-only",
+          startInTray: false,
           tailscaleServeEnabled: true,
           tailscaleServePort: 443,
           updateChannel: "latest",

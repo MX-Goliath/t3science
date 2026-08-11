@@ -12,10 +12,24 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as Electron from "electron";
-import { vi } from "vite-plus/test";
+import { beforeEach, vi } from "vite-plus/test";
+
+const electronAppListeners = vi.hoisted(
+  () => new Map<string, (...args: readonly unknown[]) => void>(),
+);
 
 vi.mock("electron", async (importOriginal) => ({
   ...(await importOriginal<typeof import("electron")>()),
+  app: {
+    on: vi.fn((eventName: string, listener: (...args: readonly unknown[]) => void) => {
+      electronAppListeners.set(eventName, listener);
+    }),
+    removeListener: vi.fn((eventName: string, listener: (...args: readonly unknown[]) => void) => {
+      if (electronAppListeners.get(eventName) === listener) {
+        electronAppListeners.delete(eventName);
+      }
+    }),
+  },
   session: {
     fromPartition: vi.fn(() => ({
       getUserAgent: vi.fn(() => "Mozilla/5.0 Electron/41.5.0 t3science/1.2.3"),
@@ -234,6 +248,7 @@ function makeTestLayer(input: {
         }
         return { settings: desktopSettings, changed };
       }),
+    setSystemIntegration: () => Effect.die("unexpected system integration update"),
     setServerExposureMode: () => Effect.die("unexpected server exposure update"),
     setTailscaleServe: () => Effect.die("unexpected Tailscale Serve update"),
     setUpdateChannel: () => Effect.die("unexpected update channel change"),
@@ -400,6 +415,8 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
   });
 
 describe("DesktopWindow", () => {
+  beforeEach(() => electronAppListeners.clear());
+
   it("leaves fullscreen before concealing a pending quit", () => {
     const fakeWindow = makeFakeBrowserWindow();
 
