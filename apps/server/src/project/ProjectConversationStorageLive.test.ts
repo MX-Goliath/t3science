@@ -6,17 +6,22 @@ import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import {
+  CommandId,
+  EventId,
   MessageId,
   PortableConversationDocument,
   PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION,
   ProjectId,
+  ProjectScript,
   ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
   type OrchestrationCommand,
+  type OrchestrationEvent,
   type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -37,6 +42,16 @@ const encodeDocument = Schema.encodeSync(Schema.fromJsonString(PortableConversat
 const decodeDocument = Schema.decodeUnknownSync(
   Schema.fromJsonString(PortableConversationDocument),
 );
+const PortableManifestJson = Schema.fromJsonString(
+  Schema.Struct({
+    schemaVersion: Schema.Literal(PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION),
+    enabled: Schema.Boolean,
+    updatedAt: Schema.String,
+    scripts: Schema.optionalKey(Schema.Array(ProjectScript)),
+  }),
+);
+const encodeManifest = Schema.encodeSync(PortableManifestJson);
+const decodeManifest = Schema.decodeUnknownSync(PortableManifestJson);
 const temporaryDirectories = new Set<string>();
 
 function makeTemporaryDirectory(prefix: string) {
@@ -97,7 +112,7 @@ describe("ProjectConversationStorageLive", () => {
   });
 
   it.effect(
-    "imports a newer portable copy before exporting all existing project conversations",
+    "imports portable conversations and project actions before keeping both copies current",
     () =>
       Effect.gen(function* () {
         const workspaceRoot = makeTemporaryDirectory("t3-portable-project-");
@@ -121,12 +136,34 @@ describe("ProjectConversationStorageLive", () => {
           updatedAt: "2026-01-02T00:00:00.000Z",
           text: "new portable history",
         });
+        const portableScripts = [
+          {
+            id: "review",
+            name: "Review",
+            kind: "prompt",
+            prompt: "Review the current changes",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5-codex",
+            },
+            icon: "debug",
+            runOnWorktreeCreate: false,
+          },
+        ] as const;
         const project = {
           id: projectId,
           title: "Project",
           workspaceRoot,
           defaultModelSelection: null,
-          scripts: [],
+          scripts: [
+            {
+              id: "old-local-action",
+              name: "Old local action",
+              command: "echo old",
+              icon: "play",
+              runOnWorktreeCreate: false,
+            },
+          ],
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
           deletedAt: null,
@@ -147,6 +184,24 @@ describe("ProjectConversationStorageLive", () => {
             sourceProvider: ProviderDriverKind.make("codex"),
             thread: portableThread,
           }),
+        );
+        NodeFS.writeFileSync(
+          NodePath.join(workspaceRoot, ".t3", "conversations", "manifest.json"),
+          encodeManifest({
+            schemaVersion: PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION,
+            enabled: true,
+            updatedAt: "2026-01-02T00:00:01.000Z",
+            scripts: portableScripts,
+          }),
+        );
+
+        const nextDomainEvent = yield* Deferred.make<OrchestrationEvent>();
+        const domainEventHandled = yield* Deferred.make<void>();
+        const domainEvents = Stream.concat(
+          Stream.fromEffect(Deferred.await(nextDomainEvent)),
+          Stream.fromEffect(
+            Deferred.succeed(domainEventHandled, undefined).pipe(Effect.andThen(Effect.never)),
+          ),
         );
 
         const configLayer = Layer.effect(
@@ -174,17 +229,29 @@ describe("ProjectConversationStorageLive", () => {
                         ),
                 };
               }
+              if (command.type === "project.meta.update" && command.scripts !== undefined) {
+                readModel = {
+                  ...readModel,
+                  projects: readModel.projects.map((current) =>
+                    current.id === command.projectId
+                      ? { ...current, scripts: command.scripts ?? current.scripts }
+                      : current,
+                  ),
+                };
+              }
               return { sequence: readModel.snapshotSequence + 1 };
             }),
           get streamDomainEvents() {
-            return Stream.empty;
+            return domainEvents;
           },
           latestSequence: Effect.succeed(0),
         });
         const snapshotsLayer = Layer.mock(ProjectionSnapshotQuery)({
           getSnapshot: () => Effect.sync(() => readModel),
           getProjectShellById: (id) =>
-            Effect.succeed(id === projectId ? Option.some(project) : Option.none()),
+            Effect.sync(() =>
+              Option.fromNullishOr(readModel.projects.find((current) => current.id === id)),
+            ),
           getThreadDetailById: (id) =>
             Effect.sync(() =>
               Option.fromNullishOr(readModel.threads.find((thread) => thread.id === id)),
@@ -208,6 +275,7 @@ describe("ProjectConversationStorageLive", () => {
 
         yield* Effect.gen(function* () {
           const storage = yield* ProjectConversationStorage;
+          yield* storage.start();
           const state = yield* storage.setEnabled({ projectId, enabled: true });
 
           expect(state).toMatchObject({ enabled: true, exportedThreadCount: 2 });
@@ -215,6 +283,7 @@ describe("ProjectConversationStorageLive", () => {
           expect(
             readModel.threads.find((thread) => thread.id === "shared-thread")?.messages[0]?.text,
           ).toBe("new portable history");
+          expect(readModel.projects[0]?.scripts).toEqual(portableScripts);
 
           const exportedShared = decodeDocument(
             NodeFS.readFileSync(NodePath.join(threadsDirectory, "shared-thread.json"), "utf8"),
@@ -225,6 +294,50 @@ describe("ProjectConversationStorageLive", () => {
           expect(exportedShared.thread.projectId).toBe(projectId);
           expect(exportedShared.thread.messages[0]?.text).toBe("new portable history");
           expect(exportedLocal.thread.messages[0]?.text).toBe("existing local history");
+
+          const updatedScripts = [
+            {
+              id: "test",
+              name: "Test",
+              command: "vp test",
+              icon: "test",
+              runOnWorktreeCreate: false,
+            },
+          ] as const;
+          readModel = {
+            ...readModel,
+            projects: readModel.projects.map((current) =>
+              current.id === projectId
+                ? { ...current, scripts: Array.from(updatedScripts) }
+                : current,
+            ),
+          };
+          yield* Deferred.succeed(nextDomainEvent, {
+            sequence: 1,
+            eventId: EventId.make("portable-project-actions-updated"),
+            aggregateKind: "project",
+            aggregateId: projectId,
+            type: "project.meta-updated",
+            occurredAt: "2026-01-03T00:00:00.000Z",
+            commandId: CommandId.make("update-project-actions"),
+            causationEventId: null,
+            correlationId: CommandId.make("update-project-actions"),
+            metadata: {},
+            payload: {
+              projectId,
+              scripts: Array.from(updatedScripts),
+              updatedAt: "2026-01-03T00:00:00.000Z",
+            },
+          });
+          yield* Deferred.await(domainEventHandled);
+
+          const manifest = decodeManifest(
+            NodeFS.readFileSync(
+              NodePath.join(workspaceRoot, ".t3", "conversations", "manifest.json"),
+              "utf8",
+            ),
+          );
+          expect(manifest.scripts).toEqual(updatedScripts);
 
           const disabled = yield* storage.setEnabled({ projectId, enabled: false });
           expect(disabled.enabled).toBe(false);
