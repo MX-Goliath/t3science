@@ -30,9 +30,11 @@ import { createModelCapabilities } from "@t3tools/shared/model";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
@@ -50,6 +52,8 @@ import {
   enrichProviderSnapshotWithVersionAdvisory,
   type ProviderMaintenanceCapabilities,
 } from "../providerMaintenance.ts";
+
+const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
 const ANTIGRAVITY_PRESENTATION = {
   displayName: "Antigravity",
@@ -280,12 +284,9 @@ export function parseAntigravitySkills(data: unknown): ReadonlyArray<ServerProvi
 export function parseAntigravityCommandData(stdout: string): unknown {
   const trimmed = stdout.trim();
   if (!trimmed.startsWith("{")) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch {
-    return undefined;
-  }
+  const decoded = decodeUnknownJsonStringExit(trimmed);
+  if (!Exit.isSuccess(decoded)) return undefined;
+  const parsed = decoded.value;
   if (!isRecord(parsed) || !isRecord(parsed.command)) return undefined;
   return parsed.command.data;
 }
@@ -368,13 +369,11 @@ const readAntigravityAccountEmail = (
       .readFileString(`${home}/.gemini/google_accounts.json`)
       .pipe(Effect.orElseSucceed(() => ""));
     if (raw.trim().length === 0) return undefined;
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (isRecord(parsed) && typeof parsed.active === "string" && parsed.active.includes("@")) {
-        return parsed.active.trim();
-      }
-    } catch {
-      return undefined;
+    const decoded = decodeUnknownJsonStringExit(raw);
+    if (!Exit.isSuccess(decoded)) return undefined;
+    const parsed = decoded.value;
+    if (isRecord(parsed) && typeof parsed.active === "string" && parsed.active.includes("@")) {
+      return parsed.active.trim();
     }
     return undefined;
   });

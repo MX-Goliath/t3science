@@ -226,6 +226,10 @@
     "./usageFormat": {
       "types": "./src/usageFormat.ts",
       "import": "./src/usageFormat.ts"
+    },
+    "./antigravityIcon": {
+      "types": "./src/antigravityIcon.ts",
+      "import": "./src/antigravityIcon.ts"
     }
   },
   "scripts": {

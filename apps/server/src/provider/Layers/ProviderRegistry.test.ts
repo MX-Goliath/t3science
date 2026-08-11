@@ -1608,6 +1608,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   claudeAgent: { enabled: false },
                   cursor: { enabled: false },
                   grok: { enabled: false },
+                  antigravity: { enabled: false },
                   opencode: { enabled: false },
                 },
                 // `providerInstances` keys are branded `ProviderInstanceId`;
@@ -1720,6 +1721,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   claudeAgent: { enabled: false },
                   cursor: { enabled: false },
                   grok: { enabled: false },
+                  antigravity: { enabled: false },
                   opencode: { enabled: false },
                 },
               }),
@@ -1834,6 +1836,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   claudeAgent: { enabled: false },
                   cursor: { enabled: false },
                   grok: { enabled: false },
+                  antigravity: { enabled: false },
                   opencode: { enabled: false },
                 },
                 providerInstances: {
@@ -1969,6 +1972,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               );
 
               assert.deepStrictEqual(providers.map((provider) => provider.instanceId).toSorted(), [
+                "antigravity",
                 "claudeAgent",
                 "codex",
                 "cursor",

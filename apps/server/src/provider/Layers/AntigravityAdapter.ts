@@ -35,6 +35,7 @@ import {
   type RuntimeMode,
   RuntimeItemId,
   type RuntimeItemStatus,
+  RuntimeTaskId,
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
@@ -43,7 +44,6 @@ import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
@@ -405,27 +405,29 @@ export function makeAntigravityAdapter(
       readonly streamKind: "assistant_text" | "reasoning_text";
       readonly raw: unknown;
     }) =>
-      Effect.gen(function* () {
-        yield* offerRuntimeEvent({
-          type: "content.delta",
-          ...(yield* makeEventStamp()),
-          provider: PROVIDER,
-          providerInstanceId: boundInstanceId,
-          threadId: input.ctx.threadId,
-          turnId: input.turnId,
-          itemId: RuntimeItemId.make(input.itemId),
-          payload: {
-            streamKind: input.streamKind,
-            delta: input.delta,
-            contentIndex: input.stepIndex,
-          },
-          raw: {
-            source: "antigravity.stream-json",
-            method: "step_update",
-            payload: input.raw,
-          },
-        });
-      });
+      makeEventStamp().pipe(
+        Effect.flatMap((stamp) =>
+          offerRuntimeEvent({
+            type: "content.delta",
+            ...stamp,
+            provider: PROVIDER,
+            providerInstanceId: boundInstanceId,
+            threadId: input.ctx.threadId,
+            turnId: input.turnId,
+            itemId: RuntimeItemId.make(input.itemId),
+            payload: {
+              streamKind: input.streamKind,
+              delta: input.delta,
+              contentIndex: input.stepIndex,
+            },
+            raw: {
+              source: "antigravity.stream-json",
+              method: "step_update",
+              payload: input.raw,
+            },
+          }),
+        ),
+      );
 
     const handleStepEvent = (input: {
       readonly ctx: AntigravitySessionContext;
@@ -500,7 +502,7 @@ export function makeAntigravityAdapter(
               threadId: ctx.threadId,
               turnId,
               payload: {
-                taskId: RuntimeItemId.make(itemId),
+                taskId: RuntimeTaskId.make(itemId),
                 status:
                   runtimeItemStatusForAntigravityStep(step) === "completed"
                     ? "completed"
@@ -759,6 +761,7 @@ export function makeAntigravityAdapter(
         );
 
         return yield* Effect.gen(function* () {
+          const turnScope = yield* Scope.Scope;
           const child = yield* spawner
             .spawn(
               ChildProcess.make(spawnCommand.command, spawnCommand.args, {
@@ -799,10 +802,17 @@ export function makeAntigravityAdapter(
             ).pipe(Effect.andThen(child.kill({ killSignal: signal }).pipe(Effect.ignore)));
           ctx.activeProcess = {
             turnId,
+            // The caller waits only for the signal, never for the escalation:
+            // a CLI that ignores SIGTERM must not stall the interrupt path.
             terminate: killGroup("SIGTERM").pipe(
-              Effect.andThen(Effect.sleep("2 seconds")),
-              Effect.andThen(killGroup("SIGKILL")),
-              Effect.ignore,
+              Effect.andThen(
+                Effect.sleep("2 seconds").pipe(
+                  Effect.andThen(killGroup("SIGKILL")),
+                  Effect.ignore,
+                  Effect.forkIn(turnScope),
+                ),
+              ),
+              Effect.asVoid,
             ),
           };
 
