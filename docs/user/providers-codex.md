@@ -4,7 +4,8 @@ When Codex reports subscription usage limits, the composer shows the remaining
 5-hour and weekly percentages beside the model controls. The ring is green above
 50%, orange from 20% through 50%, and red below 20%. If Codex does not report a
 5-hour window, only the weekly limit is shown. Limits refresh when you open a
-thread and after an agent response finishes.
+thread, every five minutes while it remains open, and after an agent response
+finishes.
 
 You can hide these indicators per Codex instance with **Show usage limits** in
 Settings → Providers. The setting is enabled by default.

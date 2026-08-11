@@ -5,6 +5,7 @@ import type {
   ServerProviderRateLimits,
 } from "@t3tools/contracts";
 import { providerSupportsRateLimits } from "@t3tools/contracts/settings";
+import { PROVIDER_RATE_LIMIT_REFRESH_INTERVAL_MS } from "@t3tools/shared/providerRateLimits";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { serverEnvironment } from "../../state/server";
@@ -63,6 +64,15 @@ export function useProviderRateLimits(input: {
     if (!supportsRateLimits || !input.enabled) return;
     void refreshRateLimits();
   }, [input.enabled, input.thread.id, refreshRateLimits, supportsRateLimits]);
+
+  useEffect(() => {
+    if (!supportsRateLimits || !input.enabled) return;
+    const intervalId = setInterval(
+      () => void refreshRateLimits(),
+      PROVIDER_RATE_LIMIT_REFRESH_INTERVAL_MS,
+    );
+    return () => clearInterval(intervalId);
+  }, [input.enabled, refreshRateLimits, supportsRateLimits]);
 
   const sessionStatus = input.thread.session?.status ?? null;
   const previousStatusRef = useRef<string | null>(sessionStatus);
