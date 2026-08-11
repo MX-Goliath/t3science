@@ -239,7 +239,8 @@ import {
   serverEnvironment,
 } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
-import { threadEnvironment, useEnvironmentThread } from "../state/threads";
+import { environmentThreadShells, threadEnvironment, useEnvironmentThread } from "../state/threads";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
   requestOlderThreadTurns,
   threadHasOlderTurns,
@@ -260,6 +261,7 @@ import {
   type ComposerSendContext,
 } from "./chat/ChatComposer";
 import {
+  armAgentCompletionSend,
   armScheduledSend,
   cancelArmedScheduledSend,
   scheduledSendTimeMs,
@@ -5395,15 +5397,40 @@ function ChatViewContent(props: ChatViewProps) {
 
   const armCurrentScheduledSend = useCallback(
     (nextScheduledSend: ScheduledSendState, sendContext: ComposerSendContext) => {
+      const onDue = async () => {
+        const store = useComposerDraftStore.getState();
+        const latestScheduledSend = store.getComposerDraft(composerDraftTarget)?.scheduledSend;
+        if (
+          latestScheduledSend?.scheduledAt !== nextScheduledSend.scheduledAt ||
+          latestScheduledSend.source !== nextScheduledSend.source
+        ) {
+          return;
+        }
+        await onSend(undefined, undefined, { sendContext });
+      };
+      const waitingForAgent = nextScheduledSend.waitingForAgent;
+      if (nextScheduledSend.source === "agent-completion" && waitingForAgent) {
+        const targetRef = scopeThreadRef(waitingForAgent.environmentId, waitingForAgent.threadId);
+        const targetAtom = environmentThreadShells.threadShellAtom(targetRef);
+        armAgentCompletionSend({
+          key: scheduledSendRuntimeKey,
+          getWaitingState: () => {
+            const shell = appAtomRegistry.get(targetAtom);
+            if (!shell) return "unknown";
+            return shell.session?.status === "running" &&
+              shell.session.activeTurnId === waitingForAgent.turnId
+              ? "running"
+              : "complete";
+          },
+          subscribe: (onChange) => appAtomRegistry.subscribe(targetAtom, onChange),
+          onDue,
+        });
+        return;
+      }
       armScheduledSend({
         key: scheduledSendRuntimeKey,
         scheduledSend: nextScheduledSend,
-        onDue: async () => {
-          const store = useComposerDraftStore.getState();
-          const latestScheduledSend = store.getComposerDraft(composerDraftTarget)?.scheduledSend;
-          if (latestScheduledSend?.scheduledAt !== nextScheduledSend.scheduledAt) return;
-          await onSend(undefined, undefined, { sendContext });
-        },
+        onDue,
       });
     },
     [composerDraftTarget, onSend, scheduledSendRuntimeKey],

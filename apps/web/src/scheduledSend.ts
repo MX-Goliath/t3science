@@ -1,12 +1,21 @@
-import type { ServerProviderRateLimits } from "@t3tools/contracts";
+import type { EnvironmentId, ServerProviderRateLimits, ThreadId, TurnId } from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 
-export type ScheduledSendSource = "custom" | "rate-limit";
+export type ScheduledSendSource = "custom" | "rate-limit" | "agent-completion";
 export type ScheduledSendLimitWindow = "fiveHour" | "weekly";
+
+export interface ScheduledSendAgentTarget {
+  environmentId: EnvironmentId;
+  threadId: ThreadId;
+  turnId: TurnId;
+  threadTitle: string;
+}
 
 export interface ScheduledSendState {
   scheduledAt: string;
   source: ScheduledSendSource;
   limitWindow?: ScheduledSendLimitWindow;
+  waitingForAgent?: ScheduledSendAgentTarget;
 }
 
 export interface RateLimitSchedule {
@@ -61,8 +70,32 @@ export function isScheduledSendOverdue(
   nowMs = Date.now(),
 ): boolean {
   if (!scheduledSend) return false;
+  if (scheduledSend.source === "agent-completion") return false;
   const scheduledAtMs = scheduledSendTimeMs(scheduledSend);
   return scheduledAtMs === null || scheduledAtMs <= nowMs;
+}
+
+export function resolveRunningAgentScheduleTargets(
+  shells: ReadonlyArray<EnvironmentThreadShell>,
+  currentThread: { environmentId: EnvironmentId; threadId: ThreadId },
+): ScheduledSendAgentTarget[] {
+  return shells.flatMap((shell) => {
+    const activeTurnId = shell.session?.status === "running" ? shell.session.activeTurnId : null;
+    if (
+      activeTurnId === null ||
+      (shell.environmentId === currentThread.environmentId && shell.id === currentThread.threadId)
+    ) {
+      return [];
+    }
+    return [
+      {
+        environmentId: shell.environmentId,
+        threadId: shell.id,
+        turnId: activeTurnId,
+        threadTitle: shell.title,
+      },
+    ];
+  });
 }
 
 interface ArmedScheduledSend {
@@ -70,14 +103,51 @@ interface ArmedScheduledSend {
   timeoutId: ReturnType<typeof setTimeout>;
 }
 
+interface ArmedAgentCompletionSend {
+  unsubscribe: (() => void) | null;
+}
+
 const armedScheduledSends = new Map<string, ArmedScheduledSend>();
+const armedAgentCompletionSends = new Map<string, ArmedAgentCompletionSend>();
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
 export function cancelArmedScheduledSend(key: string): void {
   const armed = armedScheduledSends.get(key);
-  if (!armed) return;
-  globalThis.clearTimeout(armed.timeoutId);
-  armedScheduledSends.delete(key);
+  if (armed) {
+    globalThis.clearTimeout(armed.timeoutId);
+    armedScheduledSends.delete(key);
+  }
+  const agentCompletion = armedAgentCompletionSends.get(key);
+  agentCompletion?.unsubscribe?.();
+  armedAgentCompletionSends.delete(key);
+}
+
+export function armAgentCompletionSend(input: {
+  key: string;
+  getWaitingState: () => "running" | "complete" | "unknown";
+  subscribe: (onChange: () => void) => () => void;
+  onDue: () => void | Promise<void>;
+}): boolean {
+  cancelArmedScheduledSend(input.key);
+  const armed: ArmedAgentCompletionSend = { unsubscribe: null };
+  armedAgentCompletionSends.set(input.key, armed);
+
+  const check = () => {
+    if (armedAgentCompletionSends.get(input.key) !== armed) return;
+    if (input.getWaitingState() !== "complete") return;
+    armed.unsubscribe?.();
+    armedAgentCompletionSends.delete(input.key);
+    void input.onDue();
+  };
+
+  const unsubscribe = input.subscribe(check);
+  armed.unsubscribe = unsubscribe;
+  if (!armedAgentCompletionSends.has(input.key)) {
+    unsubscribe();
+    return true;
+  }
+  check();
+  return true;
 }
 
 export function armScheduledSend(input: {
@@ -118,4 +188,8 @@ export function resetScheduledSendRuntimeForTests(): void {
     globalThis.clearTimeout(armed.timeoutId);
   }
   armedScheduledSends.clear();
+  for (const armed of armedAgentCompletionSends.values()) {
+    armed.unsubscribe?.();
+  }
+  armedAgentCompletionSends.clear();
 }

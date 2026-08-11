@@ -916,7 +916,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // so a thread reads the same color everywhere it surfaces.
   const topStatus = scheduledSend
     ? {
-        label: scheduledSendOverdue ? "Overdue" : "Scheduled",
+        label:
+          scheduledSend.source === "agent-completion"
+            ? "Waiting"
+            : scheduledSendOverdue
+              ? "Overdue"
+              : "Scheduled",
         icon: "scheduled" as const,
         className: scheduledSendOverdue
           ? "text-red-700 dark:text-red-300"

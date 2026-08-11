@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  armAgentCompletionSend,
   armScheduledSend,
   isScheduledSendArmed,
   isScheduledSendOverdue,
   resetScheduledSendRuntimeForTests,
+  resolveRunningAgentScheduleTargets,
   resolveRateLimitSchedule,
 } from "./scheduledSend";
 
@@ -99,5 +101,67 @@ describe("scheduled send runtime", () => {
     };
     expect(isScheduledSendOverdue(scheduledSend)).toBe(true);
     expect(armScheduledSend({ key: "thread", scheduledSend, onDue: vi.fn() })).toBe(false);
+  });
+
+  it("sends when the selected agent turn completes", () => {
+    let state: "running" | "complete" = "running";
+    let notify = () => {};
+    const unsubscribe = vi.fn();
+    const onDue = vi.fn();
+
+    expect(
+      armAgentCompletionSend({
+        key: "thread",
+        getWaitingState: () => state,
+        subscribe: (onChange) => {
+          notify = onChange;
+          return unsubscribe;
+        },
+        onDue,
+      }),
+    ).toBe(true);
+    expect(onDue).not.toHaveBeenCalled();
+
+    state = "complete";
+    notify();
+    notify();
+    expect(onDue).toHaveBeenCalledOnce();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it("offers only running turns from other chats", () => {
+    const environmentId = "env-1" as never;
+    const targets = resolveRunningAgentScheduleTargets(
+      [
+        {
+          environmentId,
+          id: "current" as never,
+          title: "Current",
+          session: { status: "running", activeTurnId: "turn-current" as never },
+        },
+        {
+          environmentId,
+          id: "running" as never,
+          title: "Running elsewhere",
+          session: { status: "running", activeTurnId: "turn-running" as never },
+        },
+        {
+          environmentId,
+          id: "idle" as never,
+          title: "Idle",
+          session: { status: "idle", activeTurnId: null },
+        },
+      ] as never,
+      { environmentId, threadId: "current" as never },
+    );
+
+    expect(targets).toEqual([
+      {
+        environmentId,
+        threadId: "running",
+        turnId: "turn-running",
+        threadTitle: "Running elsewhere",
+      },
+    ]);
   });
 });
