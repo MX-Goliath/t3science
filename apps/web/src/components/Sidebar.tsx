@@ -228,6 +228,7 @@ import {
   type ComposerThreadDraftState,
   type DraftSessionState,
 } from "../composerDraftStore";
+import { isScheduledSendOverdue } from "../scheduledSend";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -838,6 +839,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     [thread.environmentId, thread.id],
   );
   const threadKey = scopedThreadKey(threadRef);
+  const scheduledSend = useComposerDraftStore(
+    (store) => store.getComposerDraft(threadRef)?.scheduledSend ?? null,
+  );
+  const scheduledSendOverdue = isScheduledSendOverdue(scheduledSend);
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(props.isActive);
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
@@ -922,8 +927,20 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Status hues follow the system-wide convention set by sidebar v1 and the
   // mobile Live Activity/widgets (amber approval, indigo input, sky working)
   // so a thread reads the same color everywhere it surfaces.
-  const topStatus =
-    status === "working"
+  const topStatus = scheduledSend
+    ? {
+        label:
+          scheduledSend.source === "agent-completion"
+            ? "Waiting"
+            : scheduledSendOverdue
+              ? "Overdue"
+              : "Scheduled",
+        icon: "scheduled" as const,
+        className: scheduledSendOverdue
+          ? "text-red-700 dark:text-red-300"
+          : "text-sky-600 dark:text-sky-300",
+      }
+    : status === "working"
       ? {
           label: "Working",
           icon: "working" as const,

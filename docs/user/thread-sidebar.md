@@ -28,6 +28,21 @@ The order syncs across devices.
 
 Pinning does not prevent automatic settlement. Settling a thread removes its pin.
 
+## Schedule a message
+
+Right-click the send button to schedule the current draft for a specific time. When the active
+provider reports less than 20% remaining in its session limit, the menu also offers the limit's
+reset time. If no session window is reported, T3 Science uses the weekly window. The reset time is
+captured when you schedule the message; T3 Science does not keep polling the limit.
+
+When an agent is already working in another chat, the menu also offers **Send after agent finishes**.
+Choose the running chat and T3 Science will send the draft as soon as that specific turn completes.
+The option is hidden when no other agent is running.
+
+Scheduled chats appear with a blue timer above regular threads. Open one to edit its prompt. The
+send button becomes a timer; click it to send now or cancel. If T3 Science was closed when a timed
+send passed, the timer is shown in red after reopening and waits for you to choose what to do.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list

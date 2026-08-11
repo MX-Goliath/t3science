@@ -22,6 +22,7 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
 } from "@t3tools/contracts";
 import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
@@ -219,10 +220,15 @@ import {
 import { selectionHoldsComposerOpen } from "./composerSelectionHold";
 import { prepareVideoFirstFrame } from "../../lib/videoFirstFrame";
 import { readLocalApi } from "../../localApi";
+import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { readThreadShells } from "../../state/entities";
+import { environmentThreadShells } from "../../state/threads";
 import {
+  armAgentCompletionSend,
   armScheduledSend,
   cancelArmedScheduledSend,
   isScheduledSendOverdue,
+  resolveRunningAgentScheduleTargets,
   resolveRateLimitSchedule,
   type ScheduledSendState,
 } from "../../scheduledSend";
@@ -2946,56 +2952,92 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () => resolveRateLimitSchedule(selectedProviderStatus?.usageLimits),
     [selectedProviderStatus?.usageLimits],
   );
+  const armCurrentScheduledSend = useCallback(
+    (nextScheduledSend: ScheduledSendState) => {
+      const onDue = () => {
+        setComposerScheduledSend(composerDraftTarget, null);
+        submitComposer();
+      };
+      const waitingForAgent = nextScheduledSend.waitingForAgent;
+      if (nextScheduledSend.source === "agent-completion" && waitingForAgent) {
+        const targetAtom = environmentThreadShells.threadShellAtom(
+          scopeThreadRef(waitingForAgent.environmentId, waitingForAgent.threadId),
+        );
+        armAgentCompletionSend({
+          key: scheduledSendRuntimeKey,
+          getWaitingState: () => {
+            const shell = appAtomRegistry.get(targetAtom);
+            if (!shell) return "unknown";
+            return shell.session?.status === "running" &&
+              shell.session.activeTurnId === waitingForAgent.turnId
+              ? "running"
+              : "complete";
+          },
+          subscribe: (onChange) => appAtomRegistry.subscribe(targetAtom, onChange),
+          onDue,
+        });
+        return;
+      }
+      armScheduledSend({ key: scheduledSendRuntimeKey, scheduledSend: nextScheduledSend, onDue });
+    },
+    [composerDraftTarget, scheduledSendRuntimeKey, setComposerScheduledSend, submitComposer],
+  );
   const scheduleCurrentMessage = useCallback(
     (nextScheduledSend: ScheduledSendState) => {
       if (!composerSendState.hasSendableContent || isSendDisabled || noProviderAvailable) return;
       setComposerScheduledSend(composerDraftTarget, nextScheduledSend);
-      armScheduledSend({
-        key: scheduledSendRuntimeKey,
-        scheduledSend: nextScheduledSend,
-        onDue: () => {
-          setComposerScheduledSend(composerDraftTarget, null);
-          submitComposer();
-        },
-      });
+      armCurrentScheduledSend(nextScheduledSend);
     },
     [
+      armCurrentScheduledSend,
       composerDraftTarget,
       composerSendState.hasSendableContent,
       isSendDisabled,
       noProviderAvailable,
-      scheduledSendRuntimeKey,
       setComposerScheduledSend,
-      submitComposer,
     ],
   );
   useEffect(() => {
     if (!scheduledSend || isScheduledSendOverdue(scheduledSend)) return;
-    armScheduledSend({
-      key: scheduledSendRuntimeKey,
-      scheduledSend,
-      onDue: () => {
-        setComposerScheduledSend(composerDraftTarget, null);
-        submitComposer();
-      },
-    });
+    armCurrentScheduledSend(scheduledSend);
     return () => cancelArmedScheduledSend(scheduledSendRuntimeKey);
-  }, [
-    composerDraftTarget,
-    scheduledSend,
-    scheduledSendRuntimeKey,
-    setComposerScheduledSend,
-    submitComposer,
-  ]);
+  }, [armCurrentScheduledSend, scheduledSend, scheduledSendRuntimeKey]);
   const handleSendContextMenu = useCallback(
     async (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.preventDefault();
-      if (scheduledSend || !composerSendState.hasSendableContent || isSendDisabled) return;
-      const api = readLocalApi();
-      if (!api) return;
-      const action = await api.contextMenu.show(
+      event.stopPropagation();
+      if (
+        scheduledSend ||
+        phase === "running" ||
+        isSendBusy ||
+        isConnecting ||
+        isSendDisabled ||
+        environmentUnavailable !== null ||
+        noProviderAvailable ||
+        projectSelectionRequired ||
+        !composerSendState.hasSendableContent
+      ) {
+        return;
+      }
+      const runningAgentTargets = resolveRunningAgentScheduleTargets(readThreadShells(), {
+        environmentId: routeThreadRef.environmentId,
+        threadId: routeThreadRef.threadId,
+      });
+      const clicked = await readLocalApi()?.contextMenu.show(
         [
           { id: "custom", label: "Send later…" },
+          ...(runningAgentTargets.length > 0
+            ? [
+                {
+                  id: "agent-completion",
+                  label: "Send after agent finishes",
+                  children: runningAgentTargets.map((target, index) => ({
+                    id: `agent-completion:${index}`,
+                    label: target.threadTitle,
+                  })),
+                },
+              ]
+            : []),
           ...(rateLimitSchedule
             ? [
                 {
@@ -3007,15 +3049,34 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ],
         { x: event.clientX, y: event.clientY },
       );
-      if (action === "custom") setScheduleDialogOpen(true);
-      if (action === "rate-limit" && rateLimitSchedule) {
+      if (clicked === "custom") {
+        setScheduleDialogOpen(true);
+      } else if (clicked?.startsWith("agent-completion:")) {
+        const targetIndex = Number.parseInt(clicked.slice("agent-completion:".length), 10);
+        const target = runningAgentTargets[targetIndex];
+        if (target) {
+          scheduleCurrentMessage({
+            scheduledAt: new Date().toISOString(),
+            source: "agent-completion",
+            waitingForAgent: target,
+          });
+        }
+      } else if (clicked === "rate-limit" && rateLimitSchedule) {
         scheduleCurrentMessage(rateLimitSchedule.scheduledSend);
       }
     },
     [
       composerSendState.hasSendableContent,
+      environmentUnavailable,
+      isConnecting,
+      isSendBusy,
       isSendDisabled,
+      noProviderAvailable,
+      phase,
+      projectSelectionRequired,
       rateLimitSchedule,
+      routeThreadRef.environmentId,
+      routeThreadRef.threadId,
       scheduleCurrentMessage,
       scheduledSend,
     ],
@@ -3040,12 +3101,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const scheduledSendLabel = useMemo(() => {
     if (!scheduledSend) return null;
-    const date = new Date(scheduledSend.scheduledAt);
-    if (!Number.isFinite(date.getTime())) return "Scheduled send has an invalid time";
+    if (scheduledSend.source === "agent-completion") {
+      return scheduledSend.waitingForAgent
+        ? `Waiting for agent in ${scheduledSend.waitingForAgent.threadTitle}`
+        : "Waiting for agent to finish";
+    }
+    const scheduledAt = new Date(scheduledSend.scheduledAt);
+    if (!Number.isFinite(scheduledAt.getTime())) return "Scheduled send has an invalid time";
     const formatted = new Intl.DateTimeFormat(undefined, {
       dateStyle: "medium",
       timeStyle: "short",
-    }).format(date);
+    }).format(scheduledAt);
     return isScheduledSendOverdue(scheduledSend)
       ? `Scheduled send overdue since ${formatted}`
       : `Scheduled for ${formatted}`;
