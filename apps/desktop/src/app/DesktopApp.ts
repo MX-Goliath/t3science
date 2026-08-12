@@ -29,6 +29,7 @@ import * as DesktopState from "./DesktopState.ts";
 import * as DesktopSystemIntegration from "./DesktopSystemIntegration.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
+import * as DesktopPets from "../pets/DesktopPets.ts";
 
 const DEFAULT_DESKTOP_BACKEND_PORT = 3773;
 const MAX_TCP_PORT = 65_535;
@@ -148,6 +149,7 @@ const bootstrap = Effect.gen(function* () {
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
   const wslBackend = yield* DesktopWslBackend.DesktopWslBackend;
+  const desktopPets = yield* DesktopPets.DesktopPets;
   const desktopWindow = yield* DesktopWindow.DesktopWindow;
   const systemIntegration = yield* DesktopSystemIntegration.DesktopSystemIntegration;
   yield* logBootstrapInfo("bootstrap start");
@@ -179,6 +181,12 @@ const bootstrap = Effect.gen(function* () {
   const serverExposureState = yield* serverExposure.configureFromSettings({ port: backendPort });
   const backendConfig = yield* serverExposure.backendConfig;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
+  const runDesktopPetEffect = Effect.runPromiseWith(yield* Effect.context());
+  yield* desktopPets.initialize.pipe(
+    Effect.catch((error) =>
+      logBootstrapWarning("desktop pets initialization failed", { message: error.message }),
+    ),
+  );
   const rendererTarget = environment.isDevelopment
     ? Option.getOrThrow(environment.devServerUrl)
     : backendConfig.httpBaseUrl;
@@ -187,6 +195,8 @@ const bootstrap = Effect.gen(function* () {
     targetOrigin: rendererTarget,
     backendOrigin: backendConfig.httpBaseUrl,
     clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
+    resolveDesktopPetSpritesheet: (petId) =>
+      runDesktopPetEffect(desktopPets.resolveSpritesheet(petId)),
   });
   yield* logBootstrapInfo("bootstrap resolved backend endpoint", {
     baseUrl: backendConfig.httpBaseUrl.href,

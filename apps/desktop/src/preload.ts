@@ -96,6 +96,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.SET_WSL_BACKEND_ENABLED_CHANNEL, enabled),
   setWslDistro: (distro) => ipcRenderer.invoke(IpcChannels.SET_WSL_DISTRO_CHANNEL, distro),
   setWslOnly: (enabled) => ipcRenderer.invoke(IpcChannels.SET_WSL_ONLY_CHANNEL, enabled),
+  getDesktopPetsState: () => ipcRenderer.invoke(IpcChannels.GET_DESKTOP_PETS_STATE_CHANNEL),
+  setDesktopPetsEnabled: (enabled) =>
+    ipcRenderer.invoke(IpcChannels.SET_DESKTOP_PETS_ENABLED_CHANNEL, enabled),
+  selectDesktopPet: (input) => ipcRenderer.invoke(IpcChannels.SELECT_DESKTOP_PET_CHANNEL, input),
+  importDesktopPetArchive: () => ipcRenderer.invoke(IpcChannels.IMPORT_DESKTOP_PET_ARCHIVE_CHANNEL),
+  removeDesktopPet: (input) => ipcRenderer.invoke(IpcChannels.REMOVE_DESKTOP_PET_CHANNEL, input),
   getSystemIntegrationState: () =>
     ipcRenderer.invoke(IpcChannels.GET_SYSTEM_INTEGRATION_STATE_CHANNEL),
   setSystemIntegrationSettings: (settings) =>

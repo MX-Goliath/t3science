@@ -1,0 +1,42 @@
+.desktop-pet-sprite {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 30px;
+  background-repeat: no-repeat;
+  background-size: 800% 900%;
+  background-position-x: 0;
+  background-position-y: var(--pet-y-position);
+  image-rendering: pixelated;
+  animation: desktop-pet-sprite-frames var(--pet-duration) steps(var(--pet-frames)) infinite;
+}
+
+.desktop-pet-sprite[data-pet-size="card"] {
+  width: 58px;
+  height: 63px;
+}
+
+.desktop-pet-sprite[data-pet-size="preview"] {
+  width: 144px;
+  height: 156px;
+}
+
+.desktop-pet-sprite[data-pet-animate="false"] {
+  animation: none;
+}
+
+@keyframes desktop-pet-sprite-frames {
+  from {
+    background-position-x: 0;
+  }
+
+  to {
+    background-position-x: var(--pet-x-end);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-pet-sprite {
+    animation: none;
+  }
+}

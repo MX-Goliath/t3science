@@ -151,6 +151,9 @@ importers:
       react-grab:
         specifier: ^0.1.32
         version: 0.1.44(react@19.2.6)
+      yauzl:
+        specifier: 2.10.0
+        version: 2.10.0
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.0-beta.103
@@ -158,6 +161,9 @@ importers:
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
+      '@types/yauzl':
+        specifier: 2.10.3
+        version: 2.10.3
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
@@ -15097,7 +15103,6 @@ snapshots:
   '@types/yauzl@2.10.3':
     dependencies:
       '@types/node': 24.12.4
-    optional: true
 
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260604.1':
     optional: true

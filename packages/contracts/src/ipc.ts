@@ -152,6 +152,81 @@ export type DesktopTheme = "light" | "dark" | "system";
 export type DesktopUpdateChannel = "latest" | "nightly";
 export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
 
+export type DesktopPetAnimationState =
+  | "idle"
+  | "running-right"
+  | "running-left"
+  | "waving"
+  | "jumping"
+  | "failed"
+  | "waiting"
+  | "running"
+  | "review";
+
+export const DesktopPetAnimationStateSchema = Schema.Literals([
+  "idle",
+  "running-right",
+  "running-left",
+  "waving",
+  "jumping",
+  "failed",
+  "waiting",
+  "running",
+  "review",
+]);
+
+export type DesktopPetSource = "bundled" | "user-import";
+export const DesktopPetSourceSchema = Schema.Literals(["bundled", "user-import"]);
+
+export interface DesktopPetMetadata {
+  id: string;
+  displayName: string;
+  description: string;
+  source: DesktopPetSource;
+  protected: boolean;
+  assetRevision: string;
+  spritesheetUrl: string;
+}
+
+export const DesktopPetMetadataSchema = Schema.Struct({
+  id: Schema.String,
+  displayName: Schema.String,
+  description: Schema.String,
+  source: DesktopPetSourceSchema,
+  protected: Schema.Boolean,
+  assetRevision: Schema.String,
+  spritesheetUrl: Schema.String,
+});
+
+export interface DesktopPetsState {
+  supported: boolean;
+  enabled: boolean;
+  selectedPetId: string | null;
+  pets: ReadonlyArray<DesktopPetMetadata>;
+  errors: ReadonlyArray<string>;
+}
+
+export const DesktopPetsStateSchema = Schema.Struct({
+  supported: Schema.Boolean,
+  enabled: Schema.Boolean,
+  selectedPetId: Schema.NullOr(Schema.String),
+  pets: Schema.Array(DesktopPetMetadataSchema),
+  errors: Schema.Array(Schema.String),
+});
+
+export const DesktopPetSelectInputSchema = Schema.Struct({
+  petId: Schema.String,
+});
+
+export type DesktopPetImportResult =
+  | { kind: "cancelled" }
+  | { kind: "imported"; state: DesktopPetsState };
+
+export const DesktopPetImportResultSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("cancelled") }),
+  Schema.Struct({ kind: Schema.Literal("imported"), state: DesktopPetsStateSchema }),
+]);
+
 export interface DesktopSystemIntegrationSettings {
   closeToTray: boolean;
   launchAtLogin: boolean;
@@ -1064,6 +1139,11 @@ export interface DesktopBridge {
   setWslBackendEnabled: (enabled: boolean) => Promise<DesktopWslState>;
   setWslDistro: (distro: string | null) => Promise<DesktopWslState>;
   setWslOnly: (enabled: boolean) => Promise<DesktopWslState>;
+  getDesktopPetsState?: () => Promise<DesktopPetsState>;
+  setDesktopPetsEnabled?: (enabled: boolean) => Promise<DesktopPetsState>;
+  selectDesktopPet?: (input: { petId: string }) => Promise<DesktopPetsState>;
+  importDesktopPetArchive?: () => Promise<DesktopPetImportResult>;
+  removeDesktopPet?: (input: { petId: string }) => Promise<DesktopPetsState>;
   /** Available in desktop builds that support Windows/Linux system tray integration. */
   getSystemIntegrationState?: () => Promise<DesktopSystemIntegrationState>;
   /** Available in desktop builds that support Windows/Linux system tray integration. */

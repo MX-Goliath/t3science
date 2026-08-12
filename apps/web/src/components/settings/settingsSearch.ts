@@ -12,6 +12,7 @@ export interface SettingsSearchItem {
   readonly title: string;
   readonly to: SettingsPath;
   readonly targetId?: string;
+  readonly keywords?: readonly string[];
 }
 
 /**
@@ -62,6 +63,19 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/appearance",
     // The setting is stage-dependent, so its parent section is the stable destination.
     targetId: "appearance",
+  },
+  {
+    id: "desktop-pets",
+    title: "Desktop pets",
+    to: "/settings/general",
+    keywords: ["pet", "pets", "desktop pet", "питомец", "питомцы", "openpets"],
+  },
+  {
+    id: "desktop-pets-enabled",
+    title: "Show desktop pet",
+    to: "/settings/general",
+    targetId: "desktop-pets",
+    keywords: ["pet", "pets", "питомец", "питомцы", "openpets"],
   },
   {
     id: "interface-font",
@@ -261,5 +275,7 @@ export function searchSettings(
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) return [];
 
-  return items.filter((item) => normalizeSearchText(item.title).includes(normalizedQuery));
+  return items.filter((item) =>
+    normalizeSearchText([item.title, ...(item.keywords ?? [])].join(" ")).includes(normalizedQuery),
+  );
 }

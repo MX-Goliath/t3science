@@ -1,7 +1,9 @@
+// @effect-diagnostics nodeBuiltinImport:off - The protocol serves local Electron assets.
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as NodeTimersPromises from "node:timers/promises";
+import * as NodeFSP from "node:fs/promises";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -12,6 +14,9 @@ import {
   DESKTOP_DEVELOPMENT_SCHEME,
   DESKTOP_PRODUCTION_SCHEME,
 } from "@t3tools/shared/desktopProductIdentity";
+import { isValidPetId } from "../pets/PetArchiveValidation.ts";
+
+const NodeFS = NodeFSP;
 
 export const DESKTOP_HOST = "app";
 export { DESKTOP_DEVELOPMENT_SCHEME, DESKTOP_PRODUCTION_SCHEME };
@@ -57,6 +62,9 @@ export interface DesktopProtocolRegistrationInput {
   readonly targetOrigin: URL;
   readonly backendOrigin: URL;
   readonly clerkFrontendApiHostname: string | undefined;
+  readonly resolveDesktopPetSpritesheet?: (
+    petId: string,
+  ) => Promise<{ readonly filePath: string; readonly assetRevision: string } | null>;
 }
 
 export class ElectronProtocol extends Context.Service<
@@ -145,10 +153,22 @@ async function proxyRequest(
   request: Request,
   targetOrigin: URL,
   contentSecurityPolicy: string,
+  resolveDesktopPetSpritesheet:
+    | DesktopProtocolRegistrationInput["resolveDesktopPetSpritesheet"]
+    | undefined,
 ): Promise<Response> {
   const requestUrl = new URL(request.url);
   if (requestUrl.host !== DESKTOP_HOST) {
     return new Response(null, { status: 404 });
+  }
+
+  if (requestUrl.pathname.startsWith("/__desktop-pets/")) {
+    return serveDesktopPetSpritesheet(
+      request,
+      requestUrl,
+      contentSecurityPolicy,
+      resolveDesktopPetSpritesheet,
+    );
   }
 
   const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, targetOrigin);
@@ -186,6 +206,74 @@ async function proxyRequest(
   return withContentSecurityPolicy(response, contentSecurityPolicy);
 }
 
+async function serveDesktopPetSpritesheet(
+  request: Request,
+  requestUrl: URL,
+  contentSecurityPolicy: string,
+  resolveDesktopPetSpritesheet:
+    | DesktopProtocolRegistrationInput["resolveDesktopPetSpritesheet"]
+    | undefined,
+): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response(null, { status: 405 });
+  }
+  const segments = requestUrl.pathname.slice("/__desktop-pets/".length).split("/");
+  if (segments.length !== 2 || segments[1] !== "spritesheet.webp") {
+    return new Response(null, { status: 404 });
+  }
+  let petId: string;
+  try {
+    petId = decodeURIComponent(segments[0] ?? "");
+  } catch {
+    return new Response(null, { status: 400 });
+  }
+  if (!isValidPetId(petId) || petId.includes("/") || petId.includes("\\")) {
+    return new Response(null, { status: 404 });
+  }
+  if (!resolveDesktopPetSpritesheet) return new Response(null, { status: 404 });
+  let asset: Awaited<
+    ReturnType<NonNullable<DesktopProtocolRegistrationInput["resolveDesktopPetSpritesheet"]>>
+  >;
+  try {
+    asset = await resolveDesktopPetSpritesheet(petId);
+  } catch {
+    return new Response(null, { status: 404 });
+  }
+  if (!asset) return new Response(null, { status: 404 });
+  try {
+    const info = await NodeFS.lstat(asset.filePath);
+    if (!info.isFile() || info.isSymbolicLink()) return new Response(null, { status: 404 });
+    const etag = `"${asset.assetRevision}"`;
+    if (request.headers.get("if-none-match") === etag) {
+      return withContentSecurityPolicy(
+        new Response(null, {
+          status: 304,
+          headers: {
+            "Cache-Control": "public, max-age=31536000, immutable",
+            ETag: etag,
+          },
+        }),
+        contentSecurityPolicy,
+      );
+    }
+    const bytes = await NodeFS.readFile(asset.filePath);
+    return withContentSecurityPolicy(
+      new Response(request.method === "HEAD" ? null : bytes, {
+        status: 200,
+        headers: {
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "Content-Type": "image/webp",
+          ETag: etag,
+          "Content-Length": String(bytes.byteLength),
+        },
+      }),
+      contentSecurityPolicy,
+    );
+  } catch {
+    return new Response(null, { status: 404 });
+  }
+}
+
 const TRANSIENT_FETCH_RETRY_DELAYS_MS = [0, 50, 150] as const;
 
 async function fetchWithTransientRetry(url: string, init: RequestInit): Promise<Response> {
@@ -219,7 +307,12 @@ export const make = Effect.gen(function* () {
         Effect.try({
           try: () => {
             Electron.protocol.handle(input.scheme, (request) =>
-              proxyRequest(request, input.targetOrigin, contentSecurityPolicy),
+              proxyRequest(
+                request,
+                input.targetOrigin,
+                contentSecurityPolicy,
+                input.resolveDesktopPetSpritesheet,
+              ),
             );
           },
           catch: (cause) => new ElectronProtocolRegistrationError({ scheme: input.scheme, cause }),
