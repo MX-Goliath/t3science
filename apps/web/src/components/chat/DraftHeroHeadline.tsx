@@ -14,6 +14,7 @@ import {
 import { useProjects, useThreadShells } from "~/state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
 import { sortLogicalProjectsForSidebar } from "../Sidebar.logic";
+import { DraftHeroPet } from "../pets/DraftHeroPet";
 import {
   Menu,
   MenuItem,
@@ -27,12 +28,14 @@ import {
 interface DraftHeroHeadlineProps {
   readonly activeProjectRef: ScopedProjectRef | null;
   readonly activeProjectTitle: string | null;
+  readonly providerInstanceId: string | null;
   readonly isGeneralChat?: boolean;
 }
 
 export function DraftHeroHeadline({
   activeProjectRef,
   activeProjectTitle,
+  providerInstanceId,
   isGeneralChat = false,
 }: DraftHeroHeadlineProps) {
   const projects = useProjects();
@@ -160,7 +163,10 @@ export function DraftHeroHeadline({
   return (
     <h1 className="mx-auto w-full max-w-5xl text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
       {hasResolvedProject ? (
-        <>What should we build in {projectSelector}?</>
+        <span className="inline-flex items-center justify-center gap-2">
+          <DraftHeroPet providerInstanceId={providerInstanceId} />
+          <span className="relative top-1">What should we build in {projectSelector}?</span>
+        </span>
       ) : canChooseProject ? (
         <>{projectSelector} to start</>
       ) : (

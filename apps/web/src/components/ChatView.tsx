@@ -6535,6 +6535,9 @@ function ChatViewContent(props: ChatViewProps) {
                         <DraftHeroHeadline
                           activeProjectRef={isGeneralChat ? null : activeProjectRef}
                           activeProjectTitle={isGeneralChat ? null : (activeProject?.title ?? null)}
+                          providerInstanceId={
+                            activeProviderInstanceId ?? activeProviderStatus?.instanceId ?? null
+                          }
                           isGeneralChat={isGeneralChat}
                         />
                       </div>
