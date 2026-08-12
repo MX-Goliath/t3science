@@ -170,6 +170,7 @@ import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
+import { WorkingPetIndicator } from "../pets/WorkingPetIndicator";
 import {
   buildInlineTerminalContextText,
   formatInlineTerminalContextLabel,
@@ -1703,10 +1704,11 @@ function ProposedPlanTimelineRow({
 }
 
 function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { isCompacting, isPreparingWorktree } = use(TimelineRowActivityCtx);
+  const { isCompacting, isPreparingWorktree, isRevertingCheckpoint } = use(TimelineRowActivityCtx);
   return (
     <div className="border-b border-border/60 pb-2 pt-1">
-      <div className="flex h-6 min-w-0 items-baseline px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+      <div className="flex h-6 min-w-0 items-center gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+        <WorkingPetIndicator isRevertingCheckpoint={isRevertingCheckpoint} />
         <span
           key={isPreparingWorktree ? "setup" : isCompacting ? "compacting" : "working"}
           ref={isPreparingWorktree || isCompacting ? observeVisibleAnimation : undefined}

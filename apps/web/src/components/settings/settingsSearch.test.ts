@@ -242,4 +242,15 @@ describe("searchSettings", () => {
       "web-chat-provider",
     ]);
   });
+
+  it("indexes desktop pet aliases", () => {
+    expect(searchSettings("openpets").map((item) => item.id)).toEqual([
+      "desktop-pets",
+      "desktop-pets-enabled",
+    ]);
+    expect(searchSettings("питомец").map((item) => item.id)).toEqual([
+      "desktop-pets",
+      "desktop-pets-enabled",
+    ]);
+  });
 });

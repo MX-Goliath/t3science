@@ -118,6 +118,19 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "appearance-interface",
   },
   {
+    id: "desktop-pets",
+    title: "Desktop pets",
+    to: "/settings/general",
+    searchTerms: ["pet", "pets", "desktop pet", "питомец", "питомцы", "openpets"],
+  },
+  {
+    id: "desktop-pets-enabled",
+    title: "Show desktop pet",
+    to: "/settings/general",
+    targetId: "desktop-pets",
+    searchTerms: ["pet", "pets", "питомец", "питомцы", "openpets"],
+  },
+  {
     id: "interface-font",
     title: "Interface font",
     to: "/settings/appearance",

@@ -166,6 +166,7 @@ import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 import { WebChatProviderIcon } from "../web-chat/WebChatProviderIcon";
 import { WEB_CHAT_PROVIDERS } from "~/webChat";
+import { DesktopPetsSettings } from "./DesktopPetsSettings";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: "Artwork",
@@ -3065,6 +3066,7 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <DesktopSystemIntegrationSection />
+      <DesktopPetsSettings />
 
       <SettingsSection id="about" title="About">
         {isElectron || HOSTED_APP_CHANNEL ? (

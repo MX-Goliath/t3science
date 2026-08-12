@@ -15,6 +15,8 @@
 - [Using persistent web chat](./user/web-chat.md)
 - [Usage and limits](./user/usage.md)
 - [Product usage data](./user/telemetry.md)
+- [Portable local conversations (desktop)](./user/portable-conversations.md)
+- [Desktop pets](./user/desktop-pets.md)
 - [Remote access](./user/remote-access.md)
 - [Running in the background](./user/background-service.md)
 - [Updating T3 Code](./user/updating.md)

@@ -1,3 +1,7 @@
+// @effect-diagnostics nodeBuiltinImport:off - The protocol test uses a temporary local asset.
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -15,6 +19,8 @@ vi.mock("electron", () => ({
 }));
 
 import * as ElectronProtocol from "./ElectronProtocol.ts";
+
+const NodeFS = NodeFSP;
 
 describe("ElectronProtocol", () => {
   beforeEach(() => {
@@ -110,6 +116,95 @@ describe("ElectronProtocol", () => {
 
       assert.equal(response.status, 404);
       assert.equal(netFetchMock.mock.calls.length, 0);
+    }).pipe(Effect.provide(ElectronProtocol.layer)),
+  );
+
+  it.effect("serves desktop pet spritesheets with an immutable revision", () =>
+    Effect.gen(function* () {
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      const directory = yield* Effect.promise(() =>
+        NodeFS.mkdtemp(NodePath.join(process.env.TEMP ?? process.cwd(), "t3-protocol-test-")),
+      );
+      const filePath = NodePath.join(directory, "spritesheet.webp");
+      yield* Effect.promise(() => NodeFS.writeFile(filePath, "webp"));
+      try {
+        const response = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const protocol = yield* ElectronProtocol.ElectronProtocol;
+            yield* protocol.registerDesktopProtocol({
+              scheme: "t3science-dev",
+              targetOrigin: new URL("http://127.0.0.1:3773/"),
+              backendOrigin: new URL("http://127.0.0.1:3773/"),
+              clerkFrontendApiHostname: undefined,
+              resolveDesktopPetSpritesheet: async (petId) =>
+                petId === "codex-buddy" ? { filePath, assetRevision: "revision-1" } : null,
+            });
+            return yield* Effect.promise(() =>
+              handler!(
+                new Request(
+                  "t3science-dev://app/__desktop-pets/codex-buddy/spritesheet.webp?v=revision-1",
+                ),
+              ),
+            );
+          }),
+        );
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "image/webp");
+        assert.equal(response.headers.get("etag"), '"revision-1"');
+        assert.equal(response.headers.get("cache-control"), "public, max-age=31536000, immutable");
+        assert.equal(yield* Effect.promise(() => response.text()), "webp");
+
+        const cached = yield* Effect.promise(() =>
+          handler!(
+            new Request(
+              "t3science-dev://app/__desktop-pets/codex-buddy/spritesheet.webp?v=revision-1",
+              { headers: { "If-None-Match": '"revision-1"' } },
+            ),
+          ),
+        );
+        assert.equal(cached.status, 304);
+
+        const head = yield* Effect.promise(() =>
+          handler!(
+            new Request(
+              "t3science-dev://app/__desktop-pets/codex-buddy/spritesheet.webp?v=revision-1",
+              { method: "HEAD" },
+            ),
+          ),
+        );
+        assert.equal(head.status, 200);
+        assert.equal(head.headers.get("content-length"), "4");
+        assert.equal(yield* Effect.promise(() => head.text()), "");
+
+        const invalidPath = yield* Effect.promise(() =>
+          handler!(
+            new Request("t3science-dev://app/__desktop-pets/codex-buddy/../spritesheet.webp"),
+          ),
+        );
+        assert.equal(invalidPath.status, 404);
+
+        const notFound = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const protocol = yield* ElectronProtocol.ElectronProtocol;
+            yield* protocol.registerDesktopProtocol({
+              scheme: "t3science-dev",
+              targetOrigin: new URL("http://127.0.0.1:3773/"),
+              backendOrigin: new URL("http://127.0.0.1:3773/"),
+              clerkFrontendApiHostname: undefined,
+              resolveDesktopPetSpritesheet: async () => null,
+            });
+            return yield* Effect.promise(() =>
+              handler!(new Request("t3science-dev://app/__desktop-pets/unknown/spritesheet.webp")),
+            );
+          }),
+        );
+        assert.equal(notFound.status, 404);
+      } finally {
+        yield* Effect.promise(() => NodeFS.rm(directory, { recursive: true, force: true }));
+      }
     }).pipe(Effect.provide(ElectronProtocol.layer)),
   );
 
