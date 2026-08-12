@@ -15,6 +15,7 @@ import {
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
+  resolveSidebarPlanForTurn,
   resolveSidebarStageBadgeLabel,
   resolveSidebarTodoRingSegmentStates,
   resolveThreadRowClassName,
@@ -42,6 +43,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 
 import {
@@ -98,6 +100,30 @@ describe("resolveSidebarTodoRingSegmentStates", () => {
 
   it("does not render progress segments without a plan", () => {
     expect(resolveSidebarTodoRingSegmentStates(null)).toEqual([]);
+  });
+});
+
+describe("resolveSidebarPlanForTurn", () => {
+  const plan = {
+    createdAt: "2026-08-12T10:00:00.000Z",
+    turnId: TurnId.make("turn-1"),
+    steps: [{ step: "Finish", status: "completed" as const }],
+  };
+
+  it("hides a completed previous plan while the next turn has no plan yet", () => {
+    expect(resolveSidebarPlanForTurn(plan, "turn-2")).toBeNull();
+  });
+
+  it("carries an unfinished plan into a follow-up turn", () => {
+    const unfinishedPlan = {
+      ...plan,
+      steps: [{ step: "Continue", status: "pending" as const }],
+    };
+    expect(resolveSidebarPlanForTurn(unfinishedPlan, "turn-2")).toBe(unfinishedPlan);
+  });
+
+  it("keeps the current turn's plan visible", () => {
+    expect(resolveSidebarPlanForTurn(plan, "turn-1")).toBe(plan);
   });
 });
 

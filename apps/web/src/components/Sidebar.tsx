@@ -144,6 +144,7 @@ import {
   planPinnedReorder,
   resolveAdjacentThreadId,
   resolveSettledTimestamp,
+  resolveSidebarPlanForTurn,
   resolveSidebarThreadStatus,
   resolveSidebarTodoRingSegmentStates,
   searchSidebarThreadsByTitle,
@@ -1927,13 +1928,11 @@ export default function Sidebar() {
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
   const routeThread = useThread(routeThreadRef);
-  const activePlan = useMemo(
-    () =>
-      routeThread
-        ? deriveActivePlanState(routeThread.activities, routeThread.latestTurn?.turnId ?? undefined)
-        : null,
-    [routeThread],
-  );
+  const activePlan = useMemo(() => {
+    if (!routeThread?.latestTurn) return null;
+    const plan = deriveActivePlanState(routeThread.activities, routeThread.latestTurn.turnId);
+    return resolveSidebarPlanForTurn(plan, routeThread.latestTurn.turnId);
+  }, [routeThread]);
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one

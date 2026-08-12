@@ -43,6 +43,23 @@ export function resolveSidebarTodoRingSegmentStates(
   );
 }
 
+export function resolveSidebarPlanForTurn(
+  plan: ActivePlanState | null,
+  currentTurnId: string | null | undefined,
+): ActivePlanState | null {
+  if (plan === null || currentTurnId == null) {
+    return null;
+  }
+  if (plan.turnId === currentTurnId) {
+    return plan;
+  }
+
+  // TodoWrite plans intentionally persist across follow-up turns (for
+  // example, when the agent pauses for a question). A completed plan should
+  // not leak into a fresh turn before that turn publishes its own plan.
+  return plan.steps.some((step) => step.status !== "completed") ? plan : null;
+}
+
 type SidebarProject = {
   id: string;
   title: string;
