@@ -7,8 +7,9 @@ import "./petSprite.css";
 type PetSpriteProps = {
   readonly pet: DesktopPetMetadata;
   readonly animation: DesktopPetAnimationState;
-  readonly size?: "working" | "card" | "preview";
+  readonly size?: "working" | "hero" | "card" | "preview";
   readonly animate?: boolean;
+  readonly iterations?: number;
   readonly className?: string;
 };
 
@@ -17,6 +18,7 @@ export function PetSprite({
   animation,
   size = "working",
   animate = true,
+  iterations,
   className,
 }: PetSpriteProps) {
   const definition = PET_ANIMATIONS[animation];
@@ -32,6 +34,7 @@ export function PetSprite({
     ["--pet-duration"]: `${definition.durationMs}ms`,
     ["--pet-x-end"]: xEnd,
     ["--pet-y-position"]: yPosition,
+    animationIterationCount: iterations,
   } as CSSProperties;
 
   return (

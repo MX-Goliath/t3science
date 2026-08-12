@@ -25,6 +25,7 @@ import {
   type ThreadId,
   type TurnId,
   type KeybindingCommand,
+  isGeneralChatsProjectId,
   OrchestrationThreadActivity,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   ProviderInteractionMode,
@@ -2009,6 +2010,7 @@ export default function ChatView(props: ChatViewProps) {
       activeThread ? scopeProjectRef(activeThread.environmentId, activeThread.projectId) : null,
     [activeThread?.environmentId, activeThread?.projectId],
   );
+  const isGeneralChat = activeThread ? isGeneralChatsProjectId(activeThread.projectId) : false;
   const activeProject = useProject(activeProjectRef);
   const activeProjectScripts = useMemo(
     () => (activeProject ? resolveProjectScripts(settings, activeProject) : []),
@@ -8320,8 +8322,12 @@ export default function ChatView(props: ChatViewProps) {
                       >
                         <DraftHeroHeadline
                           draftId={draftId}
-                          activeProjectRef={activeProjectRef}
-                          activeProjectTitle={activeProject?.title ?? null}
+                          activeProjectRef={isGeneralChat ? null : activeProjectRef}
+                          activeProjectTitle={isGeneralChat ? null : (activeProject?.title ?? null)}
+                          providerInstanceId={
+                            activeProviderInstanceId ?? activeProviderStatus?.instanceId ?? null
+                          }
+                          isGeneralChat={isGeneralChat}
                         />
                       </div>
                     </div>

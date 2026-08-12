@@ -51,4 +51,10 @@ describe("PetSprite", () => {
     expect(markup).toContain('data-pet-animate="false"');
     expect(markup).toContain("--pet-y-position:0%");
   });
+
+  it("can limit an animation to three iterations", () => {
+    const markup = renderToStaticMarkup(<PetSprite pet={pet} animation="jumping" iterations={3} />);
+
+    expect(markup).toContain("animation-iteration-count:3");
+  });
 });

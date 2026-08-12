@@ -16,6 +16,11 @@
   height: 63px;
 }
 
+.desktop-pet-sprite[data-pet-size="hero"] {
+  width: 56px;
+  height: 60px;
+}
+
 .desktop-pet-sprite[data-pet-size="preview"] {
   width: 144px;
   height: 156px;
