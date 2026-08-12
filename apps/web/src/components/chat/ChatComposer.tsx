@@ -234,6 +234,7 @@ import { readLocalApi } from "../../localApi";
 import { readThreadShells } from "../../state/entities";
 import {
   isScheduledSendOverdue,
+  resolveAgentCompletionScheduleTarget,
   resolveRunningAgentScheduleTargets,
   resolveRateLimitSchedule,
   type ScheduledSendState,
@@ -1941,9 +1942,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     async (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.preventDefault();
       event.stopPropagation();
+      const currentAgentTarget =
+        phase === "running" && activeThread
+          ? resolveAgentCompletionScheduleTarget(activeThread)
+          : null;
       if (
         scheduledSend ||
-        phase === "running" ||
+        (phase === "running" && currentAgentTarget === null) ||
         isSendBusy ||
         isConnecting ||
         isSendDisabled ||
@@ -1952,6 +1957,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         projectSelectionRequired ||
         !composerSendState.hasSendableContent
       ) {
+        return;
+      }
+      if (currentAgentTarget) {
+        const clicked = await readLocalApi()?.contextMenu.show(
+          [{ id: "current-agent-completion", label: "Send after agent finishes" }],
+          { x: event.clientX, y: event.clientY },
+        );
+        if (clicked === "current-agent-completion") {
+          scheduleCurrentMessage({
+            scheduledAt: new Date().toISOString(),
+            source: "agent-completion",
+            waitingForAgent: currentAgentTarget,
+          });
+        }
         return;
       }
       const runningAgentTargets = resolveRunningAgentScheduleTargets(readThreadShells(), {
@@ -2001,6 +2020,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
     },
     [
+      activeThread,
       composerSendState.hasSendableContent,
       environmentUnavailable,
       isConnecting,

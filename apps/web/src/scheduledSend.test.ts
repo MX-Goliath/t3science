@@ -6,8 +6,10 @@ import {
   isScheduledSendArmed,
   isScheduledSendOverdue,
   resetScheduledSendRuntimeForTests,
+  resolveAgentCompletionScheduleTarget,
   resolveRunningAgentScheduleTargets,
   resolveRateLimitSchedule,
+  shouldPlaceScheduledSendInSidebarSection,
 } from "./scheduledSend";
 
 afterEach(() => {
@@ -74,6 +76,49 @@ describe("resolveRateLimitSchedule", () => {
 });
 
 describe("scheduled send runtime", () => {
+  it("keeps agent-completion sends in the active sidebar section", () => {
+    expect(
+      shouldPlaceScheduledSendInSidebarSection({
+        scheduledAt: "2026-08-09T12:00:00.000Z",
+        source: "agent-completion",
+      }),
+    ).toBe(false);
+    expect(
+      shouldPlaceScheduledSendInSidebarSection({
+        scheduledAt: "2026-08-09T12:00:00.000Z",
+        source: "custom",
+      }),
+    ).toBe(true);
+    expect(shouldPlaceScheduledSendInSidebarSection(null)).toBe(false);
+  });
+
+  it("resolves the active turn as an agent-completion target", () => {
+    expect(
+      resolveAgentCompletionScheduleTarget({
+        environmentId: "env-1" as never,
+        id: "current" as never,
+        title: "Current",
+        session: { status: "running", activeTurnId: "turn-current" as never },
+      } as never),
+    ).toEqual({
+      environmentId: "env-1",
+      threadId: "current",
+      turnId: "turn-current",
+      threadTitle: "Current",
+    });
+  });
+
+  it("does not resolve an agent-completion target without a running turn", () => {
+    expect(
+      resolveAgentCompletionScheduleTarget({
+        environmentId: "env-1" as never,
+        id: "idle" as never,
+        title: "Idle",
+        session: { status: "idle", activeTurnId: null },
+      } as never),
+    ).toBeNull();
+  });
+
   it("fires once at the computed time and can be recognized as armed", async () => {
     vi.useFakeTimers();
     vi.setSystemTime("2026-08-09T12:00:00.000Z");

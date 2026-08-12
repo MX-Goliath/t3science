@@ -65,6 +65,12 @@ export function scheduledSendTimeMs(scheduledSend: ScheduledSendState): number |
   return Number.isFinite(value) ? value : null;
 }
 
+export function shouldPlaceScheduledSendInSidebarSection(
+  scheduledSend: ScheduledSendState | null | undefined,
+): boolean {
+  return scheduledSend?.source !== undefined && scheduledSend.source !== "agent-completion";
+}
+
 export function isScheduledSendOverdue(
   scheduledSend: ScheduledSendState | null | undefined,
   nowMs = Date.now(),
@@ -75,26 +81,33 @@ export function isScheduledSendOverdue(
   return scheduledAtMs === null || scheduledAtMs <= nowMs;
 }
 
+export function resolveAgentCompletionScheduleTarget(
+  thread: Pick<EnvironmentThreadShell, "environmentId" | "id" | "title" | "session">,
+): ScheduledSendAgentTarget | null {
+  const activeTurnId = thread.session?.status === "running" ? thread.session.activeTurnId : null;
+  if (activeTurnId === null) return null;
+
+  return {
+    environmentId: thread.environmentId,
+    threadId: thread.id,
+    turnId: activeTurnId,
+    threadTitle: thread.title,
+  };
+}
+
 export function resolveRunningAgentScheduleTargets(
   shells: ReadonlyArray<EnvironmentThreadShell>,
   currentThread: { environmentId: EnvironmentId; threadId: ThreadId },
 ): ScheduledSendAgentTarget[] {
   return shells.flatMap((shell) => {
-    const activeTurnId = shell.session?.status === "running" ? shell.session.activeTurnId : null;
+    const target = resolveAgentCompletionScheduleTarget(shell);
     if (
-      activeTurnId === null ||
+      target === null ||
       (shell.environmentId === currentThread.environmentId && shell.id === currentThread.threadId)
     ) {
       return [];
     }
-    return [
-      {
-        environmentId: shell.environmentId,
-        threadId: shell.id,
-        turnId: activeTurnId,
-        threadTitle: shell.title,
-      },
-    ];
+    return [target];
   });
 }
 

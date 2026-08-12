@@ -168,6 +168,7 @@ import {
   CheckCircle2Icon,
   ChevronDownIcon,
   GitBranchIcon,
+  TimerIcon,
   WifiOffIcon,
 } from "lucide-react";
 import { cn, randomHex } from "~/lib/utils";
@@ -1316,6 +1317,7 @@ function ChatViewContent(props: ChatViewProps) {
     (store) => store.getComposerDraft(composerDraftTarget)?.activeProvider ?? null,
   );
   const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
+  const setComposerScheduledSend = useComposerDraftStore((store) => store.setScheduledSend);
   const addComposerDraftImages = useComposerDraftStore((store) => store.addImages);
   const setComposerDraftTerminalContexts = useComposerDraftStore(
     (store) => store.setTerminalContexts,
@@ -4542,6 +4544,48 @@ function ChatViewContent(props: ChatViewProps) {
       onDismiss: acknowledgeActiveThreadWoke,
     };
   }, [acknowledgeActiveThreadWoke, activeThread?.id, activeThreadWokeVisible]);
+  const queuedAgentMessageBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
+    if (scheduledSend?.source !== "agent-completion") {
+      return null;
+    }
+    const waitingForAgent = scheduledSend.waitingForAgent;
+    const waitingForCurrentThread =
+      waitingForAgent !== undefined &&
+      waitingForAgent.environmentId === activeThread?.environmentId &&
+      waitingForAgent.threadId === activeThread?.id;
+    const waitingLabel = waitingForCurrentThread
+      ? "this agent"
+      : waitingForAgent?.threadTitle
+        ? `agent in ${waitingForAgent.threadTitle}`
+        : "the agent";
+
+    return {
+      id: `queued-agent-message:${scheduledSend.scheduledAt}`,
+      variant: "info",
+      icon: <TimerIcon />,
+      title: "Next message queued",
+      description: `It will be sent after ${waitingLabel} finishes.`,
+      actions: (
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={() => {
+            setComposerScheduledSend(composerDraftTarget, null);
+            cancelArmedScheduledSend(scheduledSendRuntimeKey);
+          }}
+        >
+          Cancel
+        </Button>
+      ),
+    };
+  }, [
+    activeThread?.environmentId,
+    activeThread?.id,
+    composerDraftTarget,
+    scheduledSend,
+    scheduledSendRuntimeKey,
+    setComposerScheduledSend,
+  ]);
   // The stack renders items[0] front-most and tucks the rest behind hover, so
   // ordering is priority: urgent system banners (error/warning variants plus
   // calm-styled live states flagged `urgent`, like update progress), then
@@ -4604,12 +4648,15 @@ function ChatViewContent(props: ChatViewProps) {
     const calmSystemItems = systemComposerBannerItems.filter((item) => !isUrgentSystemItem(item));
     const backgroundLivenessItems =
       backgroundLivenessBannerItem === null ? [] : [backgroundLivenessBannerItem];
+    const queuedAgentMessageItems =
+      queuedAgentMessageBannerItem === null ? [] : [queuedAgentMessageBannerItem];
     const wokeThreadItems = wokeThreadBannerItem === null ? [] : [wokeThreadBannerItem];
     const parkedThreadItems = parkedThreadBannerItem === null ? [] : [parkedThreadBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
         ...urgentSystemItems,
         ...backgroundLivenessItems,
+        ...queuedAgentMessageItems,
         ...calmSystemItems,
         ...wokeThreadItems,
         ...parkedThreadItems,
@@ -4618,6 +4665,7 @@ function ChatViewContent(props: ChatViewProps) {
     return [
       ...urgentSystemItems,
       ...backgroundLivenessItems,
+      ...queuedAgentMessageItems,
       ...calmSystemItems,
       ...wokeThreadItems,
       {
@@ -4668,6 +4716,7 @@ function ChatViewContent(props: ChatViewProps) {
     isRestoringThreadBranch,
     localCheckoutBranchMismatch,
     parkedThreadBannerItem,
+    queuedAgentMessageBannerItem,
     showBranchMismatchBanner,
     systemComposerBannerItems,
     wokeThreadBannerItem,

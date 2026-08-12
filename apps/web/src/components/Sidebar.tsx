@@ -91,7 +91,7 @@ import { isTerminalFocused } from "../lib/terminalFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { isMacPlatform } from "~/lib/utils";
-import { isScheduledSendOverdue } from "../scheduledSend";
+import { isScheduledSendOverdue, shouldPlaceScheduledSendInSidebarSection } from "../scheduledSend";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { readLocalApi } from "../localApi";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
@@ -727,7 +727,8 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
       });
     }
     for (const [threadKey, composer] of Object.entries(draftsByThreadKey)) {
-      if (!composer.scheduledSend) continue;
+      const scheduledSend = composer.scheduledSend;
+      if (!scheduledSend || !shouldPlaceScheduledSendInSidebarSection(scheduledSend)) continue;
       const threadRef = parseScopedThreadKey(threadKey);
       const thread = threadRef ? serverThreadByKey.get(threadKey) : null;
       if (!threadRef || !thread || isGeneralChatsProjectId(thread.projectId)) continue;
@@ -742,7 +743,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
         target: { kind: "thread", threadRef },
         environmentId: thread.environmentId,
         projectId: thread.projectId,
-        createdAt: composer.scheduledSend.scheduledAt,
+        createdAt: scheduledSend.scheduledAt,
         composer,
       });
     }
@@ -959,14 +960,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Status hues follow the system-wide convention set by sidebar v1 and the
   // mobile Live Activity/widgets (amber approval, indigo input, sky working)
   // so a thread reads the same color everywhere it surfaces.
-  const topStatus = scheduledSend
+  const sidebarScheduledSend = shouldPlaceScheduledSendInSidebarSection(scheduledSend)
+    ? scheduledSend
+    : null;
+  const topStatus = sidebarScheduledSend
     ? {
-        label:
-          scheduledSend.source === "agent-completion"
-            ? "Waiting"
-            : scheduledSendOverdue
-              ? "Overdue"
-              : "Scheduled",
+        label: scheduledSendOverdue ? "Overdue" : "Scheduled",
         icon: "scheduled" as const,
         className: scheduledSendOverdue
           ? "text-red-700 dark:text-red-300"
@@ -2121,7 +2120,9 @@ export default function Sidebar() {
     useShallow((store) =>
       Object.entries(store.draftsByThreadKey)
         .filter(
-          ([threadKey, draft]) => draft.scheduledSend !== null && parseScopedThreadKey(threadKey),
+          ([threadKey, draft]) =>
+            shouldPlaceScheduledSendInSidebarSection(draft.scheduledSend) &&
+            parseScopedThreadKey(threadKey),
         )
         .map(([threadKey]) => threadKey)
         .sort(),
