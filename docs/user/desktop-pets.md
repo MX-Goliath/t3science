@@ -4,11 +4,19 @@ T3 Code Desktop can show a small animated OpenPets companion in the `Working` ro
 
 This feature is available only in the Desktop app. Web and mobile clients continue to use the normal working indicator.
 
-## Enable and choose a pet
+## Turn pets on
 
-Open **Settings → General → Desktop pets**. Turn on **Show pet**, then select an installed pet. The section also includes a large preview and a menu for trying all available animations.
+Open **Settings → General → Desktop pets** and turn on **Show pets**. The same section lists every installed pet and is where archives are imported and removed. There is no shared companion: which pet appears is decided per provider.
 
-The Desktop app includes **Codex Buddy** and **Claude**. Codex Buddy is enabled and selected by default.
+## Assign a pet to a provider
+
+Open **Settings → Providers**, expand a provider instance, and use **Companion pet**. Every instance has its own assignment — built-in slots such as Codex and Claude, and each manually added provider instance. Pick **No pet** to keep the plain dots for that provider.
+
+The section shows the assigned pet in a large preview with a menu for trying all nine animations.
+
+While a turn runs, the `Working` row shows the pet assigned to the provider instance running it.
+
+The Desktop app includes **Codex** and **Claude**. On first run they are assigned to the built-in Codex and Claude provider slots; every later change is yours to make.
 
 ## Import a pet
 
@@ -17,10 +25,10 @@ Use **Import ZIP** in the Desktop pets settings. The archive must contain exactl
 - `pet.json`
 - `spritesheet.webp`
 
-The manifest must use a lowercase ID made of letters, digits, and hyphens. The spritesheet must use the standard OpenPets 8-by-9 frame grid. Imports are stored locally on the computer and remain available after restarting the app.
+The manifest must use a lowercase ID made of letters, digits, and hyphens. The spritesheet must use the standard OpenPets 8-by-9 frame grid. Imports are stored locally on the computer and remain available after restarting the app. An imported pet is not assigned to anything until you pick it for a provider.
 
 The importer rejects unsafe paths, symlinks, encrypted archives, unsupported compression, extra files, oversized archives, and invalid spritesheets. Cancelling the file picker leaves the current settings unchanged.
 
 ## Remove a pet
 
-Only user-imported pets can be removed. The built-in Codex Buddy and Claude entries are protected. If the selected user pet is removed, the app chooses Codex Buddy, then Claude, then the first available pet.
+Only user-imported pets can be removed. The built-in Codex and Claude entries are protected. Removing a pet clears it from every provider that used it, and those providers fall back to the plain working indicator.

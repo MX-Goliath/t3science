@@ -198,10 +198,27 @@ export const DesktopPetMetadataSchema = Schema.Struct({
   spritesheetUrl: Schema.String,
 });
 
+/**
+ * One provider instance's companion. Pets are assigned per provider
+ * instance id — both built-in default slots (whose instance id is the
+ * driver kind) and user-authored custom instances — so a session's Working
+ * row shows the pet of whichever provider is running it. An instance with
+ * no entry here renders the plain dots indicator.
+ */
+export interface DesktopPetAssignment {
+  providerInstanceId: string;
+  petId: string;
+}
+
+export const DesktopPetAssignmentSchema = Schema.Struct({
+  providerInstanceId: Schema.String,
+  petId: Schema.String,
+});
+
 export interface DesktopPetsState {
   supported: boolean;
   enabled: boolean;
-  selectedPetId: string | null;
+  assignments: ReadonlyArray<DesktopPetAssignment>;
   pets: ReadonlyArray<DesktopPetMetadata>;
   errors: ReadonlyArray<string>;
 }
@@ -209,13 +226,19 @@ export interface DesktopPetsState {
 export const DesktopPetsStateSchema = Schema.Struct({
   supported: Schema.Boolean,
   enabled: Schema.Boolean,
-  selectedPetId: Schema.NullOr(Schema.String),
+  assignments: Schema.Array(DesktopPetAssignmentSchema),
   pets: Schema.Array(DesktopPetMetadataSchema),
   errors: Schema.Array(Schema.String),
 });
 
-export const DesktopPetSelectInputSchema = Schema.Struct({
+export const DesktopPetIdInputSchema = Schema.Struct({
   petId: Schema.String,
+});
+
+/** `petId: null` clears the provider instance's assignment. */
+export const DesktopPetAssignInputSchema = Schema.Struct({
+  providerInstanceId: Schema.String,
+  petId: Schema.NullOr(Schema.String),
 });
 
 export type DesktopPetImportResult =
@@ -1141,7 +1164,10 @@ export interface DesktopBridge {
   setWslOnly: (enabled: boolean) => Promise<DesktopWslState>;
   getDesktopPetsState?: () => Promise<DesktopPetsState>;
   setDesktopPetsEnabled?: (enabled: boolean) => Promise<DesktopPetsState>;
-  selectDesktopPet?: (input: { petId: string }) => Promise<DesktopPetsState>;
+  assignDesktopPet?: (input: {
+    providerInstanceId: string;
+    petId: string | null;
+  }) => Promise<DesktopPetsState>;
   importDesktopPetArchive?: () => Promise<DesktopPetImportResult>;
   removeDesktopPet?: (input: { petId: string }) => Promise<DesktopPetsState>;
   /** Available in desktop builds that support Windows/Linux system tray integration. */

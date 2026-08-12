@@ -1,6 +1,7 @@
 import {
+  DesktopPetAssignInputSchema,
+  DesktopPetIdInputSchema,
   DesktopPetImportResultSchema,
-  DesktopPetSelectInputSchema,
   DesktopPetsStateSchema,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -33,13 +34,13 @@ export const setDesktopPetsEnabled = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const selectDesktopPet = DesktopIpc.makeIpcMethod({
-  channel: IpcChannels.SELECT_DESKTOP_PET_CHANNEL,
-  payload: DesktopPetSelectInputSchema,
+export const assignDesktopPet = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.ASSIGN_DESKTOP_PET_CHANNEL,
+  payload: DesktopPetAssignInputSchema,
   result: DesktopPetsStateSchema,
-  handler: Effect.fn("desktop.ipc.pets.select")(function* (input) {
+  handler: Effect.fn("desktop.ipc.pets.assign")(function* (input) {
     const pets = yield* DesktopPets.DesktopPets;
-    return yield* pets.select(input.petId);
+    return yield* pets.assign(input.providerInstanceId, input.petId);
   }),
 });
 
@@ -64,7 +65,7 @@ export const importDesktopPetArchive = DesktopIpc.makeIpcMethod({
 
 export const removeDesktopPet = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.REMOVE_DESKTOP_PET_CHANNEL,
-  payload: DesktopPetSelectInputSchema,
+  payload: DesktopPetIdInputSchema,
   result: DesktopPetsStateSchema,
   handler: Effect.fn("desktop.ipc.pets.remove")(function* (input) {
     const pets = yield* DesktopPets.DesktopPets;

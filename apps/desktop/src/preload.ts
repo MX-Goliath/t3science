@@ -99,7 +99,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   getDesktopPetsState: () => ipcRenderer.invoke(IpcChannels.GET_DESKTOP_PETS_STATE_CHANNEL),
   setDesktopPetsEnabled: (enabled) =>
     ipcRenderer.invoke(IpcChannels.SET_DESKTOP_PETS_ENABLED_CHANNEL, enabled),
-  selectDesktopPet: (input) => ipcRenderer.invoke(IpcChannels.SELECT_DESKTOP_PET_CHANNEL, input),
+  assignDesktopPet: (input) => ipcRenderer.invoke(IpcChannels.ASSIGN_DESKTOP_PET_CHANNEL, input),
   importDesktopPetArchive: () => ipcRenderer.invoke(IpcChannels.IMPORT_DESKTOP_PET_ARCHIVE_CHANNEL),
   removeDesktopPet: (input) => ipcRenderer.invoke(IpcChannels.REMOVE_DESKTOP_PET_CHANNEL, input),
   getSystemIntegrationState: () =>

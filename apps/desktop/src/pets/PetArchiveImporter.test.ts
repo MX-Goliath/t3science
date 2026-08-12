@@ -15,7 +15,7 @@ describe("PetArchiveImporter", () => {
     );
     try {
       for (const [fileName, expectedId] of [
-        ["codex-buddy.zip", "codex-buddy"],
+        ["openai-codex.zip", "openai-codex"],
         ["claude.zip", "claude"],
       ] as const) {
         const result = await extractPetArchive({
@@ -43,10 +43,11 @@ describe("PetArchiveImporter", () => {
     try {
       const archive = Buffer.from(
         await NodeFS.readFile(
-          NodePath.resolve("apps/desktop/resources/desktop-pets/codex-buddy.zip"),
+          NodePath.resolve("apps/desktop/resources/desktop-pets/openai-codex.zip"),
         ),
       );
-      replaceAllAscii(archive, "codex-buddy/pet.json", "codex-buddy\\pet.json");
+      // The archive's root folder, which is independent of the pet id.
+      replaceAllAscii(archive, "codex-openpets/pet.json", "codex-openpets\\pet.json");
       await NodeFS.writeFile(archivePath, archive);
 
       let failure: unknown = null;

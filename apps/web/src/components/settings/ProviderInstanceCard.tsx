@@ -42,6 +42,7 @@ import { ProviderSettingsForm } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
+import { ProviderPetSettings } from "./ProviderPetSettings";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import {
   getProviderVersionAdvisoryPresentation,
@@ -755,6 +756,10 @@ export function ProviderInstanceCard({
                 commitDelayMs={120}
                 description="Used to distinguish this instance in picker rails and model lists."
               />
+            </div>
+
+            <div>
+              <ProviderPetSettings instanceId={instanceId} displayName={displayName} />
             </div>
 
             <div>
