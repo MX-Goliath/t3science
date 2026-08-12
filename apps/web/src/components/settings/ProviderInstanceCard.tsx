@@ -46,6 +46,7 @@ import { ProviderSettingsForm } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
 import { ProviderInstanceIcon, providerInstanceInitials } from "../chat/ProviderInstanceIcon";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
+import { ProviderPetSettings } from "./ProviderPetSettings";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import {
@@ -844,6 +845,12 @@ export function ProviderInstanceCard({
           <div className="px-3 py-3 sm:px-4">{setup}</div>
         </SettingsSection>
       ) : null}
+
+      <SettingsSection title="Companion">
+        <div className="px-3 py-3 sm:px-4">
+          <ProviderPetSettings instanceId={instanceId} displayName={displayName} />
+        </div>
+      </SettingsSection>
 
       <SettingsSection
         title="Runtime"

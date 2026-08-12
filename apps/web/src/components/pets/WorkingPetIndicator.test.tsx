@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mockPets = vi.hoisted(() => ({
   state: null as DesktopPetsState | null,
-  selectedPet: null as DesktopPetMetadata | null,
+  petForProvider: (providerInstanceId: string | null | undefined) => {
+    const state = mockPets.state;
+    const petId = state?.assignments.find(
+      (assignment) => assignment.providerInstanceId === providerInstanceId,
+    )?.petId;
+    return state?.pets.find((pet) => pet.id === petId) ?? null;
+  },
 }));
 
 vi.mock("./useDesktopPets", () => ({
@@ -14,54 +20,70 @@ vi.mock("./useDesktopPets", () => ({
 import { WorkingPetIndicator } from "./WorkingPetIndicator";
 
 const pet: DesktopPetMetadata = {
-  id: "codex-buddy",
-  displayName: "Codex Buddy",
+  id: "openai-codex",
+  displayName: "Codex",
   description: "A test pet",
   source: "bundled",
   protected: true,
   assetRevision: "revision",
-  spritesheetUrl: "t3science://app/__desktop-pets/codex-buddy/spritesheet.webp?v=revision",
+  spritesheetUrl: "t3science://app/__desktop-pets/openai-codex/spritesheet.webp?v=revision",
+};
+
+const assignedState: DesktopPetsState = {
+  supported: true,
+  enabled: true,
+  assignments: [{ providerInstanceId: "codex", petId: pet.id }],
+  pets: [pet],
+  errors: [],
 };
 
 describe("WorkingPetIndicator", () => {
   beforeEach(() => {
     mockPets.state = null;
-    mockPets.selectedPet = null;
   });
 
   it("keeps the dots outside desktop or while pets are disabled", () => {
-    expect(renderToStaticMarkup(<WorkingPetIndicator isRevertingCheckpoint={false} />)).toContain(
-      'data-working-indicator="dots"',
-    );
+    expect(
+      renderToStaticMarkup(
+        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId="codex" />,
+      ),
+    ).toContain('data-working-indicator="dots"');
 
-    mockPets.state = {
-      supported: true,
-      enabled: false,
-      selectedPetId: pet.id,
-      pets: [pet],
-      errors: [],
-    };
-    mockPets.selectedPet = pet;
-    expect(renderToStaticMarkup(<WorkingPetIndicator isRevertingCheckpoint={false} />)).toContain(
-      'data-working-indicator="dots"',
-    );
+    mockPets.state = { ...assignedState, enabled: false };
+    expect(
+      renderToStaticMarkup(
+        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId="codex" />,
+      ),
+    ).toContain('data-working-indicator="dots"');
   });
 
-  it("renders running and review animations for the selected desktop pet", () => {
-    mockPets.state = {
-      supported: true,
-      enabled: true,
-      selectedPetId: pet.id,
-      pets: [pet],
-      errors: [],
-    };
-    mockPets.selectedPet = pet;
+  it("keeps the dots for a provider instance with no assigned pet", () => {
+    mockPets.state = assignedState;
 
-    expect(renderToStaticMarkup(<WorkingPetIndicator isRevertingCheckpoint={false} />)).toContain(
-      'data-pet-animation="running"',
-    );
-    expect(renderToStaticMarkup(<WorkingPetIndicator isRevertingCheckpoint />)).toContain(
-      'data-pet-animation="review"',
-    );
+    expect(
+      renderToStaticMarkup(
+        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId="claudeAgent" />,
+      ),
+    ).toContain('data-working-indicator="dots"');
+    expect(
+      renderToStaticMarkup(
+        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId={null} />,
+      ),
+    ).toContain('data-working-indicator="dots"');
+  });
+
+  it("renders running and review animations for the provider's pet", () => {
+    mockPets.state = assignedState;
+
+    expect(
+      renderToStaticMarkup(
+        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId="codex" />,
+      ),
+    ).toContain('data-pet-animation="running"');
+    expect(
+      renderToStaticMarkup(
+        <WorkingPetIndicator isRevertingCheckpoint providerInstanceId="codex" />,
+      ),
+    ).toContain('data-pet-animation="review"');
   });
 });

@@ -30,14 +30,16 @@ import {
 
 const NodeFS = NodeFSP;
 
-const PETS_STATE_VERSION = 1;
+const PETS_STATE_VERSION = 2;
 const MAX_INSTALLED_PETS = 100;
+const MAX_PET_ASSIGNMENTS = 500;
+const MAX_PROVIDER_INSTANCE_ID_LENGTH = 200;
 
 const BUNDLED_PETS = [
   {
-    id: "codex-buddy",
-    archiveFileName: "desktop-pets/codex-buddy.zip",
-    archiveSha256: "18E8451082C85BCD59C10E877466299A9EDFC6337F2513B82E703DD606A8A755",
+    id: "openai-codex",
+    archiveFileName: "desktop-pets/openai-codex.zip",
+    archiveSha256: "1F697AC69481C21AE0AB05A6EA681C14FEB67F2A27CEE421BD45C761ED58A72B",
   },
   {
     id: "claude",
@@ -47,6 +49,19 @@ const BUNDLED_PETS = [
 ] as const;
 
 const BUNDLED_PET_IDS = new Set<string>(BUNDLED_PETS.map((pet) => pet.id));
+
+/**
+ * Seeded once, when no assignment map has ever been persisted (fresh
+ * install, or an upgrade from the single-pet state format). A built-in
+ * provider slot's instance id is its driver kind, so these ids pair the two
+ * bundled pets with the providers they depict. Everything afterwards is the
+ * user's: clearing an assignment is persisted as an absent entry and is
+ * never re-seeded.
+ */
+const DEFAULT_PET_ASSIGNMENTS: ReadonlyArray<readonly [string, string]> = [
+  ["codex", "openai-codex"],
+  ["claudeAgent", "claude"],
+];
 
 export class DesktopPetUnknownIdError extends Schema.TaggedErrorClass<DesktopPetUnknownIdError>()(
   "DesktopPetUnknownIdError",
@@ -84,7 +99,8 @@ interface StoredPet {
 
 interface RuntimeState {
   enabled: boolean;
-  selectedPetId: string | null;
+  /** Provider instance id -> installed pet id. */
+  assignments: ReadonlyMap<string, string>;
   pets: ReadonlyMap<string, StoredPet>;
   errors: string[];
 }
@@ -96,9 +112,9 @@ interface PersistedPet {
 }
 
 interface PersistedState {
-  readonly version: 1;
+  readonly version: 2;
   readonly enabled: boolean;
-  readonly selectedPetId: string | null;
+  readonly assignments: Record<string, string> | null;
   readonly pets: Record<string, unknown>;
 }
 
@@ -115,8 +131,9 @@ export class DesktopPets extends Context.Service<
     readonly setEnabled: (
       enabled: boolean,
     ) => Effect.Effect<DesktopPetsState, DesktopPetOperationError>;
-    readonly select: (
-      petId: string,
+    readonly assign: (
+      providerInstanceId: string,
+      petId: string | null,
     ) => Effect.Effect<DesktopPetsState, DesktopPetOperationError | DesktopPetUnknownIdError>;
     readonly importArchive: (
       archivePath: string,
@@ -134,7 +151,7 @@ export class DesktopPets extends Context.Service<
 >()("@t3tools/desktop/pets/DesktopPets") {}
 
 function defaultRuntimeState(): RuntimeState {
-  return { enabled: true, selectedPetId: "codex-buddy", pets: new Map(), errors: [] };
+  return { enabled: true, assignments: new Map(), pets: new Map(), errors: [] };
 }
 
 const make = Effect.gen(function* () {
@@ -164,7 +181,9 @@ const make = Effect.gen(function* () {
   const publicState = (runtime: RuntimeState): DesktopPetsState => ({
     supported: true,
     enabled: runtime.enabled,
-    selectedPetId: runtime.selectedPetId,
+    assignments: [...runtime.assignments.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([providerInstanceId, petId]) => ({ providerInstanceId, petId })),
     pets: [...runtime.pets.values()]
       .sort((left, right) => left.manifest.displayName.localeCompare(right.manifest.displayName))
       .map((pet) => toMetadata(environment.isDevelopment, pet)),
@@ -185,10 +204,35 @@ const make = Effect.gen(function* () {
     return publicState(next);
   });
 
-  const select = Effect.fn("desktop.pets.select")(function* (petId: string) {
+  const assign = Effect.fn("desktop.pets.assign")(function* (
+    providerInstanceId: string,
+    petId: string | null,
+  ) {
     const current = yield* getRuntimeState;
-    if (!current.pets.has(petId)) return yield* new DesktopPetUnknownIdError({ petId });
-    const next = { ...current, selectedPetId: petId };
+    const instanceId = providerInstanceId.trim();
+    if (instanceId.length === 0 || instanceId.length > MAX_PROVIDER_INSTANCE_ID_LENGTH) {
+      return yield* new DesktopPetOperationError({
+        operation: "assign",
+        messageText: "Provider instance id is empty or too long.",
+      });
+    }
+    if (petId !== null && !current.pets.has(petId)) {
+      return yield* new DesktopPetUnknownIdError({ petId });
+    }
+    if (
+      petId !== null &&
+      !current.assignments.has(instanceId) &&
+      current.assignments.size >= MAX_PET_ASSIGNMENTS
+    ) {
+      return yield* new DesktopPetOperationError({
+        operation: "assign",
+        messageText: `At most ${MAX_PET_ASSIGNMENTS} provider pet assignments can be stored.`,
+      });
+    }
+    const assignments = new Map(current.assignments);
+    if (petId === null) assignments.delete(instanceId);
+    else assignments.set(instanceId, petId);
+    const next: RuntimeState = { ...current, assignments };
     yield* persist(next);
     yield* Ref.set(stateRef, next);
     return publicState(next);
@@ -224,7 +268,6 @@ const make = Effect.gen(function* () {
     });
     const next: RuntimeState = {
       ...current,
-      selectedPetId: storedPet.manifest.id,
       pets: new Map(current.pets).set(storedPet.manifest.id, storedPet),
       errors: current.errors.filter((error) => !error.includes(storedPet.manifest.id)),
     };
@@ -260,10 +303,9 @@ const make = Effect.gen(function* () {
     nextPets.delete(petId);
     const next: RuntimeState = {
       ...current,
-      selectedPetId: resolveFallbackPetId(
-        nextPets,
-        current.selectedPetId === petId ? null : current.selectedPetId,
-      ),
+      // Providers pointing at the removed pet fall back to the plain dots
+      // indicator rather than silently inheriting someone else's companion.
+      assignments: withoutAssignmentsForPet(current.assignments, petId),
       pets: nextPets,
     };
     const persisted = yield* Effect.result(persist(next));
@@ -297,7 +339,7 @@ const make = Effect.gen(function* () {
     initialize: initializeEffect,
     getState: getRuntimeState.pipe(Effect.map(publicState)),
     setEnabled,
-    select,
+    assign,
     importArchive,
     remove,
     resolveSpritesheet,
@@ -425,11 +467,9 @@ async function initializeFromDisk(input: {
     }
   }
 
-  const selectedFromDisk = persisted?.selectedPetId ?? "codex-buddy";
-  const selectedPetId = resolveFallbackPetId(pets, selectedFromDisk);
   const runtime: RuntimeState = {
     enabled: persisted?.enabled ?? true,
-    selectedPetId,
+    assignments: resolveAssignments(persisted?.assignments ?? null, pets),
     pets,
     errors,
   };
@@ -460,9 +500,9 @@ async function readPersistedState(statePath: string): Promise<PersistedState | n
     const pets = record.pets;
     if (typeof pets !== "object" || pets === null || Array.isArray(pets)) return null;
     return {
-      version: 1,
+      version: PETS_STATE_VERSION,
       enabled: record.enabled,
-      selectedPetId: typeof record.selectedPetId === "string" ? record.selectedPetId : null,
+      assignments: asPersistedAssignments(record.assignments),
       pets: pets as Record<string, unknown>,
     };
   } catch {
@@ -491,9 +531,9 @@ function asPersistedPet(value: unknown): PersistedPet | null {
 async function writePersistedState(statePath: string, runtime: RuntimeState): Promise<void> {
   await NodeFS.mkdir(NodePath.dirname(statePath), { recursive: true });
   const document: PersistedState = {
-    version: 1,
+    version: PETS_STATE_VERSION,
     enabled: runtime.enabled,
-    selectedPetId: runtime.selectedPetId,
+    assignments: Object.fromEntries(runtime.assignments),
     pets: Object.fromEntries(
       [...runtime.pets.entries()].map(([id, pet]) => [
         id,
@@ -623,15 +663,52 @@ async function hashFile(filePath: string): Promise<string> {
   return NodeCrypto.createHash("sha256").update(bytes).digest("hex").toUpperCase();
 }
 
-function resolveFallbackPetId(
-  pets: ReadonlyMap<string, StoredPet>,
-  preferred: string | null,
-): string | null {
-  if (preferred && pets.has(preferred)) return preferred;
-  for (const id of ["codex-buddy", "claude"]) {
-    if (pets.has(id)) return id;
+function asPersistedAssignments(value: unknown): Record<string, string> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const assignments: Record<string, string> = {};
+  for (const [providerInstanceId, petId] of Object.entries(value as Record<string, unknown>)) {
+    if (
+      providerInstanceId.length === 0 ||
+      providerInstanceId.length > MAX_PROVIDER_INSTANCE_ID_LENGTH ||
+      typeof petId !== "string" ||
+      !isValidPetId(petId)
+    ) {
+      continue;
+    }
+    assignments[providerInstanceId] = petId;
   }
-  return [...pets.keys()].sort()[0] ?? null;
+  return assignments;
+}
+
+/**
+ * Drop assignments whose pet is no longer installed, and seed the built-in
+ * pairings when nothing has ever been persisted. A persisted-but-empty map
+ * means the user cleared every assignment, so it is left alone.
+ */
+function resolveAssignments(
+  persisted: Record<string, string> | null,
+  pets: ReadonlyMap<string, StoredPet>,
+): ReadonlyMap<string, string> {
+  const source: ReadonlyArray<readonly [string, string]> =
+    persisted === null ? DEFAULT_PET_ASSIGNMENTS : Object.entries(persisted);
+  const assignments = new Map<string, string>();
+  for (const [providerInstanceId, petId] of source) {
+    if (!pets.has(petId)) continue;
+    if (assignments.size >= MAX_PET_ASSIGNMENTS) break;
+    assignments.set(providerInstanceId, petId);
+  }
+  return assignments;
+}
+
+function withoutAssignmentsForPet(
+  assignments: ReadonlyMap<string, string>,
+  petId: string,
+): ReadonlyMap<string, string> {
+  const next = new Map(assignments);
+  for (const [providerInstanceId, assignedPetId] of assignments) {
+    if (assignedPetId === petId) next.delete(providerInstanceId);
+  }
+  return next;
 }
 
 function toOperationError(operation: string, cause: unknown): DesktopPetOperationError {

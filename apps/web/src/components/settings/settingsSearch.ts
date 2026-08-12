@@ -125,7 +125,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "desktop-pets-enabled",
-    title: "Show desktop pet",
+    title: "Show desktop pets",
     to: "/settings/general",
     targetId: "desktop-pets",
     searchTerms: ["pet", "pets", "питомец", "питомцы", "openpets"],

@@ -1,4 +1,8 @@
-import type { DesktopPetImportResult, DesktopPetsState } from "@t3tools/contracts";
+import type {
+  DesktopPetImportResult,
+  DesktopPetMetadata,
+  DesktopPetsState,
+} from "@t3tools/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 let sharedState: DesktopPetsState | null = null;
@@ -81,10 +85,10 @@ export function useDesktopPets() {
     },
     [bridge, mutate],
   );
-  const selectPet = useCallback(
-    (petId: string) => {
-      if (!bridge?.selectDesktopPet) return Promise.resolve(null);
-      return mutate(() => bridge.selectDesktopPet!({ petId }));
+  const assignPet = useCallback(
+    (providerInstanceId: string, petId: string | null) => {
+      if (!bridge?.assignDesktopPet) return Promise.resolve(null);
+      return mutate(() => bridge.assignDesktopPet!({ providerInstanceId, petId }));
     },
     [bridge, mutate],
   );
@@ -111,19 +115,36 @@ export function useDesktopPets() {
     [bridge, mutate],
   );
 
-  const selectedPet = useMemo(
-    () => state?.pets.find((pet) => pet.id === state.selectedPetId) ?? null,
-    [state],
+  const petsById = useMemo(
+    () => new Map((state?.pets ?? []).map((pet) => [pet.id, pet])),
+    [state?.pets],
+  );
+  const petIdByProviderInstanceId = useMemo(
+    () =>
+      new Map(
+        (state?.assignments ?? []).map(
+          (assignment) => [assignment.providerInstanceId, assignment.petId] as const,
+        ),
+      ),
+    [state?.assignments],
+  );
+  const petForProvider = useCallback(
+    (providerInstanceId: string | null | undefined): DesktopPetMetadata | null => {
+      if (!providerInstanceId) return null;
+      const petId = petIdByProviderInstanceId.get(providerInstanceId);
+      return petId === undefined ? null : (petsById.get(petId) ?? null);
+    },
+    [petIdByProviderInstanceId, petsById],
   );
 
   return {
     state,
-    selectedPet,
     loading,
     busy,
     error,
     setEnabled,
-    selectPet,
+    assignPet,
+    petForProvider,
     importArchive,
     removePet,
   };

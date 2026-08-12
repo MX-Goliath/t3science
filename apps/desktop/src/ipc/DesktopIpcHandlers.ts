@@ -50,10 +50,10 @@ import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
 import {
+  assignDesktopPet,
   getDesktopPetsState,
   importDesktopPetArchive,
   removeDesktopPet,
-  selectDesktopPet,
   setDesktopPetsEnabled,
 } from "./methods/pets.ts";
 import {
@@ -101,7 +101,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setWslOnly);
   yield* ipc.handle(getDesktopPetsState);
   yield* ipc.handle(setDesktopPetsEnabled);
-  yield* ipc.handle(selectDesktopPet);
+  yield* ipc.handle(assignDesktopPet);
   yield* ipc.handle(importDesktopPetArchive);
   yield* ipc.handle(removeDesktopPet);
   yield* ipc.handle(getSystemIntegrationState);

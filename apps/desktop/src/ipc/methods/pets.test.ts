@@ -10,17 +10,17 @@ import * as ElectronDialog from "../../electron/ElectronDialog.ts";
 import * as ElectronWindow from "../../electron/ElectronWindow.ts";
 import * as DesktopPets from "../../pets/DesktopPets.ts";
 import {
+  assignDesktopPet,
   getDesktopPetsState,
   importDesktopPetArchive,
   removeDesktopPet,
-  selectDesktopPet,
   setDesktopPetsEnabled,
 } from "./pets.ts";
 
 const baseState: DesktopPetsState = {
   supported: true,
   enabled: true,
-  selectedPetId: "codex-buddy",
+  assignments: [{ providerInstanceId: "codex", petId: "openai-codex" }],
   pets: [],
   errors: [],
 };
@@ -38,10 +38,13 @@ function petsLayer(calls: string[]) {
           calls.push(`enabled:${enabled}`);
           return { ...baseState, enabled };
         }),
-      select: (petId) =>
+      assign: (providerInstanceId, petId) =>
         Effect.sync(() => {
-          calls.push(`select:${petId}`);
-          return { ...baseState, selectedPetId: petId };
+          calls.push(`assign:${providerInstanceId}:${petId ?? "none"}`);
+          return {
+            ...baseState,
+            assignments: petId === null ? [] : [{ providerInstanceId, petId }],
+          };
         }),
       importArchive: (archivePath) =>
         Effect.sync(() => {
@@ -70,15 +73,29 @@ describe("desktop pets IPC", () => {
         (yield* setDesktopPetsEnabled.handler(false).pipe(Effect.flatMap(decodeState))).enabled,
         false,
       );
-      assert.equal(
-        (yield* selectDesktopPet.handler({ petId: "claude" }).pipe(Effect.flatMap(decodeState)))
-          .selectedPetId,
-        "claude",
+      assert.deepEqual(
+        (yield* assignDesktopPet
+          .handler({ providerInstanceId: "codex_personal", petId: "claude" })
+          .pipe(Effect.flatMap(decodeState))).assignments,
+        [{ providerInstanceId: "codex_personal", petId: "claude" }],
+      );
+      assert.deepEqual(
+        (yield* assignDesktopPet
+          .handler({ providerInstanceId: "codex", petId: null })
+          .pipe(Effect.flatMap(decodeState))).assignments,
+        [],
       );
       yield* removeDesktopPet.handler({ petId: "custom" });
-      assert.deepEqual(calls, ["enabled:false", "select:claude", "remove:custom"]);
+      assert.deepEqual(calls, [
+        "enabled:false",
+        "assign:codex_personal:claude",
+        "assign:codex:none",
+        "remove:custom",
+      ]);
 
-      const invalid = yield* Effect.result(selectDesktopPet.handler({ petId: 42 }));
+      const invalid = yield* Effect.result(
+        assignDesktopPet.handler({ providerInstanceId: 42, petId: "claude" }),
+      );
       assert.isTrue(Result.isFailure(invalid));
     }).pipe(Effect.provide(petsLayer(calls)));
   });

@@ -34,18 +34,34 @@ describe("DesktopPets", () => {
             Effect.gen(function* () {
               const initial = yield* pets.getState;
               assert.equal(initial.enabled, true);
-              assert.equal(initial.selectedPetId, "codex-buddy");
-              assert.deepEqual(initial.pets.map((pet) => pet.id).sort(), ["claude", "codex-buddy"]);
+              assert.deepEqual(initial.pets.map((pet) => pet.id).sort(), [
+                "claude",
+                "openai-codex",
+              ]);
+              assert.deepEqual(initial.assignments, [
+                { providerInstanceId: "claudeAgent", petId: "claude" },
+                { providerInstanceId: "codex", petId: "openai-codex" },
+              ]);
               yield* pets.setEnabled(false);
-              return yield* pets.select("claude");
+              yield* pets.assign("codex", "claude");
+              return yield* pets.assign("claudeAgent", null);
             }),
           );
           assert.equal(first.enabled, false);
-          assert.equal(first.selectedPetId, "claude");
+          assert.deepEqual(first.assignments, [{ providerInstanceId: "codex", petId: "claude" }]);
 
           const persisted = yield* runPets(stateDir, (pets) => pets.getState);
           assert.equal(persisted.enabled, false);
-          assert.equal(persisted.selectedPetId, "claude");
+          assert.deepEqual(persisted.assignments, [
+            { providerInstanceId: "codex", petId: "claude" },
+          ]);
+          const unknownFailure = yield* runPets(stateDir, (pets) =>
+            Effect.result(pets.assign("codex", "missing-pet")),
+          );
+          assert.isTrue(Result.isFailure(unknownFailure));
+          if (Result.isFailure(unknownFailure)) {
+            assert.instanceOf(unknownFailure.failure, DesktopPetUnknownIdError);
+          }
           const protectedFailure = yield* runPets(stateDir, (pets) =>
             Effect.result(pets.remove("claude")),
           );

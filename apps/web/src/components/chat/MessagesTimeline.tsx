@@ -224,6 +224,8 @@ interface TimelineRowActivityState {
   isCompacting: boolean;
   isRevertingCheckpoint: boolean;
   latestTurnId: TurnId | null;
+  /** Provider instance running the turn; selects the Working row's pet. */
+  activeProviderInstanceId: string | null;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
@@ -313,6 +315,7 @@ interface MessagesTimelineProps {
   latestTurn: TimelineLatestTurn | null;
   runningTurnId: TurnId | null;
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
+  activeProviderInstanceId?: string | null;
   routeThreadKey: string;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
@@ -371,6 +374,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   latestTurn,
   runningTurnId,
   turnDiffSummaryByAssistantMessageId,
+  activeProviderInstanceId = null,
   routeThreadKey,
   onOpenTurnDiff,
   revertTurnCountByUserMessageId,
@@ -775,8 +779,16 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isCompacting,
       isRevertingCheckpoint,
       latestTurnId: latestTurn?.turnId ?? null,
+      activeProviderInstanceId,
     }),
-    [isCompacting, isRevertingCheckpoint, isWorking, isPreparingWorktree, latestTurn?.turnId],
+    [
+      activeProviderInstanceId,
+      isCompacting,
+      isRevertingCheckpoint,
+      isWorking,
+      isPreparingWorktree,
+      latestTurn?.turnId,
+    ],
   );
 
   // Stable renderItem — no closure deps. Row components read shared state
@@ -1704,11 +1716,15 @@ function ProposedPlanTimelineRow({
 }
 
 function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { isCompacting, isPreparingWorktree, isRevertingCheckpoint } = use(TimelineRowActivityCtx);
+  const { isCompacting, isPreparingWorktree, isRevertingCheckpoint, activeProviderInstanceId } =
+    use(TimelineRowActivityCtx);
   return (
     <div className="border-b border-border/60 pb-2 pt-1">
       <div className="flex h-6 min-w-0 items-center gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-        <WorkingPetIndicator isRevertingCheckpoint={isRevertingCheckpoint} />
+        <WorkingPetIndicator
+          isRevertingCheckpoint={isRevertingCheckpoint}
+          providerInstanceId={activeProviderInstanceId}
+        />
         <span
           key={isPreparingWorktree ? "setup" : isCompacting ? "compacting" : "working"}
           ref={isPreparingWorktree || isCompacting ? observeVisibleAnimation : undefined}

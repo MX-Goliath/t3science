@@ -8234,6 +8234,7 @@ export default function ChatView(props: ChatViewProps) {
                 latestTurn={activeLatestTurn}
                 runningTurnId={activeRunningTurnId}
                 turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
+                activeProviderInstanceId={activeProviderInstanceId}
                 activeThreadEnvironmentId={activeThread.environmentId}
                 routeThreadKey={routeThreadKey}
                 onOpenTurnDiff={onOpenTurnDiff}
