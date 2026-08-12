@@ -208,10 +208,12 @@ import {
   GitBranchIcon,
   Minimize2Icon,
   PaperclipIcon,
+  TimerIcon,
   WifiOffIcon,
 } from "lucide-react";
 import { cn, randomHex } from "~/lib/utils";
 import { stackedThreadToast, toastManager } from "./ui/toast";
+import { cancelArmedScheduledSend } from "../scheduledSend";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
 import { type NewProjectScriptInput } from "./ProjectScriptsControl";
 import {
@@ -263,6 +265,7 @@ import {
   beginBackgroundDraftSubmissionByRef,
   clearBackgroundDraftSubmissionByRef,
   composerDraftHasUserContent,
+  composerTargetKey,
   type ComposerFileAttachment,
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -1527,7 +1530,12 @@ export default function ChatView(props: ChatViewProps) {
     const draft = store.getComposerDraft(composerDraftTarget);
     return draft ? composerDraftHasUserContent({ ...draft, prompt: "" }) : false;
   });
+  const scheduledSend = useComposerDraftStore(
+    (store) => store.getComposerDraft(composerDraftTarget)?.scheduledSend ?? null,
+  );
+  const scheduledSendRuntimeKey = composerTargetKey(composerDraftTarget);
   const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
+  const setComposerScheduledSend = useComposerDraftStore((store) => store.setScheduledSend);
   const addComposerDraftImages = useComposerDraftStore((store) => store.addImages);
   const addComposerDraftFiles = useComposerDraftStore((store) => store.addFiles);
   const setComposerDraftTerminalContexts = useComposerDraftStore(
@@ -5779,6 +5787,55 @@ export default function ChatView(props: ChatViewProps) {
       onDismiss: acknowledgeActiveThreadWoke,
     };
   }, [acknowledgeActiveThreadWoke, activeThread?.id, activeThreadWokeVisible]);
+  const queuedAgentMessageBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
+    if (scheduledSend?.source !== "agent-completion") {
+      return null;
+    }
+    const waitingForAgent = scheduledSend.waitingForAgent;
+    const waitingForCurrentThread =
+      waitingForAgent !== undefined &&
+      waitingForAgent.environmentId === activeThread?.environmentId &&
+      waitingForAgent.threadId === activeThread?.id;
+    const waitingLabel = waitingForCurrentThread
+      ? "this agent"
+      : waitingForAgent?.threadTitle
+        ? `agent in ${waitingForAgent.threadTitle}`
+        : "the agent";
+
+    return {
+      id: `queued-agent-message:${scheduledSend.scheduledAt}`,
+      variant: "info",
+      icon: <TimerIcon />,
+      title: "Next message queued",
+      description: `It will be sent after ${waitingLabel} finishes.`,
+      actions: (
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={() => {
+            setComposerScheduledSend(composerDraftTarget, null);
+            cancelArmedScheduledSend(scheduledSendRuntimeKey);
+          }}
+        >
+          Cancel
+        </Button>
+      ),
+    };
+  }, [
+    activeThread?.environmentId,
+    activeThread?.id,
+    composerDraftTarget,
+    scheduledSend,
+    scheduledSendRuntimeKey,
+    setComposerScheduledSend,
+  ]);
+  // The stack renders items[0] front-most and tucks the rest behind hover, so
+  // ordering is priority: urgent system banners (error/warning variants plus
+  // calm-styled live states flagged `urgent`, like update progress), then
+  // background liveness — its Stop button is the only stop affordance for
+  // settled turns, so a passive "update available" notice must not cover it —
+  // then the queued message, the woke and branch-mismatch notices, and the
+  // informational parked-thread banner last — it must never cover another.
   const parkedThreadBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (!activeThreadSnoozed && !activeThreadSettled) {
       return null;
@@ -5935,6 +5992,8 @@ export default function ChatView(props: ChatViewProps) {
       backgroundLivenessBannerItem === null ? [] : [backgroundLivenessBannerItem];
     const resumeCompactionItems =
       resumeCompactionBannerItem === null ? [] : [resumeCompactionBannerItem];
+    const queuedAgentMessageItems =
+      queuedAgentMessageBannerItem === null ? [] : [queuedAgentMessageBannerItem];
     const wokeThreadItems = wokeThreadBannerItem === null ? [] : [wokeThreadBannerItem];
     const parkedThreadItems = parkedThreadBannerItem === null ? [] : [parkedThreadBannerItem];
     // The user asked for this one, so it leads the notice tier instead of trailing it.
@@ -5945,6 +6004,7 @@ export default function ChatView(props: ChatViewProps) {
         ...systemComposerBannerItems,
         ...backgroundLivenessItems,
         ...resumeCompactionItems,
+        ...queuedAgentMessageItems,
         ...wokeThreadItems,
         ...parkedThreadItems,
       ];
@@ -5954,6 +6014,7 @@ export default function ChatView(props: ChatViewProps) {
       ...systemComposerBannerItems,
       ...backgroundLivenessItems,
       ...resumeCompactionItems,
+      ...queuedAgentMessageItems,
       ...wokeThreadItems,
       {
         id: `branch-mismatch:${activeBranchMismatchKey}`,
@@ -6003,6 +6064,7 @@ export default function ChatView(props: ChatViewProps) {
     localCheckoutBranchMismatch,
     parkedThreadBannerItem,
     resumeCompactionBannerItem,
+    queuedAgentMessageBannerItem,
     showBranchMismatchBanner,
     systemComposerBannerItems,
     usageLimitsBanner,
