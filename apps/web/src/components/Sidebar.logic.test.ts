@@ -16,6 +16,7 @@ import {
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
   resolveSidebarStageBadgeLabel,
+  resolveSidebarTodoRingSegmentStates,
   resolveThreadRowClassName,
   resolveSidebarThreadStatus,
   resolveThreadStatusPill,
@@ -51,6 +52,54 @@ import {
 } from "../types";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("resolveSidebarTodoRingSegmentStates", () => {
+  it("fills the proportional number of segments for short plans", () => {
+    expect(
+      resolveSidebarTodoRingSegmentStates({
+        steps: [
+          { step: "Inspect", status: "completed" },
+          { step: "Implement", status: "pending" },
+          { step: "Verify", status: "pending" },
+          { step: "Ship", status: "pending" },
+        ],
+      }),
+    ).toEqual([
+      "completed",
+      "completed",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
+  });
+
+  it("groups multiple completed steps into one segment for long plans", () => {
+    expect(
+      resolveSidebarTodoRingSegmentStates({
+        steps: Array.from({ length: 16 }, (_, index) => ({
+          step: `Step ${index + 1}`,
+          status: index < 2 ? ("completed" as const) : ("pending" as const),
+        })),
+      }),
+    ).toEqual([
+      "completed",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
+  });
+
+  it("does not render progress segments without a plan", () => {
+    expect(resolveSidebarTodoRingSegmentStates(null)).toEqual([]);
+  });
+});
 
 describe("shouldNavigateAfterProjectRemoval", () => {
   const projectThreads = [{ environmentId: "environment-local", id: "thread-1" }];

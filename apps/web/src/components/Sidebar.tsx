@@ -46,7 +46,6 @@ import {
   FolderPlusIcon,
   GitBranchIcon,
   Globe2Icon,
-  EllipsisIcon,
   MessageSquareIcon,
   PinIcon,
   PlusIcon,
@@ -114,7 +113,12 @@ import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
-import { useGeneralChatsProjects, useProjects, useThreadShells } from "../state/entities";
+import {
+  useGeneralChatsProjects,
+  useProjects,
+  useThread,
+  useThreadShells,
+} from "../state/entities";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
@@ -141,6 +145,7 @@ import {
   resolveAdjacentThreadId,
   resolveSettledTimestamp,
   resolveSidebarThreadStatus,
+  resolveSidebarTodoRingSegmentStates,
   searchSidebarThreadsByTitle,
   resolveWorkingStartedAt,
   sortLogicalProjectsForSidebar,
@@ -149,6 +154,7 @@ import {
   sortSettledThreadsForSidebar,
   sortThreadsForSidebar,
 } from "./Sidebar.logic";
+import { deriveActivePlanState, type ActivePlanState } from "../session-logic";
 import { resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
 import {
   ThreadWorktreeIndicator,
@@ -197,6 +203,39 @@ import { GENERAL_CHATS_PROJECT_KEY } from "../generalChats";
 // stays behind an explicit Show more.
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
+
+function SidebarTodoProgressRing({ plan }: { plan: ActivePlanState }) {
+  const segmentStates = resolveSidebarTodoRingSegmentStates(plan);
+  const center = 8;
+  const radius = 5.75;
+  const dashHalfAngle = 0.18;
+
+  return (
+    <svg
+      aria-hidden
+      className="size-4 shrink-0"
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {segmentStates.map((state, index) => {
+        const angle = (index / segmentStates.length) * Math.PI * 2 - Math.PI / 2;
+        const point = (pointAngle: number) =>
+          `${center + Math.cos(pointAngle) * radius} ${center + Math.sin(pointAngle) * radius}`;
+        return (
+          <path
+            key={angle}
+            d={`M ${point(angle - dashHalfAngle)} A ${radius} ${radius} 0 0 1 ${point(angle + dashHalfAngle)}`}
+            className={state === "completed" ? "text-success" : "opacity-70"}
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        );
+      })}
+    </svg>
+  );
+}
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -773,6 +812,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
 
 const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   thread: SidebarThreadSummary;
+  activePlan: ActivePlanState | null;
   variant: "card" | "slim";
   // Slim rows are either settled (action: un-settle) or merely quiet
   // (seen Ready threads — action: settle).
@@ -1530,7 +1570,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                         )}
                       >
                         {topStatus.icon === "working" ? (
-                          <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
+                          props.activePlan ? (
+                            <SidebarTodoProgressRing plan={props.activePlan} />
+                          ) : (
+                            <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
+                          )
                         ) : topStatus.icon === "done" ? (
                           <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
                         ) : topStatus.icon === "scheduled" ? (
@@ -1882,6 +1926,14 @@ export default function Sidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  const routeThread = useThread(routeThreadRef);
+  const activePlan = useMemo(
+    () =>
+      routeThread
+        ? deriveActivePlanState(routeThread.activities, routeThread.latestTurn?.turnId ?? undefined)
+        : null,
+    [routeThread],
+  );
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one
@@ -3531,6 +3583,7 @@ export default function Sidebar() {
       <SidebarThreadRow
         key={`${threadKey}:${rowVariant}`}
         thread={thread}
+        activePlan={threadKey === routeThreadKey ? activePlan : null}
         variant={rowVariant}
         variantAction={
           section === "snoozed" ? "unsnooze" : section === "settled" ? "unsettle" : "settle"

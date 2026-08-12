@@ -11,7 +11,7 @@ import {
 import type { SidebarThreadSummary, Thread } from "../types";
 import type { ThreadRouteTarget } from "../threadRoutes";
 import { cn } from "../lib/utils";
-import { isLatestTurnSettled } from "../session-logic";
+import { isLatestTurnSettled, type ActivePlanState } from "../session-logic";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
@@ -23,6 +23,25 @@ export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 100;
 // so this limit is a direct renderer-heap and server-load multiplier — keep
 // it small; cold opens still render instantly from the cached snapshot.
 export const SIDEBAR_THREAD_PREWARM_LIMIT = 3;
+
+export const SIDEBAR_TODO_RING_SEGMENT_COUNT = 8;
+
+export function resolveSidebarTodoRingSegmentStates(
+  plan: Pick<ActivePlanState, "steps"> | null,
+  segmentCount = SIDEBAR_TODO_RING_SEGMENT_COUNT,
+): ReadonlyArray<"completed" | "pending"> {
+  if (plan === null || plan.steps.length === 0 || segmentCount <= 0) {
+    return [];
+  }
+
+  const completedSegmentCount = Math.floor(
+    (plan.steps.filter((step) => step.status === "completed").length * segmentCount) /
+      plan.steps.length,
+  );
+  return Array.from({ length: segmentCount }, (_, segmentIndex) =>
+    segmentIndex < completedSegmentCount ? "completed" : "pending",
+  );
+}
 
 type SidebarProject = {
   id: string;
