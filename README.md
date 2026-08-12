@@ -4,13 +4,18 @@ This project is a fork of [T3 Code](https://github.com/pingdotgg/t3code) that ad
 
 ## Changes Compared to the Original T3 Code
 
-- Added the ability to store conversations directly in the project root. This is useful for projects that need to remain fully local, be portable on a USB drive, or avoid relying on synchronization services.
-- Added display of the remaining 5-hour and weekly usage limits for Codex and Claude Code.
-- Added the ability to pin chats within projects in the legacy sidebar.
-- Added an opt-in web interface for using ChatGPT, Claude, and Grok without consuming Codex limits, making it possible to run tasks such as Deep Research separately. By default, downloaded files are saved to the most recently opened project directory, with a save-location dialog opening inside that project folder for more convenient document export.
+- Added opt-in portable local conversations stored in each project's `.t3/conversations` directory, including attachments and Actions, so projects can be moved between devices and conversations continued from the project root.
+- Added display of the remaining 5-hour and weekly usage limits for Codex, Claude Code, and Antigravity.
+- Added the ability to pin chats and preserve their order across web, desktop, and mobile clients, with pinned chats also supported inside projects in the legacy sidebar.
+- Added an opt-in web interface for using ChatGPT, Claude, Grok, and Perplexity without running those tasks through a provider CLI, making it possible to run tasks such as Deep Research separately. By default, downloaded files are saved to the most recently opened project directory, with a save-location dialog opening inside that project folder for more convenient document export.
 - Added the ability to define custom AI prompts in Actions for frequently repeated tasks.
-- Added global chat menu for general questions not connected to any project
-- Added scheduled message sending with an option to send messages after usage limits reset, which is convenient for 5-hour limits.
+- Added opt-in general chats for questions and conversations not connected to any project.
+- Added sorting threads by recent activity, so conversations with new messages or turns move to the top.
+- Added the ability to switch providers within an existing chat while carrying its conversation context into a new provider session.
+- Added scheduled message sending at a chosen time, after usage limits reset, or after another agent finishes its current turn.
+- Added handling for unavailable project folders: affected chats remain readable but cannot send messages, and are restored automatically when the folder becomes available again.
+- Added Windows and Linux desktop tray support, including keeping the app running in the tray, starting in the tray, and launching at login.
+- Added Antigravity provider support through the `agy` headless CLI, including model discovery, reasoning levels, permissions, image attachments, and session continuation.
 
 # T3 Code
 
