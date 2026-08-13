@@ -9,6 +9,7 @@
 - [Using persistent web chat](./user/web-chat.md)
 - [Portable local conversations (desktop)](./user/portable-conversations.md)
 - [Desktop pets](./user/desktop-pets.md)
+- [Review usage](./user/usage.md)
 - [Customize a project icon](./user/project-settings.md)
 - [Remote access](./user/remote-access.md)
 - [Keeping app and server in sync](./user/updating.md)
