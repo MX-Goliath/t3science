@@ -607,17 +607,25 @@ export function deriveMessagesTimelineRows(input: {
       timelineEntry.message.role === "assistant" &&
       unsettledTurnId !== null &&
       timelineEntry.message.turnId === unsettledTurnId;
+    const assistantTurnInSettledTail =
+      timelineEntry.message.role === "assistant" &&
+      input.settledTurnState != null &&
+      timelineEntry.message.turnId === input.latestTurn?.turnId;
 
     const durationStart =
       durationStartByMessageId.get(timelineEntry.message.id) ?? timelineEntry.message.createdAt;
 
     // While the turn is still running, the latest assistant message is only
     // provisionally terminal — withhold the metadata row until the turn
-    // settles so commentary doesn't flash timestamps mid-work.
+    // settles so commentary doesn't flash timestamps mid-work. Keep it
+    // withheld during the settled pet tail as well: the invisible hover-only
+    // metadata occupies a line and would push Done / Failed / Stopped below
+    // the position previously occupied by Working.
     const showAssistantMeta =
       timelineEntry.message.role === "assistant" &&
       terminalAssistantMessageIds.has(timelineEntry.message.id) &&
-      !assistantTurnStillInProgress;
+      !assistantTurnStillInProgress &&
+      !assistantTurnInSettledTail;
 
     nextRows.push({
       kind: "message",
