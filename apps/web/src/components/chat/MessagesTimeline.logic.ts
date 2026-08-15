@@ -29,6 +29,7 @@ import {
 import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
 import { type MessageId, type OrchestrationLatestTurn, type TurnId } from "@t3tools/contracts";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
+import type { SettledTurnState } from "../pets/workingPetAnimation";
 
 const TIMELINE_MINIMAP_ITEM_SPACING = 8;
 export const TIMELINE_MINIMAP_MIN_ITEMS = 2;
@@ -786,6 +787,8 @@ export function deriveMessagesTimelineRows(input: {
   isWorking: boolean;
   /** Working row visible — live work, or the settled tail window. */
   workingRowVisible?: boolean;
+  /** Settled state while the working row's terminal pet animation is visible. */
+  settledTurnState?: SettledTurnState | null;
   activeTurnStartedAt: string | null;
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
@@ -1116,17 +1119,25 @@ export function deriveMessagesTimelineRows(input: {
       timelineEntry.message.turnId !== null &&
       timelineEntry.message.turnId !== undefined &&
       activeVisualResponseTurnIds.has(timelineEntry.message.turnId);
+    const assistantTurnInSettledTail =
+      timelineEntry.message.role === "assistant" &&
+      input.settledTurnState != null &&
+      timelineEntry.message.turnId === input.latestTurn?.turnId;
 
     const durationStart =
       durationStartByMessageId.get(timelineEntry.message.id) ?? timelineEntry.message.createdAt;
 
     // While the turn is still running, the latest assistant message is only
     // provisionally terminal — withhold the metadata row until the turn
-    // settles so commentary doesn't flash timestamps mid-work.
+    // settles so commentary doesn't flash timestamps mid-work. Keep it
+    // withheld during the settled pet tail as well: the invisible hover-only
+    // metadata occupies a line and would push Done / Failed / Stopped below
+    // the position previously occupied by Working.
     const showAssistantMeta =
       timelineEntry.message.role === "assistant" &&
       terminalAssistantMessageIds.has(timelineEntry.message.id) &&
-      !assistantResponseStillInProgress;
+      !assistantResponseStillInProgress &&
+      !assistantTurnInSettledTail;
 
     nextRows.push({
       kind: "message",

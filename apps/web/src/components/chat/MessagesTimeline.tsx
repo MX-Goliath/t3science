@@ -561,6 +561,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         expandedWorkGroupIds,
         isWorking,
         workingRowVisible,
+        settledTurnState,
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,

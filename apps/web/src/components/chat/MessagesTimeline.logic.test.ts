@@ -103,6 +103,47 @@ describe("streaming row projection", () => {
     return { messages, work, timeline, input, time, turnId, historyTurnId };
   }
 
+  it("withholds assistant metadata until the settled pet tail ends", () => {
+    const input = {
+      timelineEntries: [
+        {
+          id: "assistant-final-entry",
+          kind: "message" as const,
+          createdAt: "2026-01-01T00:00:10Z",
+          message: {
+            id: "assistant-final" as never,
+            role: "assistant" as const,
+            text: "Done.",
+            turnId: "turn-1" as never,
+            createdAt: "2026-01-01T00:00:10Z",
+            updatedAt: "2026-01-01T00:00:11Z",
+            streaming: false,
+          },
+        },
+      ],
+      latestTurn: {
+        turnId: "turn-1" as never,
+        state: "completed" as const,
+        startedAt: "2026-01-01T00:00:00Z",
+        completedAt: "2026-01-01T00:00:11Z",
+      },
+      isWorking: false,
+      activeTurnStartedAt: "2026-01-01T00:00:00Z",
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    };
+
+    const duringTail = deriveMessagesTimelineRows({
+      ...input,
+      workingRowVisible: true,
+      settledTurnState: "completed",
+    });
+    const afterTail = deriveMessagesTimelineRows({ ...input, workingRowVisible: false });
+
+    expect(duringTail.find((row) => row.kind === "message")?.showAssistantMeta).toBe(false);
+    expect(afterTail.find((row) => row.kind === "message")?.showAssistantMeta).toBe(true);
+  });
+
   it.each([
     ["", "Now visible"],
     [" \n", "Now visible"],
