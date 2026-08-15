@@ -14,7 +14,7 @@ Open **Settings → Providers**, expand a provider instance, and use **Companion
 
 The section shows the assigned pet in a large preview with a menu for trying all nine animations.
 
-While a turn runs, the `Working` row shows the pet assigned to the provider instance running it.
+While a turn runs, the `Working` row shows the pet assigned to the provider instance running it. The pet reacts to what the turn is doing: it runs while the agent works, waits while the agent asks a question or awaits your approval for a command, and reviews a checkpoint while a restore runs. When the turn finishes, the pet stays for a few seconds to celebrate a done turn, fail a broken one, or wave a stopped one, then the row goes away.
 
 The Desktop app includes **Codex** and **Claude**. On first run they are assigned to the built-in Codex and Claude provider slots; every later change is yours to make.
 

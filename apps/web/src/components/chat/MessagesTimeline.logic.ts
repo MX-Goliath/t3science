@@ -782,11 +782,16 @@ export function deriveMessagesTimelineRows(input: {
   runningTurnId?: TurnId | null;
   expandedTurnIds?: ReadonlySet<TurnId>;
   expandedWorkGroupIds?: ReadonlySet<string>;
+  /** Whether provider work is currently in flight. */
   isWorking: boolean;
+  /** Working row visible — live work, or the settled tail window. */
+  workingRowVisible?: boolean;
   activeTurnStartedAt: string | null;
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
 }): MessagesTimelineRow[] {
+  const isWorking = input.isWorking;
+  const workingRowVisible = input.workingRowVisible ?? isWorking;
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
     input.timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
@@ -799,7 +804,7 @@ export function deriveMessagesTimelineRows(input: {
   const activeVisualResponseTurnIds = deriveActiveVisualResponseTurnIds({
     timelineEntries: input.timelineEntries,
     unsettledTurnId,
-    isWorking: input.isWorking,
+    isWorking,
   });
   const foldsByAnchorEntryId = deriveTurnFolds({
     timelineEntries: input.timelineEntries,
@@ -1143,10 +1148,10 @@ export function deriveMessagesTimelineRows(input: {
     });
   }
 
-  if (input.isWorking && activeTurnHeaderIndex === input.timelineEntries.length) {
+  if (workingRowVisible && activeTurnHeaderIndex === input.timelineEntries.length) {
     appendWorkingRow();
   }
-  if (input.isWorking && (!hasActivityRow || latestToolFailed)) {
+  if (isWorking && (!hasActivityRow || latestToolFailed)) {
     nextRows.push({
       kind: "thinking",
       id: LIVE_ACTIVITY_ROW_ID,

@@ -325,6 +325,7 @@ import { MessagesTimeline } from "./chat/MessagesTimeline";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { resolveComposerTimelineInset } from "./composerFooterLayout";
+import { useWorkingRowSettledTail } from "./pets/useWorkingRowSettledTail";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { expandedImageKey, type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
@@ -2828,6 +2829,17 @@ export default function ChatView(props: ChatViewProps) {
     !compactionSettled;
   const isWorking =
     phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint || isCompacting;
+  // The working row's pet plays a terminal animation for a short tail after
+  // the active turn settles (jump on done, fail on error, wave on stop), then
+  // the row goes away.
+  const settledTurnState = useWorkingRowSettledTail({
+    threadKey: activeThread ? activeThreadKey : null,
+    latestTurnId: activeLatestTurn?.turnId ?? null,
+    latestTurnState: activeLatestTurn?.state ?? null,
+    isWorking,
+    latestTurnSettled,
+  });
+  const isWaitingForUser = activePendingApproval !== null || activePendingUserInput !== null;
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -8230,6 +8242,8 @@ export default function ChatView(props: ChatViewProps) {
                 isWorking={isWorking}
                 isPreparingWorktree={isPreparingWorktree}
                 isCompacting={isCompacting}
+                settledTurnState={settledTurnState}
+                isWaitingForUser={isWaitingForUser}
                 activeTurnStartedAt={activeWorkStartedAt}
                 listRef={legendListRef}
                 timelineEntries={timelineEntries}

@@ -1,5 +1,6 @@
 import {
   type AssistantCitation,
+  type DesktopPetAnimationState,
   type EnvironmentId,
   type MessageId,
   type ScopedThreadRef,
@@ -171,6 +172,7 @@ import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 import { WorkingPetIndicator } from "../pets/WorkingPetIndicator";
+import { resolveWorkingPetAnimation, type SettledTurnState } from "../pets/workingPetAnimation";
 import {
   buildInlineTerminalContextText,
   formatInlineTerminalContextLabel,
@@ -226,6 +228,10 @@ interface TimelineRowActivityState {
   latestTurnId: TurnId | null;
   /** Provider instance running the turn; selects the Working row's pet. */
   activeProviderInstanceId: string | null;
+  /** Resolved pet animation for the working row. */
+  workingPetAnimation: DesktopPetAnimationState;
+  /** Settled turn state while the terminal pet animation is visible. */
+  settledTurnState: SettledTurnState | null;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
@@ -309,6 +315,10 @@ interface MessagesTimelineProps {
   isWorking: boolean;
   isPreparingWorktree?: boolean;
   isCompacting?: boolean;
+  /** Settled state during the short post-turn pet animation. */
+  settledTurnState?: SettledTurnState | null;
+  /** Whether the active turn is blocked on an approval or user input. */
+  isWaitingForUser?: boolean;
   activeTurnStartedAt: string | null;
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReturnType<typeof deriveTimelineEntries>;
@@ -366,6 +376,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
   isPreparingWorktree = false,
   isCompacting = false,
+  settledTurnState = null,
+  isWaitingForUser = false,
   activeTurnStartedAt,
   agentPanelModel = EMPTY_AGENT_PANEL_MODEL,
   onOpenAgents = NOOP_OPEN_AGENTS,
@@ -532,6 +544,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     });
   }, [latestTurn]);
 
+  const workingRowVisible = isWorking || settledTurnState !== null;
   const rowsProjectionRef = useRef<{
     threadKey: string;
     workspaceRoot: string | undefined;
@@ -547,6 +560,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         expandedTurnIds,
         expandedWorkGroupIds,
         isWorking,
+        workingRowVisible,
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
@@ -567,6 +581,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     expandedTurnIds,
     expandedWorkGroupIds,
     isWorking,
+    settledTurnState,
     activeTurnStartedAt,
     turnDiffSummaryByAssistantMessageId,
     revertTurnCountByUserMessageId,
@@ -780,14 +795,22 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isRevertingCheckpoint,
       latestTurnId: latestTurn?.turnId ?? null,
       activeProviderInstanceId,
+      workingPetAnimation: resolveWorkingPetAnimation({
+        isRevertingCheckpoint,
+        settledTurnState,
+        isWaitingForUser,
+      }),
+      settledTurnState,
     }),
     [
       activeProviderInstanceId,
       isCompacting,
       isRevertingCheckpoint,
+      isWaitingForUser,
       isWorking,
       isPreparingWorktree,
       latestTurn?.turnId,
+      settledTurnState,
     ],
   );
 
@@ -1715,18 +1738,36 @@ function ProposedPlanTimelineRow({
   );
 }
 
+const WORKING_ROW_SETTLED_LABELS: Readonly<Record<SettledTurnState, string>> = {
+  completed: "Done",
+  error: "Failed",
+  interrupted: "Stopped",
+};
+
 function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { isCompacting, isPreparingWorktree, isRevertingCheckpoint, activeProviderInstanceId } =
-    use(TimelineRowActivityCtx);
+  const {
+    isCompacting,
+    isPreparingWorktree,
+    activeProviderInstanceId,
+    workingPetAnimation,
+    settledTurnState,
+  } = use(TimelineRowActivityCtx);
+  const settledLabel = settledTurnState ? WORKING_ROW_SETTLED_LABELS[settledTurnState] : null;
   return (
     <div className="border-b border-border/60 pb-2 pt-1">
       <div className="flex h-6 min-w-0 items-center gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
         <WorkingPetIndicator
-          isRevertingCheckpoint={isRevertingCheckpoint}
+          animation={workingPetAnimation}
           providerInstanceId={activeProviderInstanceId}
         />
         <span
-          key={isPreparingWorktree ? "setup" : isCompacting ? "compacting" : "working"}
+          key={
+            isPreparingWorktree
+              ? "setup"
+              : isCompacting
+                ? "compacting"
+                : (settledTurnState ?? "working")
+          }
           ref={isPreparingWorktree || isCompacting ? observeVisibleAnimation : undefined}
           className="relative shrink-0 overflow-hidden whitespace-nowrap transition-opacity duration-150 starting:opacity-0 motion-reduce:transition-none"
         >
@@ -1742,6 +1783,8 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
                 <CompactingLabel />
               </ActivityShimmerOverlay>
             </>
+          ) : settledLabel ? (
+            settledLabel
           ) : row.createdAt ? (
             <>
               Working for <WorkingTimer createdAt={row.createdAt} />
