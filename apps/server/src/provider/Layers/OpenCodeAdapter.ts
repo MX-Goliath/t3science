@@ -5,6 +5,7 @@ import {
   ProviderInstanceId,
   type ProviderRuntimeEvent,
   type ProviderSession,
+  type ThreadTokenUsageSnapshot,
   RuntimeItemId,
   RuntimeRequestId,
   ThreadId,
@@ -23,7 +24,13 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import type { OpencodeClient, Part, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2";
+import type {
+  AssistantMessage,
+  OpencodeClient,
+  Part,
+  PermissionRequest,
+  QuestionRequest,
+} from "@opencode-ai/sdk/v2";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
@@ -216,10 +223,12 @@ interface OpenCodeSessionContext {
   readonly partById: Map<string, Part>;
   readonly emittedTextByPartId: Map<string, string>;
   readonly completedAssistantPartIds: Set<string>;
+  readonly contextWindowByModel: ReadonlyMap<string, number>;
   readonly turns: Array<OpenCodeTurnSnapshot>;
   activeTurnId: TurnId | undefined;
   activeAgent: string | undefined;
   activeVariant: string | undefined;
+  lastTokenUsageKey: string | undefined;
   /**
    * One-shot guard flipped by `stopOpenCodeContext` / `emitUnexpectedExit`.
    * The session lifecycle is owned by `sessionScope`; this Ref exists only
@@ -235,6 +244,67 @@ interface OpenCodeSessionContext {
    *   - tears down the OpenCode server process for scope-owned servers.
    */
   readonly sessionScope: Scope.Closeable;
+}
+
+function finiteNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : undefined;
+}
+
+function finitePositiveInteger(value: unknown): number | undefined {
+  const normalized = finiteNonNegativeInteger(value);
+  return normalized !== undefined && normalized > 0 ? normalized : undefined;
+}
+
+function openCodeModelSlug(providerID: string, modelID: string): string {
+  return `${providerID}/${modelID}`;
+}
+
+function openCodeTokenUsageKey(usage: ThreadTokenUsageSnapshot): string {
+  return [
+    usage.usedTokens,
+    usage.maxTokens,
+    usage.inputTokens,
+    usage.cachedInputTokens,
+    usage.outputTokens,
+    usage.reasoningOutputTokens,
+  ].join(":");
+}
+
+/**
+ * OpenCode reports the latest assistant message as an active-context snapshot.
+ * Its input count excludes cache reads and writes, so add those components back
+ * exactly once instead of trusting `tokens.total`, whose semantics have varied
+ * across OpenCode and upstream AI SDK versions.
+ */
+export function normalizeOpenCodeTokenUsage(
+  message: Pick<AssistantMessage, "providerID" | "modelID" | "tokens">,
+  contextWindow?: number,
+): ThreadTokenUsageSnapshot | undefined {
+  const inputTokens = finiteNonNegativeInteger(message.tokens.input) ?? 0;
+  const cachedInputTokens = finiteNonNegativeInteger(message.tokens.cache.read) ?? 0;
+  const cacheWriteTokens = finiteNonNegativeInteger(message.tokens.cache.write) ?? 0;
+  const outputTokens = finiteNonNegativeInteger(message.tokens.output) ?? 0;
+  const reasoningOutputTokens = finiteNonNegativeInteger(message.tokens.reasoning) ?? 0;
+  const activeTokens =
+    inputTokens + cachedInputTokens + cacheWriteTokens + outputTokens + reasoningOutputTokens;
+  if (activeTokens <= 0) {
+    return undefined;
+  }
+
+  const maxTokens = finitePositiveInteger(contextWindow);
+  const usedTokens = maxTokens !== undefined ? Math.min(activeTokens, maxTokens) : activeTokens;
+  const totalInputTokens = inputTokens + cachedInputTokens + cacheWriteTokens;
+  return {
+    usedTokens,
+    lastUsedTokens: usedTokens,
+    ...(totalInputTokens > 0 ? { inputTokens: totalInputTokens } : {}),
+    ...(cachedInputTokens > 0 ? { cachedInputTokens } : {}),
+    ...(outputTokens > 0 ? { outputTokens } : {}),
+    ...(reasoningOutputTokens > 0 ? { reasoningOutputTokens } : {}),
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
+  };
 }
 
 export interface OpenCodeAdapterLiveOptions {
@@ -651,6 +721,21 @@ export function makeOpenCodeAdapter(
 
     const emit = (event: ProviderRuntimeEvent) =>
       Queue.offer(runtimeEvents, event).pipe(Effect.asVoid);
+    const loadContextWindowByModel = Effect.fn("loadContextWindowByModel")(function* (
+      client: OpencodeClient,
+    ) {
+      const response = yield* runOpenCodeSdk("provider.list", () => client.provider.list());
+      const windows = new Map<string, number>();
+      for (const provider of response.data?.all ?? []) {
+        for (const model of Object.values(provider.models)) {
+          const contextWindow = finitePositiveInteger(model.limit.context);
+          if (contextWindow !== undefined) {
+            windows.set(openCodeModelSlug(provider.id, model.id), contextWindow);
+          }
+        }
+      }
+      return windows as ReadonlyMap<string, number>;
+    });
     const writeNativeEvent = (
       threadId: ThreadId,
       event: {
@@ -782,6 +867,36 @@ export function makeOpenCodeAdapter(
       }
     });
 
+    const emitThreadTokenUsage = Effect.fn("emitThreadTokenUsage")(function* (
+      context: OpenCodeSessionContext,
+      message: AssistantMessage,
+      turnId: TurnId | undefined,
+      raw: unknown,
+    ) {
+      const contextWindow = context.contextWindowByModel.get(
+        openCodeModelSlug(message.providerID, message.modelID),
+      );
+      const usage = normalizeOpenCodeTokenUsage(message, contextWindow);
+      if (!usage) {
+        return;
+      }
+
+      const usageKey = openCodeTokenUsageKey(usage);
+      if (usageKey === context.lastTokenUsageKey) {
+        return;
+      }
+      context.lastTokenUsageKey = usageKey;
+      yield* emit({
+        ...(yield* buildEventBase({
+          threadId: context.session.threadId,
+          turnId,
+          raw,
+        })),
+        type: "thread.token-usage.updated",
+        payload: { usage },
+      });
+    });
+
     const handleSubscribedEvent = Effect.fn("handleSubscribedEvent")(function* (
       context: OpenCodeSessionContext,
       event: OpenCodeSubscribedEvent,
@@ -828,6 +943,7 @@ export function makeOpenCodeAdapter(
         case "message.updated": {
           context.messageRoleById.set(event.properties.info.id, event.properties.info.role);
           if (event.properties.info.role === "assistant") {
+            yield* emitThreadTokenUsage(context, event.properties.info, turnId, event);
             for (const part of context.partById.values()) {
               if (part.messageID !== event.properties.info.id) {
                 continue;
@@ -1368,6 +1484,9 @@ export function makeOpenCodeAdapter(
           updatedAt: createdAt,
         };
 
+        const contextWindowByModel = yield* loadContextWindowByModel(started.client).pipe(
+          Effect.orElseSucceed(() => new Map<string, number>()),
+        );
         const context: OpenCodeSessionContext = {
           session,
           client: started.client,
@@ -1380,10 +1499,12 @@ export function makeOpenCodeAdapter(
           emittedTextByPartId: new Map(),
           messageRoleById: new Map(),
           completedAssistantPartIds: new Set(),
+          contextWindowByModel,
           turns: [],
           activeTurnId: undefined,
           activeAgent: undefined,
           activeVariant: undefined,
+          lastTokenUsageKey: undefined,
           stopped: yield* Ref.make(false),
           sessionScope: started.sessionScope,
         };

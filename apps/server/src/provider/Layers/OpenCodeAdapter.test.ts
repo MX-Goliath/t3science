@@ -37,6 +37,7 @@ import {
   isSameOpenCodeDirectory,
   makeOpenCodeAdapter,
   mergeOpenCodeAssistantText,
+  normalizeOpenCodeTokenUsage,
 } from "./OpenCodeAdapter.ts";
 
 // Test-local service tag so the rest of the file can keep using `yield* OpenCodeAdapter`.
@@ -64,6 +65,8 @@ const runtimeMock = {
     closeCalls: [] as string[],
     revertCalls: [] as Array<{ sessionID: string; messageID?: string }>,
     promptCalls: [] as Array<unknown>,
+    providerListCalls: 0,
+    modelContextWindows: new Map<string, number>(),
     promptAsyncError: null as Error | null,
     closeError: null as Error | null,
     messages: [] as MessageEntry[],
@@ -84,6 +87,8 @@ const runtimeMock = {
     this.state.closeCalls.length = 0;
     this.state.revertCalls.length = 0;
     this.state.promptCalls.length = 0;
+    this.state.providerListCalls = 0;
+    this.state.modelContextWindows.clear();
     this.state.promptAsyncError = null;
     this.state.closeError = null;
     this.state.messages = [];
@@ -211,6 +216,30 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
             }
           })(),
         }),
+      },
+      provider: {
+        list: async () => {
+          runtimeMock.state.providerListCalls += 1;
+          const providers = new Map<
+            string,
+            { id: string; models: Record<string, { id: string; limit: { context: number } }> }
+          >();
+          for (const [slug, context] of runtimeMock.state.modelContextWindows) {
+            const separator = slug.indexOf("/");
+            const providerID = slug.slice(0, separator);
+            const modelID = slug.slice(separator + 1);
+            const provider = providers.get(providerID) ?? { id: providerID, models: {} };
+            provider.models[modelID] = { id: modelID, limit: { context } };
+            providers.set(providerID, provider);
+          }
+          return {
+            data: {
+              all: [...providers.values()],
+              connected: [...providers.keys()],
+              default: {},
+            },
+          };
+        },
       },
     }) as unknown as ReturnType<OpenCodeRuntimeShape["createOpenCodeSdkClient"]>,
   loadOpenCodeInventory: () =>
@@ -1147,6 +1176,100 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       if (completed?.type === "item.completed") {
         NodeAssert.equal(completed.payload.detail, "A BBonus");
       }
+    }),
+  );
+
+  it.effect("emits deduplicated context-window usage from assistant messages", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-token-usage");
+      runtimeMock.state.modelContextWindows.set("anthropic/sonnet", 200_000);
+      const assistantMessage = {
+        id: "msg-token-usage",
+        sessionID: "http://127.0.0.1:9999/session",
+        role: "assistant" as const,
+        time: { created: 1, completed: 2 },
+        parentID: "msg-user",
+        modelID: "sonnet",
+        providerID: "anthropic",
+        mode: "build",
+        agent: "build",
+        path: { cwd: process.cwd(), root: process.cwd() },
+        cost: 0.01,
+        tokens: {
+          input: 120_000,
+          output: 10_000,
+          reasoning: 5_000,
+          cache: { read: 50_000, write: 1_000 },
+        },
+      };
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "message.updated",
+          properties: {
+            sessionID: "http://127.0.0.1:9999/session",
+            info: assistantMessage,
+          },
+        },
+        {
+          type: "message.updated",
+          properties: {
+            sessionID: "http://127.0.0.1:9999/session",
+            info: assistantMessage,
+          },
+        },
+      ];
+
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(3),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")));
+      const usageEvents = events.filter((event) => event.type === "thread.token-usage.updated");
+      NodeAssert.equal(runtimeMock.state.providerListCalls, 1);
+      NodeAssert.equal(usageEvents.length, 1);
+      const usageEvent = usageEvents[0];
+      NodeAssert.equal(usageEvent?.type, "thread.token-usage.updated");
+      if (usageEvent?.type === "thread.token-usage.updated") {
+        NodeAssert.deepEqual(usageEvent.payload.usage, {
+          usedTokens: 186_000,
+          lastUsedTokens: 186_000,
+          inputTokens: 171_000,
+          cachedInputTokens: 50_000,
+          outputTokens: 10_000,
+          reasoningOutputTokens: 5_000,
+          maxTokens: 200_000,
+        });
+      }
+    }),
+  );
+
+  it.effect("clamps OpenCode usage to the reported model context window", () =>
+    Effect.sync(() => {
+      const usage = normalizeOpenCodeTokenUsage(
+        {
+          providerID: "openai",
+          modelID: "gpt",
+          tokens: {
+            input: 180_000,
+            output: 30_000,
+            reasoning: 0,
+            cache: { read: 10_000, write: 0 },
+          },
+        },
+        200_000,
+      );
+
+      NodeAssert.equal(usage?.usedTokens, 200_000);
+      NodeAssert.equal(usage?.maxTokens, 200_000);
     }),
   );
 
