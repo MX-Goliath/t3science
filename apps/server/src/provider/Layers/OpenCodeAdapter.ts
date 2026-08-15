@@ -222,6 +222,7 @@ interface OpenCodeSessionContext {
   readonly messageRoleById: Map<string, "user" | "assistant">;
   readonly partById: Map<string, Part>;
   readonly emittedTextByPartId: Map<string, string>;
+  readonly emittedTodoPlanByPartId: Map<string, ReadonlyArray<OpenCodeTodoPlanStep>>;
   readonly completedAssistantPartIds: Set<string>;
   readonly contextWindowByModel: ReadonlyMap<string, number>;
   readonly turns: Array<OpenCodeTurnSnapshot>;
@@ -383,6 +384,55 @@ function toToolLifecycleItemType(toolName: string): ToolLifecycleItemType {
     return "collab_agent_tool_call";
   }
   return "dynamic_tool_call";
+}
+
+type OpenCodeTodoPlanStep = {
+  readonly step: string;
+  readonly status: "pending" | "inProgress" | "completed";
+};
+
+function isOpenCodeTodoWriteTool(toolName: string): boolean {
+  return toolName.toLowerCase().replaceAll(/[^a-z]/g, "") === "todowrite";
+}
+
+export function extractOpenCodeTodoPlan(
+  toolName: string,
+  input: Record<string, unknown>,
+): ReadonlyArray<OpenCodeTodoPlanStep> | null {
+  if (!isOpenCodeTodoWriteTool(toolName) || !Array.isArray(input.todos)) {
+    return null;
+  }
+
+  return input.todos.flatMap((todo) => {
+    if (todo === null || typeof todo !== "object" || Array.isArray(todo)) {
+      return [];
+    }
+    const record = todo as Record<string, unknown>;
+    if (record.status === "cancelled") {
+      return [];
+    }
+    const step = typeof record.content === "string" ? record.content.trim() : "";
+    const status: OpenCodeTodoPlanStep["status"] =
+      record.status === "completed"
+        ? "completed"
+        : record.status === "in_progress" || record.status === "inProgress"
+          ? "inProgress"
+          : "pending";
+    return [{ step: step || "Task", status }];
+  });
+}
+
+function sameOpenCodeTodoPlan(
+  left: ReadonlyArray<OpenCodeTodoPlanStep> | undefined,
+  right: ReadonlyArray<OpenCodeTodoPlanStep>,
+): boolean {
+  return (
+    left !== undefined &&
+    left.length === right.length &&
+    left.every(
+      (step, index) => step.step === right[index]?.step && step.status === right[index]?.status,
+    )
+  );
 }
 
 function mapPermissionToRequestType(
@@ -1050,6 +1100,26 @@ export function makeOpenCodeAdapter(
             };
             appendTurnItem(context, turnId, part);
             yield* emit(runtimeEvent);
+
+            const todoPlan = extractOpenCodeTodoPlan(part.tool, part.state.input);
+            if (todoPlan !== null) {
+              if (!sameOpenCodeTodoPlan(context.emittedTodoPlanByPartId.get(part.id), todoPlan)) {
+                context.emittedTodoPlanByPartId.set(part.id, todoPlan);
+                yield* emit({
+                  ...(yield* buildEventBase({
+                    threadId: context.session.threadId,
+                    turnId,
+                    itemId: part.callID,
+                    raw: event,
+                  })),
+                  type: "turn.plan.updated",
+                  payload: {
+                    explanation: "OpenCode Todos",
+                    plan: todoPlan,
+                  },
+                });
+              }
+            }
           }
           break;
         }
@@ -1497,6 +1567,7 @@ export function makeOpenCodeAdapter(
           pendingQuestions: new Map(),
           partById: new Map(),
           emittedTextByPartId: new Map(),
+          emittedTodoPlanByPartId: new Map(),
           messageRoleById: new Map(),
           completedAssistantPartIds: new Set(),
           contextWindowByModel,

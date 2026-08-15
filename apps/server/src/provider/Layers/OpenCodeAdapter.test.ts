@@ -33,6 +33,7 @@ import {
 } from "../opencodeRuntime.ts";
 import {
   appendOpenCodeAssistantTextDelta,
+  extractOpenCodeTodoPlan,
   isOpenCodeNotFound,
   isSameOpenCodeDirectory,
   makeOpenCodeAdapter,
@@ -1176,6 +1177,30 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       if (completed?.type === "item.completed") {
         NodeAssert.equal(completed.payload.detail, "A BBonus");
       }
+    }),
+  );
+
+  it.effect("projects OpenCode todowrite input into shared plan steps", () =>
+    Effect.sync(() => {
+      NodeAssert.deepEqual(
+        extractOpenCodeTodoPlan("TodoWrite", {
+          todos: [
+            { content: "Inspect adapter", status: "completed" },
+            { content: "Render todos", status: "in_progress" },
+            { content: "Run tests", status: "pending" },
+            { content: "   ", status: "in_progress" },
+            { content: "No longer needed", status: "cancelled" },
+            null,
+          ],
+        }),
+        [
+          { step: "Inspect adapter", status: "completed" },
+          { step: "Render todos", status: "inProgress" },
+          { step: "Run tests", status: "pending" },
+          { step: "Task", status: "inProgress" },
+        ],
+      );
+      NodeAssert.equal(extractOpenCodeTodoPlan("bash", { todos: [] }), null);
     }),
   );
 
