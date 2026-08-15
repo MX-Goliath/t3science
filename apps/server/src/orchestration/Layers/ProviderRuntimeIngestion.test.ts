@@ -2470,6 +2470,65 @@ describe("ProviderRuntimeIngestion", () => {
     expect(finalMessage?.streaming).toBe(false);
   });
 
+  it("streams OpenCode deltas when only that provider instance opts in", async () => {
+    const openCodeInstanceId = ProviderInstanceId.make("opencode");
+    const harness = await createHarness({
+      serverSettings: {
+        providerInstances: {
+          [openCodeInstanceId]: {
+            driver: ProviderDriverKind.make("opencode"),
+            config: { enableLegacyTokenStreaming: true },
+          },
+        },
+      },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-opencode-turn-started-streaming-mode"),
+      provider: ProviderDriverKind.make("opencode"),
+      providerInstanceId: openCodeInstanceId,
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-opencode-streaming-mode"),
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.activeTurnId === "turn-opencode-streaming-mode",
+    );
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-opencode-message-delta-streaming-mode"),
+      provider: ProviderDriverKind.make("opencode"),
+      providerInstanceId: openCodeInstanceId,
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-opencode-streaming-mode"),
+      itemId: asItemId("item-opencode-streaming-mode"),
+      payload: {
+        streamKind: "assistant_text",
+        delta: "hello from OpenCode",
+      },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.messages.some(
+        (message: ProviderRuntimeTestMessage) =>
+          message.id === "assistant:item-opencode-streaming-mode" &&
+          message.streaming &&
+          message.text === "hello from OpenCode",
+      ),
+    );
+    expect(
+      thread.messages.find(
+        (message: ProviderRuntimeTestMessage) =>
+          message.id === "assistant:item-opencode-streaming-mode",
+      )?.streaming,
+    ).toBe(true);
+  });
+
   it("spills oversized buffered deltas and still finalizes full assistant text", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

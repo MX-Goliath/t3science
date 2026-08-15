@@ -44,6 +44,16 @@ describe("ProviderSettingsForm helpers", () => {
       description: "Stored in plain text on disk.",
       control: "password",
     });
+
+    expect(
+      deriveProviderSettingsFields(opencode!).find(
+        (field) => field.key === "enableLegacyTokenStreaming",
+      ),
+    ).toMatchObject({
+      label: "Stream token by token (legacy)",
+      control: "switch",
+      defaultBooleanValue: false,
+    });
   });
 
   it("preserves unknown config keys while omitting empty configurable fields", () => {

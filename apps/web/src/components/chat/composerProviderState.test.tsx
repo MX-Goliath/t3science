@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import {
   ProviderDriverKind,
   type ProviderOptionDescriptor,
@@ -11,6 +12,7 @@ import {
   renderProviderTraitsMenuContent,
   renderProviderTraitsPicker,
 } from "./composerProviderState";
+import { DraftId } from "../../composerDraftStore";
 
 // Everything in composerProviderState is now data-driven by the model's
 // optionDescriptors, so these tests use a single synthetic provider/model and
@@ -244,5 +246,31 @@ describe("provider traits render guards", () => {
 
     expect(renderProviderTraitsPicker(args)).toBeNull();
     expect(renderProviderTraitsMenuContent(args)).toBeNull();
+  });
+
+  it("renders separate OpenCode pickers for reasoning effort and agent", () => {
+    const rendered = renderProviderTraitsPicker({
+      provider: ProviderDriverKind.make("opencode"),
+      draftId: DraftId.make("draft-opencode-traits"),
+      model: MODEL,
+      models: modelWith([
+        selectDescriptor("variant", [{ id: "medium", label: "Medium", isDefault: true }]),
+        selectDescriptor("agent", [{ id: "build", label: "Build", isDefault: true }]),
+      ]),
+      modelOptions: undefined,
+      prompt: "",
+      onPromptChange: () => {},
+    });
+
+    expect(isValidElement(rendered)).toBe(true);
+    if (!isValidElement(rendered)) return;
+    const fragment = rendered as ReactElement<{ children?: ReactNode }>;
+    const controls = Children.toArray(fragment.props.children) as Array<
+      ReactElement<{ descriptorIds?: ReadonlyArray<string> }>
+    >;
+    expect(controls.map((control) => control.props.descriptorIds)).toEqual([
+      ["variant"],
+      ["agent"],
+    ]);
   });
 });

@@ -195,7 +195,7 @@ function openCodeCapabilitiesForModel(input: {
         ? [
             {
               id: "variant",
-              label: "Variant",
+              label: "Reasoning effort",
               type: "select" as const,
               options: variantOptions,
               ...(defaultVariant ? { currentValue: defaultVariant } : {}),

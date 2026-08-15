@@ -18,6 +18,7 @@ import {
   type OrchestrationThread,
   type OrchestrationThreadActivity,
   type ProviderRuntimeEvent,
+  type ServerSettings,
 } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -46,6 +47,32 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
+
+function readConfigBoolean(config: unknown, key: string): boolean | undefined {
+  if (config === null || typeof config !== "object") return undefined;
+  const value = (config as Record<string, unknown>)[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function resolveAssistantDeliveryMode(
+  settings: ServerSettings,
+  event: ProviderRuntimeEvent,
+): AssistantDeliveryMode {
+  if (settings.enableLegacyTokenStreaming) return "streaming";
+  if (String(event.provider) !== "opencode") return "buffered";
+
+  const instanceId = event.providerInstanceId;
+  if (instanceId !== undefined) {
+    const instance = settings.providerInstances[instanceId];
+    if (instance !== undefined) {
+      return readConfigBoolean(instance.config, "enableLegacyTokenStreaming") === true
+        ? "streaming"
+        : "buffered";
+    }
+  }
+
+  return settings.providers.opencode.enableLegacyTokenStreaming ? "streaming" : "buffered";
+}
 
 // Fallback when the in-memory description cache no longer has the task name
 // (server restart, session-exit sweep, TTL/capacity eviction): earlier
@@ -1680,9 +1707,9 @@ const make = Effect.gen(function* () {
           yield* rememberAssistantMessageId(thread.id, turnId, assistantMessageId);
         }
 
-        const assistantDeliveryMode: AssistantDeliveryMode = yield* Effect.map(
+        const assistantDeliveryMode = yield* Effect.map(
           serverSettingsService.getSettings,
-          (settings) => (settings.enableLegacyTokenStreaming ? "streaming" : "buffered"),
+          (settings) => resolveAssistantDeliveryMode(settings, event),
         );
         if (assistantDeliveryMode === "buffered") {
           const spillChunk = yield* appendBufferedAssistantText(assistantMessageId, assistantDelta);
@@ -1716,9 +1743,9 @@ const make = Effect.gen(function* () {
           : undefined;
       if (pauseForUserTurnId) {
         const detailedThread = yield* getLoadedThreadDetail();
-        const assistantDeliveryMode: AssistantDeliveryMode = yield* Effect.map(
+        const assistantDeliveryMode = yield* Effect.map(
           serverSettingsService.getSettings,
-          (settings) => (settings.enableLegacyTokenStreaming ? "streaming" : "buffered"),
+          (settings) => resolveAssistantDeliveryMode(settings, event),
         );
         const flushedMessageIds =
           assistantDeliveryMode === "buffered"

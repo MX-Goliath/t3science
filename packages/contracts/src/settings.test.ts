@@ -146,6 +146,20 @@ describe("ClientSettings web chat", () => {
 });
 
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
+  it("defaults OpenCode token streaming off and preserves an explicit opt-in", () => {
+    expect(decodeServerSettings({}).providers.opencode.enableLegacyTokenStreaming).toBe(false);
+    expect(
+      decodeServerSettings({
+        providers: { opencode: { enableLegacyTokenStreaming: true } },
+      }).providers.opencode.enableLegacyTokenStreaming,
+    ).toBe(true);
+    expect(
+      decodeServerSettingsPatch({
+        providers: { opencode: { enableLegacyTokenStreaming: true } },
+      }).providers?.opencode?.enableLegacyTokenStreaming,
+    ).toBe(true);
+  });
+
   it("defaults text generation to Luna at low reasoning effort", () => {
     expect(DEFAULT_SERVER_SETTINGS.textGenerationModelSelection).toEqual({
       instanceId: ProviderInstanceId.make("codex"),

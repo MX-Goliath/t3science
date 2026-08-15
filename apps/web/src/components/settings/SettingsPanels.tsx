@@ -1814,7 +1814,7 @@ function LegacyFeaturesSection() {
             />
             <SettingsRow
               {...searchableSetting("legacy-token-streaming")}
-              description="Paints assistant output token by token instead of in complete chunks. Not recommended: it is significantly slower, and long responses become harder to follow. Kept only for compatibility with the old behavior."
+              description="Paints assistant output from every provider token by token instead of in complete chunks. OpenCode can be enabled independently in its provider settings. Not recommended globally: it is significantly slower, and long responses become harder to follow."
               control={
                 <Switch
                   checked={settings.enableLegacyTokenStreaming}

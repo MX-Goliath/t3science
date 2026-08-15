@@ -96,17 +96,21 @@ function getSelectedTraits(
   prompt: string,
   modelOptions: ProviderOptions | null | undefined,
   allowPromptInjectedEffort: boolean,
+  descriptorIds?: ReadonlyArray<string>,
 ) {
   const caps = getProviderModelCapabilities(models, model, provider);
   const descriptors = getProviderOptionDescriptors({
     caps,
     selections: modelOptions,
   });
-  const selectDescriptors = descriptors.filter(
+  const visibleDescriptors = descriptorIds
+    ? descriptors.filter((descriptor) => descriptorIds.includes(descriptor.id))
+    : descriptors;
+  const selectDescriptors = visibleDescriptors.filter(
     (descriptor): descriptor is Extract<ProviderOptionDescriptor, { type: "select" }> =>
       descriptor.type === "select",
   );
-  const booleanDescriptors = descriptors.filter(
+  const booleanDescriptors = visibleDescriptors.filter(
     (descriptor): descriptor is Extract<ProviderOptionDescriptor, { type: "boolean" }> =>
       descriptor.type === "boolean",
   );
@@ -143,6 +147,7 @@ function getSelectedTraits(
   return {
     caps,
     descriptors,
+    visibleDescriptors,
     selectDescriptors,
     booleanDescriptors,
     primarySelectDescriptor,
@@ -167,6 +172,7 @@ function getTraitsSectionVisibility(input: {
   prompt: string;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  descriptorIds?: ReadonlyArray<string>;
 }) {
   const selected = getSelectedTraits(
     input.provider,
@@ -175,6 +181,7 @@ function getTraitsSectionVisibility(input: {
     input.prompt,
     input.modelOptions,
     input.allowPromptInjectedEffort ?? true,
+    input.descriptorIds,
   );
 
   const showEffort = selected.primarySelectDescriptor !== null;
@@ -201,6 +208,7 @@ export function shouldRenderTraitsControls(input: {
   prompt: string;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  descriptorIds?: ReadonlyArray<string>;
 }): boolean {
   return getTraitsSectionVisibility(input).hasAnyControls;
 }
@@ -214,6 +222,7 @@ export interface TraitsMenuContentProps {
   onPromptChange: (prompt: string) => void;
   modelOptions?: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  descriptorIds?: ReadonlyArray<string>;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
 }
@@ -227,6 +236,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   onPromptChange,
   modelOptions,
   allowPromptInjectedEffort = true,
+  descriptorIds,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
@@ -263,6 +273,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     prompt,
     modelOptions,
     allowPromptInjectedEffort,
+    ...(descriptorIds ? { descriptorIds } : {}),
   });
   const updateDescriptors = (nextDescriptors: ReadonlyArray<ProviderOptionDescriptor>) => {
     updateModelOptions(buildProviderOptionSelectionsFromDescriptors(nextDescriptors));
@@ -444,12 +455,13 @@ export const TraitsPicker = memo(function TraitsPicker({
   onPromptChange,
   modelOptions,
   allowPromptInjectedEffort = true,
+  descriptorIds,
   triggerVariant,
   triggerClassName,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
+  const { visibleDescriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
     getTraitsSectionVisibility({
       provider,
       models,
@@ -457,6 +469,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       prompt,
       modelOptions,
       allowPromptInjectedEffort,
+      ...(descriptorIds ? { descriptorIds } : {}),
     });
   if (
     !shouldRenderTraitsControls({
@@ -466,6 +479,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       prompt,
       modelOptions,
       allowPromptInjectedEffort,
+      ...(descriptorIds ? { descriptorIds } : {}),
     })
   ) {
     return null;
@@ -473,7 +487,7 @@ export const TraitsPicker = memo(function TraitsPicker({
 
   const { label: triggerLabel, showFastModeIcon } = buildTraitsTriggerDisplay({
     provider,
-    descriptors,
+    descriptors: visibleDescriptors,
     primarySelectDescriptorId: primarySelectDescriptor?.id ?? null,
     ultrathinkPromptControlled,
   });
@@ -536,6 +550,7 @@ export const TraitsPicker = memo(function TraitsPicker({
           onPromptChange={onPromptChange}
           modelOptions={modelOptions}
           allowPromptInjectedEffort={allowPromptInjectedEffort}
+          {...(descriptorIds ? { descriptorIds } : {})}
           {...persistence}
         />
       </MenuPopup>

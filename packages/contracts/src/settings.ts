@@ -549,13 +549,22 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    enableLegacyTokenStreaming: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({
+        title: "Stream token by token (legacy)",
+        description:
+          "Streams OpenCode output without buffering. This can improve tool-call rendering, but is slower for long responses.",
+        providerSettingsForm: { control: "switch", clearWhenEmpty: "omit" },
+      }),
+    ),
     customModels: Schema.Array(Schema.String).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
   {
-    order: ["binaryPath", "serverUrl", "serverPassword"],
+    order: ["binaryPath", "serverUrl", "serverPassword", "enableLegacyTokenStreaming"],
   },
 );
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;
@@ -840,6 +849,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
   binaryPath: Schema.optionalKey(TrimmedString),
   serverUrl: Schema.optionalKey(TrimmedString),
   serverPassword: Schema.optionalKey(TrimmedString),
+  enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
