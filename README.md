@@ -12,10 +12,13 @@ This project is a fork of [T3 Code](https://github.com/pingdotgg/t3code) that ad
 - Added opt-in general chats for questions and conversations not connected to any project.
 - Added sorting threads by recent activity, so conversations with new messages or turns move to the top.
 - Added the ability to switch providers within an existing chat while carrying its conversation context into a new provider session.
-- Added scheduled message sending at a chosen time, after usage limits reset, or after another agent finishes its current turn.
+- Added scheduled message sending at a chosen time or after usage limits reset, plus the ability to queue messages until the current or another agent finishes its turn.
 - Added handling for unavailable project folders: affected chats remain readable but cannot send messages, and are restored automatically when the folder becomes available again.
 - Added Windows and Linux desktop tray support, including keeping the app running in the tray, starting in the tray, and launching at login.
 - Added Antigravity provider support through the `agy` headless CLI, including model discovery, reasoning levels, permissions, image attachments, and session continuation.
+- Added progress rings for agent plans in the sidebar, with unfinished plans carried across follow-up turns.
+- Added OpenCode streaming support with separate controls for reasoning effort and agent selection, as well as token usage and context-window tracking.
+- Added animated desktop pets, with separate companions assignable to provider instances and animations shown in the draft hero and after turns finish.
 
 # T3 Code
 
