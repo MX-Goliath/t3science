@@ -129,15 +129,11 @@ export function useThreadComposerState() {
     );
   }, [selectedThreadDetail, selectedThreadSessionActivity, selectedThreadShell]);
 
-  const activeThreadBusy =
-    !!selectedThread &&
-    (selectedThread.session?.status === "running" || selectedThread.session?.status === "starting");
   const sendDisabledReason =
     selectedThreadShell?.worktreePath === null &&
     selectedThreadProject?.workspaceAvailable === false
       ? "Project folder is missing. Restore it before sending a message."
       : null;
-
   const onSendMessage = useCallback(async () => {
     if (!selectedThreadShell || sendDisabledReason !== null) {
       return null;
@@ -313,7 +309,6 @@ export function useThreadComposerState() {
     modelSelection,
     runtimeMode,
     interactionMode,
-    activeThreadBusy,
     sendDisabledReason,
     onChangeDraftMessage,
     onPickDraftImages,

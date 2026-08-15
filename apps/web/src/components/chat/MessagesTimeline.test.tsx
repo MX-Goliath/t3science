@@ -237,9 +237,9 @@ describe("MessagesTimeline", () => {
     );
 
     expect(compactMarkup).toContain('class="h-3 sm:h-4"');
-    expect(compactMarkup).not.toContain("chat-timeline-scroll-fade");
+    expect(compactMarkup).not.toContain("topbar-scroll-fade");
     expect(fadedMarkup).toContain('class="h-10 sm:h-12"');
-    expect(fadedMarkup).toContain("chat-timeline-scroll-fade");
+    expect(fadedMarkup).toContain("topbar-scroll-fade");
   });
 
   it("keeps the working row visible with the settled label during the settled tail", () => {

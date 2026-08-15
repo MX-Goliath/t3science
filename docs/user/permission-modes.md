@@ -49,5 +49,4 @@ that would ask; **Auto-accept edits** and **Auto** allow edits but deny commands
 **Full access** passes Antigravity's unrestricted permission flag. T3 Code shows a notice in the
 conversation when a selected mode must be degraded this way.
 
-Mobile offers the same four modes. It labels the first one **Approve actions** rather than
-**Supervised**.
+Mobile offers the same four modes with the same labels and descriptions.
