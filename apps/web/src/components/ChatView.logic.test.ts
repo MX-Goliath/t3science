@@ -19,6 +19,7 @@ import {
   buildThreadTurnInterruptInput,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
+  deriveIsWorking,
   dismissBranchMismatchForSession,
   ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
   getStartedThreadModelChangeBlockReason,
@@ -744,5 +745,30 @@ describe("hasServerAcknowledgedLocalDispatch", () => {
     expect(hasServerAcknowledgedLocalDispatch({ ...common, hasPendingApproval: true })).toBe(true);
     expect(hasServerAcknowledgedLocalDispatch({ ...common, hasPendingUserInput: true })).toBe(true);
     expect(hasServerAcknowledgedLocalDispatch({ ...common, threadError: "failed" })).toBe(true);
+  });
+});
+
+describe("deriveIsWorking", () => {
+  const idleSignals = {
+    isSendBusy: false,
+    isConnecting: false,
+    isRevertingCheckpoint: false,
+  };
+
+  it("keeps work visible from local dispatch through provider start", () => {
+    expect(
+      deriveIsWorking({
+        ...idleSignals,
+        phase: "ready",
+        isSendBusy: true,
+      }),
+    ).toBe(true);
+    expect(deriveIsWorking({ ...idleSignals, phase: "connecting" })).toBe(true);
+    expect(deriveIsWorking({ ...idleSignals, phase: "running" })).toBe(true);
+  });
+
+  it("hides work only when the session and local work are idle", () => {
+    expect(deriveIsWorking({ ...idleSignals, phase: "ready" })).toBe(false);
+    expect(deriveIsWorking({ ...idleSignals, phase: "disconnected" })).toBe(false);
   });
 });

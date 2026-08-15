@@ -552,3 +552,20 @@ export function hasServerAcknowledgedLocalDispatch(input: {
     input.localDispatch.sessionUpdatedAt !== (session?.updatedAt ?? null)
   );
 }
+
+export function deriveIsWorking(input: {
+  phase: SessionPhase;
+  isSendBusy: boolean;
+  isConnecting: boolean;
+  isRevertingCheckpoint: boolean;
+}): boolean {
+  // A starting provider session maps to "connecting". Keep the working row
+  // continuous after local dispatch is acknowledged and before turn.started.
+  return (
+    input.phase === "connecting" ||
+    input.phase === "running" ||
+    input.isSendBusy ||
+    input.isConnecting ||
+    input.isRevertingCheckpoint
+  );
+}
