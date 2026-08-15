@@ -208,6 +208,50 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
     }),
   );
 
+  it.effect("defaults llama.cpp reasoning variants to xhigh", () =>
+    Effect.gen(function* () {
+      runtimeMock.state.inventory = {
+        providerList: {
+          connected: ["Llama.cpp"],
+          all: [
+            {
+              id: "Llama.cpp",
+              name: "llama.cpp",
+              models: {
+                "local-reasoner": {
+                  id: "local-reasoner",
+                  name: "Local Reasoner",
+                  variants: {
+                    low: {},
+                    medium: {},
+                    high: {},
+                    xhigh: {},
+                  },
+                },
+              },
+            },
+          ],
+          default: {},
+        },
+        agents: [],
+      };
+
+      const snapshot = yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd());
+      const model = snapshot.models.find((entry) => entry.slug === "Llama.cpp/local-reasoner");
+
+      NodeAssert.ok(model);
+      const variantDescriptor = model.capabilities?.optionDescriptors?.find(
+        (descriptor) => descriptor.id === "variant" && descriptor.type === "select",
+      );
+      NodeAssert.ok(variantDescriptor && variantDescriptor.type === "select");
+      NodeAssert.equal(
+        variantDescriptor.options.find((option) => option.isDefault === true)?.id,
+        "xhigh",
+      );
+      NodeAssert.equal(variantDescriptor.currentValue, "xhigh");
+    }),
+  );
+
   it.effect("does not spawn a local server for health check (uses CLI instead)", () =>
     Effect.gen(function* () {
       yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd());

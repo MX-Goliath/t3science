@@ -154,6 +154,9 @@ function inferDefaultVariant(
   if (providerID === "anthropic" || providerID.startsWith("google")) {
     return variants.includes("high") ? "high" : undefined;
   }
+  if (providerID.toLowerCase() === "llama.cpp") {
+    return variants.includes("xhigh") ? "xhigh" : undefined;
+  }
   if (providerID === "openai" || providerID === "opencode") {
     return variants.includes("medium") ? "medium" : variants.includes("high") ? "high" : undefined;
   }
