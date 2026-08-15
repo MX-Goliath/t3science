@@ -119,6 +119,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
 function renderTraitsControl(
   Component: typeof TraitsMenuContent | typeof TraitsPicker,
   input: TraitsRenderInput,
+  descriptorIds?: ReadonlyArray<string>,
 ): ReactNode {
   const {
     provider,
@@ -147,6 +148,7 @@ function renderTraitsControl(
       modelOptions,
       prompt,
       planModeEnabled,
+      ...(descriptorIds ? { descriptorIds } : {}),
     })
   ) {
     return null;
@@ -163,6 +165,7 @@ function renderTraitsControl(
       prompt={prompt}
       onPromptChange={onPromptChange}
       planModeEnabled={planModeEnabled}
+      {...(descriptorIds ? { descriptorIds } : {})}
       {...(size !== undefined ? { size } : {})}
       {...(hidden !== undefined ? { hidden } : {})}
       {...(triggerVariant !== undefined ? { triggerVariant } : {})}
@@ -177,5 +180,16 @@ export function renderProviderTraitsMenuContent(input: TraitsRenderInput): React
 }
 
 export function renderProviderTraitsPicker(input: TraitsRenderInput): ReactNode {
+  if (input.provider === "opencode") {
+    const reasoningEffort = renderTraitsControl(TraitsPicker, input, ["variant"]);
+    const agent = renderTraitsControl(TraitsPicker, input, ["agent"]);
+    if (reasoningEffort === null && agent === null) return null;
+    return (
+      <>
+        {reasoningEffort}
+        {agent}
+      </>
+    );
+  }
   return renderTraitsControl(TraitsPicker, input);
 }

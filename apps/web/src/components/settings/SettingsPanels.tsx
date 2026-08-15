@@ -2088,7 +2088,7 @@ function LegacyFeaturesSection() {
             <SettingsRow
               serverScoped
               {...searchableSetting("legacy-token-streaming")}
-              description="Stream output token by token. This legacy mode is slower and harder to follow."
+              description="Stream every provider token globally. OpenCode can be enabled independently in its provider settings. This legacy mode is slower and harder to follow."
               control={
                 <Switch
                   checked={settings.enableLegacyTokenStreaming}

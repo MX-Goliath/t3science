@@ -138,6 +138,7 @@ const makeOpenCodeConfig = (overrides: Partial<OpenCodeSettings>): OpenCodeSetti
   binaryPath: "opencode",
   serverUrl: "",
   serverPassword: "",
+  enableLegacyTokenStreaming: false,
   customModels: [],
   ...overrides,
 });

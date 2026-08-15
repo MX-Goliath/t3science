@@ -331,6 +331,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
         (descriptor) => descriptor.id === "variant" && descriptor.type === "select",
       );
       NodeAssert.ok(variantDescriptor && variantDescriptor.type === "select");
+      NodeAssert.equal(variantDescriptor.label, "Reasoning");
       NodeAssert.equal(
         variantDescriptor.options.find((option) => option.isDefault === true)?.id,
         "medium",

@@ -33,6 +33,16 @@ describe("ProviderSettingsForm helpers", () => {
       description: "Stored in plain text on disk.",
       control: "password",
     });
+
+    expect(
+      deriveProviderSettingsFields(opencode!).find(
+        (field) => field.key === "enableLegacyTokenStreaming",
+      ),
+    ).toMatchObject({
+      label: "Stream token by token (legacy)",
+      control: "switch",
+      defaultBooleanValue: false,
+    });
   });
 
   it("derives a select control with its choices for the Antigravity sign-in method", () => {
