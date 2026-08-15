@@ -44,16 +44,12 @@ describe("WorkingPetIndicator", () => {
 
   it("keeps the dots outside desktop or while pets are disabled", () => {
     expect(
-      renderToStaticMarkup(
-        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId="codex" />,
-      ),
+      renderToStaticMarkup(<WorkingPetIndicator animation="running" providerInstanceId="codex" />),
     ).toContain('data-working-indicator="dots"');
 
     mockPets.state = { ...assignedState, enabled: false };
     expect(
-      renderToStaticMarkup(
-        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId="codex" />,
-      ),
+      renderToStaticMarkup(<WorkingPetIndicator animation="running" providerInstanceId="codex" />),
     ).toContain('data-working-indicator="dots"');
   });
 
@@ -62,28 +58,25 @@ describe("WorkingPetIndicator", () => {
 
     expect(
       renderToStaticMarkup(
-        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId="claudeAgent" />,
+        <WorkingPetIndicator animation="running" providerInstanceId="claudeAgent" />,
       ),
     ).toContain('data-working-indicator="dots"');
     expect(
-      renderToStaticMarkup(
-        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId={null} />,
-      ),
+      renderToStaticMarkup(<WorkingPetIndicator animation="running" providerInstanceId={null} />),
     ).toContain('data-working-indicator="dots"');
   });
 
-  it("renders running and review animations for the provider's pet", () => {
+  it("renders the requested animation for the provider's pet", () => {
     mockPets.state = assignedState;
 
     expect(
-      renderToStaticMarkup(
-        <WorkingPetIndicator isRevertingCheckpoint={false} providerInstanceId="codex" />,
-      ),
+      renderToStaticMarkup(<WorkingPetIndicator animation="running" providerInstanceId="codex" />),
     ).toContain('data-pet-animation="running"');
     expect(
-      renderToStaticMarkup(
-        <WorkingPetIndicator isRevertingCheckpoint providerInstanceId="codex" />,
-      ),
+      renderToStaticMarkup(<WorkingPetIndicator animation="waiting" providerInstanceId="codex" />),
+    ).toContain('data-pet-animation="waiting"');
+    expect(
+      renderToStaticMarkup(<WorkingPetIndicator animation="review" providerInstanceId="codex" />),
     ).toContain('data-pet-animation="review"');
   });
 });

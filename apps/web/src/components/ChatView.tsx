@@ -278,6 +278,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
+import { useWorkingRowSettledTail } from "./pets/useWorkingRowSettledTail";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
@@ -2351,6 +2352,17 @@ function ChatViewContent(props: ChatViewProps) {
     threadError,
   });
   const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  // The working row's pet plays a terminal animation for a short tail after
+  // the active turn settles (jump on done, fail on error, wave on stop), then
+  // the row goes away.
+  const settledTurnState = useWorkingRowSettledTail({
+    threadKey: activeThread ? activeThreadKey : null,
+    latestTurnId: activeLatestTurn?.turnId ?? null,
+    latestTurnState: activeLatestTurn?.state ?? null,
+    isWorking,
+    latestTurnSettled,
+  });
+  const isWaitingForUser = activePendingApproval !== null || activePendingUserInput !== null;
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -6502,6 +6514,8 @@ function ChatViewContent(props: ChatViewProps) {
                 onOpenAgents={addAgentsSurface}
                 key={activeThread.id}
                 isWorking={isWorking}
+                settledTurnState={settledTurnState}
+                isWaitingForUser={isWaitingForUser}
                 workingStepLabel={workingStepLabel}
                 activeTurnInProgress={isWorking || !latestTurnSettled}
                 activeTurnStartedAt={activeWorkStartedAt}

@@ -308,7 +308,7 @@ describe("deriveMessagesTimelineRows", () => {
         },
       ],
       expandedTurnIds: new Set(["turn-1" as never]),
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -362,7 +362,7 @@ describe("deriveMessagesTimelineRows", () => {
         startedAt: "2026-01-01T00:00:19Z",
         completedAt: null,
       },
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -419,7 +419,7 @@ describe("deriveMessagesTimelineRows", () => {
           },
         },
       ],
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map([
         ["assistant-1" as never, assistantTurnDiffSummary],
@@ -500,7 +500,7 @@ describe("deriveMessagesTimelineRows", () => {
 
     const collapsedRows = deriveMessagesTimelineRows({
       timelineEntries,
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -523,7 +523,7 @@ describe("deriveMessagesTimelineRows", () => {
     const expandedRows = deriveMessagesTimelineRows({
       timelineEntries,
       expandedTurnIds: new Set(["turn-1" as never]),
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -623,7 +623,7 @@ describe("deriveMessagesTimelineRows", () => {
         startedAt: "2026-01-01T00:00:14Z",
         completedAt: null,
       },
-      isWorking: true,
+      workingRowVisible: true,
       activeTurnStartedAt: "2026-01-01T00:00:14Z",
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -660,7 +660,7 @@ describe("deriveMessagesTimelineRows", () => {
         startedAt: "2026-01-01T00:00:00Z",
         completedAt: "2026-01-01T00:00:47Z",
       },
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -674,6 +674,48 @@ describe("deriveMessagesTimelineRows", () => {
         expanded: false,
       }),
     ]);
+  });
+
+  it("carries the settled turn state on the working row during the settled tail", () => {
+    const input = {
+      timelineEntries: [] as never,
+      latestTurn: null,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map() as never,
+      revertTurnCountByUserMessageId: new Map() as never,
+    };
+
+    const settled = deriveMessagesTimelineRows({
+      ...input,
+      workingRowVisible: true,
+      settledTurnState: "completed",
+    });
+    expect(settled).toEqual([
+      expect.objectContaining({
+        kind: "working",
+        id: "working-indicator-row",
+        settled: "completed",
+      }),
+    ]);
+
+    const live = deriveMessagesTimelineRows({
+      ...input,
+      workingRowVisible: true,
+    });
+    expect(live).toEqual([
+      expect.objectContaining({
+        kind: "working",
+        id: "working-indicator-row",
+        settled: null,
+      }),
+    ]);
+
+    const hidden = deriveMessagesTimelineRows({
+      ...input,
+      workingRowVisible: false,
+      settledTurnState: "completed",
+    });
+    expect(hidden).toEqual([]);
   });
 
   it("keeps the previous turn folded while a newly sent message awaits its turn", () => {
@@ -728,7 +770,7 @@ describe("deriveMessagesTimelineRows", () => {
         startedAt: "2026-01-01T00:00:00Z",
         completedAt: "2026-01-01T00:00:22Z",
       },
-      isWorking: true,
+      workingRowVisible: true,
       activeTurnStartedAt: "2026-01-01T00:01:00Z",
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -780,7 +822,7 @@ describe("deriveMessagesTimelineRows", () => {
         startedAt: "2026-01-01T00:00:00Z",
         completedAt: null,
       },
-      isWorking: true,
+      workingRowVisible: true,
       activeTurnStartedAt: "2026-01-01T00:00:00Z",
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -843,7 +885,7 @@ describe("deriveMessagesTimelineRows", () => {
         completedAt: "2026-01-01T00:00:25Z",
       },
       runningTurnId: "turn-2" as never,
-      isWorking: true,
+      workingRowVisible: true,
       activeTurnStartedAt: "2026-01-01T00:01:00Z",
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -888,7 +930,7 @@ describe("deriveMessagesTimelineRows", () => {
         },
       ],
       expandedTurnIds: new Set(["turn-1" as never]),
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -926,7 +968,7 @@ describe("deriveMessagesTimelineRows", () => {
         startedAt: "2026-01-01T00:00:00Z",
         completedAt: null,
       },
-      isWorking: true,
+      workingRowVisible: true,
       activeTurnStartedAt: "2026-01-01T00:00:00Z",
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -983,7 +1025,7 @@ describe("deriveMessagesTimelineRows", () => {
 
     const baseInput = {
       timelineEntries,
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -1049,7 +1091,7 @@ describe("computeStableMessagesTimelineRows", () => {
           message: secondUserMessage,
         },
       ],
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
@@ -1098,7 +1140,7 @@ describe("computeStableMessagesTimelineRows", () => {
             entry: secondWorkEntry,
           },
         ],
-        isWorking: false,
+        workingRowVisible: false,
         activeTurnStartedAt: null,
         turnDiffSummaryByAssistantMessageId: new Map(),
         revertTurnCountByUserMessageId: new Map(),
@@ -1154,7 +1196,7 @@ describe("computeStableMessagesTimelineRows", () => {
           message: secondUserMessage,
         },
       ],
-      isWorking: false,
+      workingRowVisible: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),

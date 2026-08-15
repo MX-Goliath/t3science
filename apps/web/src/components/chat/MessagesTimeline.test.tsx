@@ -242,6 +242,41 @@ describe("MessagesTimeline", () => {
     expect(fadedMarkup).toContain("chat-timeline-scroll-fade");
   });
 
+  it("keeps the working row visible with the settled label during the settled tail", () => {
+    const timelineEntries = [buildUserTimelineEntry("Hello")];
+
+    // Live work: the row shows the ticking label and the plan step.
+    const live = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        workingStepLabel="Step one"
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={timelineEntries}
+      />,
+    );
+    expect(live).toContain("Working for");
+    expect(live).toContain("· Step one");
+    expect(live).toContain('data-working-indicator="dots"');
+
+    // Settled tail: isWorking is false but the row stays, swaps to the
+    // terminal label, and drops the step suffix.
+    const settled = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking={false}
+        settledTurnState="completed"
+        workingStepLabel="Step one"
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={timelineEntries}
+      />,
+    );
+    expect(settled).toContain("Done");
+    expect(settled).not.toContain("Working for");
+    expect(settled).not.toContain("· Step one");
+    expect(settled).toContain('data-working-indicator="dots"');
+  });
+
   it("keeps assistant changed-files headers sticky below the thread header", () => {
     const assistantMessageId = MessageId.make("message-assistant-with-files");
     const turnId = TurnId.make("turn-with-files");

@@ -1,4 +1,5 @@
 import {
+  type DesktopPetAnimationState,
   type EnvironmentId,
   type MessageId,
   type ScopedThreadRef,
@@ -107,6 +108,7 @@ import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
 import { WorkingPetIndicator } from "../pets/WorkingPetIndicator";
+import { resolveWorkingPetAnimation, type SettledTurnState } from "../pets/workingPetAnimation";
 
 import {
   buildInlineTerminalContextText,
@@ -156,6 +158,8 @@ interface TimelineRowActivityState {
   workingStepLabel: string | null;
   /** Provider instance running the turn; selects the Working row's pet. */
   activeProviderInstanceId: string | null;
+  /** Resolved pet animation for the working row. */
+  workingPetAnimation: DesktopPetAnimationState;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
@@ -208,6 +212,13 @@ interface MessagesTimelineProps {
   agentPanelModel?: AgentPanelModel;
   onOpenAgents?: () => void;
   isWorking: boolean;
+  /**
+   * Settled turn state during the post-turn tail window, when the working
+   * row lingers with its terminal animation. Null outside the tail.
+   */
+  settledTurnState?: SettledTurnState | null;
+  /** The active turn is blocked on the user — a question or command approval. */
+  isWaitingForUser?: boolean;
   workingStepLabel?: string | null;
   activeTurnInProgress: boolean;
   activeTurnStartedAt: string | null;
@@ -253,6 +264,8 @@ interface MessagesTimelineProps {
 
 export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
+  settledTurnState = null,
+  isWaitingForUser = false,
   workingStepLabel = null,
   activeTurnInProgress,
   activeTurnStartedAt,
@@ -398,6 +411,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     });
   }, [latestTurn]);
 
+  // The working row is live while work is in flight, and lingers briefly
+  // after the turn settles so the pet can play its terminal animation.
+  const workingRowVisible = isWorking || settledTurnState !== null;
   const rawRows = useMemo(
     () =>
       deriveMessagesTimelineRows({
@@ -406,7 +422,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         runningTurnId,
         expandedTurnIds,
         expandedWorkGroupIds,
-        isWorking,
+        workingRowVisible,
+        settledTurnState,
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
@@ -417,7 +434,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       runningTurnId,
       expandedTurnIds,
       expandedWorkGroupIds,
-      isWorking,
+      settledTurnState,
+      workingRowVisible,
       activeTurnStartedAt,
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
@@ -548,13 +566,20 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       latestTurnId: latestTurn?.turnId ?? null,
       workingStepLabel,
       activeProviderInstanceId,
+      workingPetAnimation: resolveWorkingPetAnimation({
+        isRevertingCheckpoint,
+        settledTurnState,
+        isWaitingForUser,
+      }),
     }),
     [
       activeProviderInstanceId,
       activeTurnInProgress,
       isRevertingCheckpoint,
+      isWaitingForUser,
       isWorking,
       latestTurn?.turnId,
+      settledTurnState,
       workingStepLabel,
     ],
   );
@@ -1290,18 +1315,27 @@ const TurnPlanTimelineRow = memo(function TurnPlanTimelineRow({
   );
 });
 
+const WORKING_ROW_SETTLED_LABELS: Readonly<Record<SettledTurnState, string>> = {
+  completed: "Done",
+  error: "Failed",
+  interrupted: "Stopped",
+};
+
 function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { workingStepLabel, isRevertingCheckpoint, activeProviderInstanceId } =
+  const { workingPetAnimation, workingStepLabel, activeProviderInstanceId } =
     use(TimelineRowActivityCtx);
+  const settledLabel = row.settled !== null ? WORKING_ROW_SETTLED_LABELS[row.settled] : null;
   return (
     <div className="py-0.5 pl-1.5">
       <div className="flex min-w-0 items-center gap-2 pt-1 text-secondary-label text-[11px] tabular-nums">
         <WorkingPetIndicator
-          isRevertingCheckpoint={isRevertingCheckpoint}
+          animation={workingPetAnimation}
           providerInstanceId={activeProviderInstanceId}
         />
         <span className="shrink-0">
-          {row.createdAt ? (
+          {settledLabel !== null ? (
+            settledLabel
+          ) : row.createdAt ? (
             <>
               Working for <WorkingTimer createdAt={row.createdAt} />
             </>
@@ -1309,7 +1343,7 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
             "Working..."
           )}
         </span>
-        {workingStepLabel ? (
+        {settledLabel === null && workingStepLabel ? (
           <span className="min-w-0 truncate text-muted-foreground/55">· {workingStepLabel}</span>
         ) : null}
       </div>
