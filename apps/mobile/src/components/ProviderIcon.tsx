@@ -1,7 +1,7 @@
-import { useColorScheme } from "react-native";
 import { Image as SvgImage, Path, Svg } from "react-native-svg";
 
 import { ANTIGRAVITY_ICON_DATA_URL } from "@t3tools/shared/antigravityIcon";
+import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 
 type ProviderIconProps = {
   readonly provider: string | null | undefined;
@@ -9,7 +9,8 @@ type ProviderIconProps = {
 };
 
 export function ProviderIcon(props: ProviderIconProps) {
-  const isDarkMode = useColorScheme() === "dark";
+  const { themeAppearance } = useAppearancePreferences();
+  const isDarkMode = themeAppearance === "dark";
   const size = props.size ?? 16;
   const mono = isDarkMode ? "#e5e5e5" : "#171717";
 
