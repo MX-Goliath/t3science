@@ -103,6 +103,19 @@ describe("resolveSidebarTodoRingSegmentStates", () => {
   it("does not render progress segments without a plan", () => {
     expect(resolveSidebarTodoRingSegmentStates(null)).toEqual([]);
   });
+
+  it("renders progress from the lightweight shell snapshot", () => {
+    expect(resolveSidebarTodoRingSegmentStates({ completedSteps: 3, totalSteps: 4 })).toEqual([
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "pending",
+      "pending",
+    ]);
+  });
 });
 
 describe("resolveSidebarPlanForTurn", () => {

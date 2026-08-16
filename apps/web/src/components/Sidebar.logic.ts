@@ -26,17 +26,30 @@ export const SIDEBAR_THREAD_PREWARM_LIMIT = 3;
 
 export const SIDEBAR_TODO_RING_SEGMENT_COUNT = 8;
 
+export type SidebarTodoProgress = {
+  readonly completedSteps: number;
+  readonly totalSteps: number;
+};
+
 export function resolveSidebarTodoRingSegmentStates(
-  plan: Pick<ActivePlanState, "steps"> | null,
+  plan: Pick<ActivePlanState, "steps"> | SidebarTodoProgress | null,
   segmentCount = SIDEBAR_TODO_RING_SEGMENT_COUNT,
 ): ReadonlyArray<"completed" | "pending"> {
-  if (plan === null || plan.steps.length === 0 || segmentCount <= 0) {
+  if (plan === null || segmentCount <= 0) {
+    return [];
+  }
+
+  const completedSteps =
+    "steps" in plan
+      ? plan.steps.filter((step) => step.status === "completed").length
+      : plan.completedSteps;
+  const totalSteps = "steps" in plan ? plan.steps.length : plan.totalSteps;
+  if (totalSteps <= 0) {
     return [];
   }
 
   const completedSegmentCount = Math.floor(
-    (plan.steps.filter((step) => step.status === "completed").length * segmentCount) /
-      plan.steps.length,
+    (Math.min(Math.max(completedSteps, 0), totalSteps) * segmentCount) / totalSteps,
   );
   return Array.from({ length: segmentCount }, (_, segmentIndex) =>
     segmentIndex < completedSegmentCount ? "completed" : "pending",

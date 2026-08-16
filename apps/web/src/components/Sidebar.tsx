@@ -159,6 +159,7 @@ import {
   sortProjectThreadsWithPins,
   sortSettledThreadsForSidebar,
   sortThreadsForSidebar,
+  type SidebarTodoProgress,
 } from "./Sidebar.logic";
 import { deriveActivePlanState, type ActivePlanState } from "../session-logic";
 import { resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
@@ -222,8 +223,12 @@ const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:snoozed-expanded";
 
-function SidebarTodoProgressRing({ plan }: { plan: ActivePlanState }) {
-  const segmentStates = resolveSidebarTodoRingSegmentStates(plan);
+function SidebarTodoProgressRing({
+  progress,
+}: {
+  progress: Pick<ActivePlanState, "steps"> | SidebarTodoProgress;
+}) {
+  const segmentStates = resolveSidebarTodoRingSegmentStates(progress);
   const center = 8;
   const radius = 5.75;
   const dashHalfAngle = 0.18;
@@ -1649,8 +1654,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                         )}
                       >
                         {topStatus.icon === "working" ? (
-                          props.activePlan ? (
-                            <SidebarTodoProgressRing plan={props.activePlan} />
+                          thread.planProgress || props.activePlan ? (
+                            <SidebarTodoProgressRing
+                              progress={thread.planProgress ?? props.activePlan!}
+                            />
                           ) : (
                             <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
                           )
