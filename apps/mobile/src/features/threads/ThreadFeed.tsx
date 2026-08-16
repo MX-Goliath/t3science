@@ -101,6 +101,7 @@ import {
   WORK_GROUP_TOGGLE_HEIGHT,
 } from "./thread-work-log";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
+import { containsMarkdownImage } from "./thread-feed-markdown";
 import { useAssetUrl } from "../../state/assets";
 import { resolveWorkspaceRelativeFilePath } from "../files/filePath";
 
@@ -189,6 +190,52 @@ function MessageAttachmentImage(props: {
   return (
     <TouchableOpacity activeOpacity={0.7} onPress={() => props.onPressImage(uri)}>
       <Image source={{ uri }} className={props.className} resizeMode="cover" />
+    </TouchableOpacity>
+  );
+}
+
+function MarkdownMessageImage(props: {
+  readonly alt: string | undefined;
+  readonly environmentId: EnvironmentId;
+  readonly onPressImage: (uri: string) => void;
+  readonly threadId: ThreadId;
+  readonly url: string;
+  readonly workspaceRoot?: string | null;
+}) {
+  const presentation = resolveMarkdownLinkPresentation(props.url);
+  const workspacePath =
+    presentation.kind === "file"
+      ? resolveWorkspaceRelativeFilePath(props.workspaceRoot, presentation.path)
+      : null;
+  const assetUri = useAssetUrl(
+    workspacePath ? props.environmentId : null,
+    workspacePath
+      ? { _tag: "workspace-file", threadId: props.threadId, path: workspacePath }
+      : null,
+  );
+  const uri = presentation.kind === "external" ? presentation.href : assetUri;
+  const label = props.alt?.trim() || "Image";
+
+  if (uri === null) {
+    return (
+      <View className="my-2 h-48 w-full max-w-full items-center justify-center rounded-xl bg-neutral-200 dark:bg-neutral-800">
+        {workspacePath ? <ActivityIndicator /> : <Text className="px-4 text-center">{label}</Text>}
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      className="my-2 w-full overflow-hidden rounded-xl bg-neutral-200 dark:bg-neutral-800"
+      onPress={() => props.onPressImage(uri)}
+    >
+      <Image
+        source={{ uri }}
+        accessibilityLabel={label}
+        className="aspect-[1.3] w-full"
+        resizeMode="contain"
+      />
     </TouchableOpacity>
   );
 }
@@ -408,7 +455,14 @@ function useReviewCommentColors(): ReviewCommentColors {
   );
 }
 
-function useMarkdownStyles(onLinkPress: (href: string) => void): MarkdownStyleSets {
+function useMarkdownStyles(input: {
+  readonly environmentId: EnvironmentId;
+  readonly onLinkPress: (href: string) => void;
+  readonly onPressImage: (uri: string) => void;
+  readonly threadId: ThreadId;
+  readonly workspaceRoot?: string | null;
+}): MarkdownStyleSets {
+  const { environmentId, onLinkPress, onPressImage, threadId, workspaceRoot } = input;
   const { appearance, themeAppearance } = useAppearancePreferences();
   const markdownFontSizes = useMemo(
     () => resolveMarkdownFontSizes(appearance.baseFontSize),
@@ -648,6 +702,16 @@ function useMarkdownStyles(onLinkPress: (href: string) => void): MarkdownStyleSe
           theme={themeMode}
         />
       ),
+      image: ({ url = "", alt }) => (
+        <MarkdownMessageImage
+          alt={alt}
+          environmentId={environmentId}
+          onPressImage={onPressImage}
+          threadId={threadId}
+          url={url}
+          workspaceRoot={workspaceRoot}
+        />
+      ),
     });
 
     const userTheme: PartialMarkdownTheme = {
@@ -765,6 +829,7 @@ function useMarkdownStyles(onLinkPress: (href: string) => void): MarkdownStyleSe
     };
   }, [
     boldFontFamily,
+    environmentId,
     iconSubtleColor,
     inlineSkillForeground,
     markdownBlockquoteBg,
@@ -785,10 +850,13 @@ function useMarkdownStyles(onLinkPress: (href: string) => void): MarkdownStyleSe
     markdownUserInlineCodeText,
     nativeMarkdownTypography,
     onLinkPress,
+    onPressImage,
     regularFontFamily,
     themeMode,
+    threadId,
     userBubbleForegroundMuted,
     userBubbleSkillForeground,
+    workspaceRoot,
   ]);
 }
 
@@ -948,7 +1016,7 @@ function renderFeedEntry(
         {...(enterAnimated ? { entering: FadeIn.duration(220) } : {})}
       >
         {message.text.trim().length > 0 ? (
-          hasNativeSelectableMarkdownText() ? (
+          hasNativeSelectableMarkdownText() && !containsMarkdownImage(message.text) ? (
             <SelectableMarkdownText
               markdown={message.text}
               skills={props.skills}
@@ -1043,7 +1111,7 @@ function UserMessageContent(props: {
   const segments = parseReviewCommentMessageSegments(props.text);
   const hasReviewComment = segments.some((segment) => segment.kind === "review-comment");
   if (!hasReviewComment) {
-    if (hasNativeSelectableMarkdownText()) {
+    if (hasNativeSelectableMarkdownText() && !containsMarkdownImage(props.text)) {
       return (
         <SelectableMarkdownText
           markdown={props.text}
@@ -1084,7 +1152,7 @@ function UserMessageContent(props: {
           return null;
         }
 
-        return hasNativeSelectableMarkdownText() ? (
+        return hasNativeSelectableMarkdownText() && !containsMarkdownImage(text) ? (
           <SelectableMarkdownText
             key={segment.id}
             markdown={text}
@@ -1359,6 +1427,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     uri: string;
     headers?: Record<string, string>;
   } | null>(null);
+  const onPressImage = useCallback((uri: string, headers?: Record<string, string>) => {
+    setExpandedImage({ uri, headers });
+  }, []);
   const horizontalPadding = props.layoutVariant === "split" ? 20 : 16;
   const contentHorizontalPadding = deriveCenteredContentHorizontalPadding({
     viewportWidth,
@@ -1413,7 +1484,13 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     },
     [props.environmentId, props.threadId, props.workspaceRoot, navigation],
   );
-  const markdownStyles = useMarkdownStyles(onMarkdownLinkPress);
+  const markdownStyles = useMarkdownStyles({
+    environmentId: props.environmentId,
+    onLinkPress: onMarkdownLinkPress,
+    onPressImage,
+    threadId: props.threadId,
+    workspaceRoot: props.workspaceRoot,
+  });
   const reviewCommentColors = useReviewCommentColors();
   // LegendList does not invalidate visible rows when only the renderItem closure changes.
   // Keep row-local interaction props in extraData so disclosures and copy feedback repaint.
@@ -1753,10 +1830,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     },
     [suspendEndScrollMaintenanceForDisclosure],
   );
-
-  const onPressImage = useCallback((uri: string, headers?: Record<string, string>) => {
-    setExpandedImage({ uri, headers });
-  }, []);
 
   // Rows whose height is known before they ever render. Without this, every
   // row above the viewport is assumed to be estimatedItemSize tall, and

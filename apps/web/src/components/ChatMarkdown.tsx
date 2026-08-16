@@ -86,6 +86,7 @@ import { useRightPanelStore } from "../rightPanelStore";
 import { useActiveEnvironmentId } from "../state/entities";
 import { serverEnvironment } from "../state/server";
 import { assetEnvironment } from "../state/assets";
+import { useAssetUrlState } from "../assets/assetUrls";
 import { usePreparedConnection } from "../state/session";
 import { previewEnvironment } from "../state/preview";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -119,6 +120,66 @@ interface ChatMarkdownProps {
   lineBreaks?: boolean;
   /** Parse sanitized raw HTML instead of displaying its source text. */
   parseRawHtml?: boolean;
+}
+
+function RenderedMarkdownImage(props: { readonly alt: string | undefined; readonly src: string }) {
+  const [failed, setFailed] = useState(false);
+  const label = props.alt?.trim() || "Image";
+
+  if (failed) {
+    return (
+      <span className="my-2 flex min-h-20 items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-center text-xs text-muted-foreground">
+        {label} could not be loaded.
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={props.src}
+      target="_blank"
+      rel="noreferrer"
+      className="my-2 block w-fit max-w-full overflow-hidden rounded-lg border border-border/70 bg-muted/20"
+    >
+      <img
+        src={props.src}
+        alt={label}
+        loading="lazy"
+        draggable={false}
+        className="max-h-[32rem] max-w-full object-contain"
+        onError={() => setFailed(true)}
+      />
+    </a>
+  );
+}
+
+function WorkspaceMarkdownImage(props: {
+  readonly alt: string | undefined;
+  readonly path: string;
+  readonly threadRef: ScopedThreadRef;
+}) {
+  const assetUrl = useAssetUrlState(props.threadRef.environmentId, {
+    _tag: "workspace-file",
+    threadId: props.threadRef.threadId,
+    path: props.path,
+  });
+
+  if (assetUrl._tag === "Failure") {
+    return (
+      <span className="my-2 flex min-h-20 items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-center text-xs text-muted-foreground">
+        {props.alt?.trim() || "Image"} could not be loaded.
+      </span>
+    );
+  }
+  if (assetUrl._tag !== "Success") {
+    return (
+      <span
+        className="my-2 block h-40 w-full max-w-lg rounded-lg border border-border/60 bg-muted/40"
+        aria-label={`Loading ${props.alt?.trim() || "image"}`}
+      />
+    );
+  }
+  return <RenderedMarkdownImage alt={props.alt} src={assetUrl.url} />;
 }
 
 const EMPTY_MARKDOWN_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
@@ -1710,8 +1771,19 @@ function ChatMarkdown({
           props.className,
         );
       },
-      img({ node: _node, title: _title, ...props }) {
-        return <img {...props} />;
+      img({ node: _node, title: _title, src, alt }) {
+        if (!src) return null;
+        const fileLinkMeta = resolveMarkdownFileLinkMeta(src, cwd);
+        if (fileLinkMeta && threadRef) {
+          return (
+            <WorkspaceMarkdownImage
+              alt={alt}
+              path={fileLinkMeta.targetPath}
+              threadRef={threadRef}
+            />
+          );
+        }
+        return <RenderedMarkdownImage alt={alt} src={src} />;
       },
       code({ node, children, className, ...props }) {
         if (node?.properties?.dataInlineCode != null) {

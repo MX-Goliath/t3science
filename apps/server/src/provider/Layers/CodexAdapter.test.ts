@@ -556,6 +556,54 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("adds completed generated images to the assistant markdown stream", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 2)).pipe(
+        Effect.forkChild,
+      );
+
+      yield* runtime.emit({
+        id: asEventId("evt-image-generated"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "item/completed",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        itemId: asItemId("image_1"),
+        payload: {
+          completedAtMs: 1_778_000_000_000,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "imageGeneration",
+            id: "image_1",
+            result: "completed",
+            revisedPrompt: null,
+            savedPath: "/workspace/generated images/result (1).png",
+            status: "completed",
+          },
+        },
+      });
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+
+      NodeAssert.equal(events[0]?.type, "item.completed");
+      if (events[0]?.type === "item.completed") {
+        NodeAssert.equal(events[0].payload.itemType, "image_view");
+        NodeAssert.equal(events[0].payload.title, "Generated image");
+      }
+      NodeAssert.equal(events[1]?.type, "content.delta");
+      if (events[1]?.type === "content.delta") {
+        NodeAssert.equal(events[1].payload.streamKind, "assistant_text");
+        NodeAssert.equal(
+          events[1].payload.delta,
+          "\n\n![Generated image](/workspace/generated%20images/result%20%281%29.png)\n\n",
+        );
+      }
+    }),
+  );
+
   it.effect("labels MCP lifecycle entries with server and tool names", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

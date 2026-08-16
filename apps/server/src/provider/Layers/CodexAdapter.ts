@@ -239,6 +239,9 @@ function toCanonicalItemType(raw: string | undefined | null): CanonicalItemType 
 }
 
 function itemTitle(itemType: CanonicalItemType, item?: CodexLifecycleItem): string | undefined {
+  if (item?.type === "imageGeneration") {
+    return "Generated image";
+  }
   if (itemType === "mcp_tool_call" && item?.type === "mcpToolCall") {
     return `${item.server} · ${item.tool}`;
   }
@@ -268,6 +271,14 @@ function itemTitle(itemType: CanonicalItemType, item?: CodexLifecycleItem): stri
     default:
       return undefined;
   }
+}
+
+function generatedImageMarkdown(item: CodexLifecycleItem): string | undefined {
+  if (item.type !== "imageGeneration" || !item.savedPath) {
+    return undefined;
+  }
+  const destination = encodeURI(item.savedPath).replaceAll("(", "%28").replaceAll(")", "%29");
+  return `\n\n![Generated image](${destination})\n\n`;
 }
 
 function itemDetail(itemType: CanonicalItemType, item: CodexLifecycleItem): string | undefined {
@@ -1130,7 +1141,21 @@ function mapToRuntimeEvents(
       ];
     }
     const completed = mapItemLifecycle(event, canonicalThreadId, "item.completed");
-    return completed ? [completed] : [];
+    const imageMarkdown = generatedImageMarkdown(item);
+    if (!imageMarkdown) {
+      return completed ? [completed] : [];
+    }
+    return [
+      ...(completed ? [completed] : []),
+      {
+        ...runtimeEventBase(event, canonicalThreadId),
+        type: "content.delta",
+        payload: {
+          streamKind: "assistant_text",
+          delta: imageMarkdown,
+        },
+      },
+    ];
   }
 
   if (
