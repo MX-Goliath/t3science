@@ -34,6 +34,7 @@ import {
   pickComposerMedia,
 } from "../lib/composerImages";
 import type { DraftComposerImageAttachment } from "../lib/composerImages";
+import { deriveLatestContextWindowSnapshot } from "../lib/contextWindow";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
 import { buildThreadFeed } from "../lib/threadActivity";
@@ -147,6 +148,13 @@ export function useThreadComposerState() {
           )
         : [],
     [localFeedbackMessages, selectedThreadActivities, selectedThreadMessages],
+  );
+  const contextWindow = useMemo(
+    () =>
+      selectedThreadDetail
+        ? deriveLatestContextWindowSnapshot(selectedThreadDetail.activities)
+        : null,
+    [selectedThreadDetail],
   );
 
   const selectedDraft = selectedThreadKey ? composerDrafts[selectedThreadKey] : null;
@@ -574,6 +582,7 @@ export function useThreadComposerState() {
 
   return {
     selectedThreadFeed,
+    contextWindow,
     selectedThreadQueueCount,
     activeWorkStartedAt,
     isCompacting,
