@@ -3,6 +3,7 @@ import {
   type OpenCodeSettings,
   type ServerProviderModel,
 } from "@t3tools/contracts";
+import { OPENCODE_GO_PROVIDER_ID } from "@t3tools/contracts/settings";
 import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
@@ -22,6 +23,7 @@ import {
   openCodeRuntimeErrorDetail,
   type OpenCodeInventory,
 } from "../opencodeRuntime.ts";
+import { loadOpenCodeGoUsage } from "./OpenCodeGoUsage.ts";
 import type { Agent, ProviderListResponse } from "@opencode-ai/sdk/v2";
 
 const OPENCODE_PRESENTATION = {
@@ -433,7 +435,10 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
     DEFAULT_OPENCODE_MODEL_CAPABILITIES,
   );
   const connectedCount = inventoryExit.value.providerList.connected.length;
-  return buildServerProvider({
+  const goRateLimits = inventoryExit.value.providerList.connected.includes(OPENCODE_GO_PROVIDER_ID)
+    ? yield* loadOpenCodeGoUsage(resolvedEnvironment)
+    : undefined;
+  const provider = buildServerProvider({
     presentation: OPENCODE_PRESENTATION,
     enabled: true,
     checkedAt,
@@ -454,4 +459,5 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
             : "OpenCode is available, but it did not report any connected upstream providers.",
     },
   });
+  return goRateLimits === undefined ? provider : { ...provider, rateLimits: goRateLimits };
 });

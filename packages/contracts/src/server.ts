@@ -71,6 +71,7 @@ export type ServerProviderRateLimitWindow = typeof ServerProviderRateLimitWindow
 export const ServerProviderRateLimits = Schema.Struct({
   fiveHour: Schema.optionalKey(ServerProviderRateLimitWindow),
   weekly: Schema.optionalKey(ServerProviderRateLimitWindow),
+  monthly: Schema.optionalKey(ServerProviderRateLimitWindow),
 });
 export type ServerProviderRateLimits = typeof ServerProviderRateLimits.Type;
 

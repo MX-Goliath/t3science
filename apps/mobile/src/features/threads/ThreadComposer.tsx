@@ -7,7 +7,7 @@ import type {
   RuntimeMode,
   ServerConfig as T3ServerConfig,
 } from "@t3tools/contracts";
-import { shouldShowProviderRateLimits } from "@t3tools/contracts/settings";
+import { isOpencodeGoModelSlug, shouldShowProviderRateLimits } from "@t3tools/contracts/settings";
 import {
   detectComposerTrigger,
   replaceTextRange,
@@ -364,16 +364,22 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       ) ?? null
     );
   }, [props.serverConfig, props.selectedThread.modelSelection.instanceId]);
+  // OpenCode rate limits only apply while a Go subscription model is
+  // selected, so non-Go OpenCode models hide the meter entirely.
+  const rateLimitsVisibleForSelection =
+    selectedProviderStatus?.driver !== "opencode" ||
+    isOpencodeGoModelSlug(currentModelSelection.model);
   const providerRateLimits = useProviderRateLimits({
     environmentId: props.environmentId,
     thread: props.selectedThread,
     provider: selectedProviderStatus,
-    enabled: props.serverConfig
-      ? shouldShowProviderRateLimits(
-          props.serverConfig.settings,
-          props.selectedThread.modelSelection.instanceId,
-        )
-      : true,
+    enabled:
+      (props.serverConfig
+        ? shouldShowProviderRateLimits(
+            props.serverConfig.settings,
+            props.selectedThread.modelSelection.instanceId,
+          )
+        : true) && rateLimitsVisibleForSelection,
   });
 
   // ── Trigger detection ────────────────────────────────────

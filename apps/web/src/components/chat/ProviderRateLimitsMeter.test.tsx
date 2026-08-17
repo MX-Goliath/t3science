@@ -42,6 +42,40 @@ describe("ProviderRateLimitsMeter", () => {
     expect(markup).toContain("5-hour Claude limit: 84% remaining");
   });
 
+  it("renders the monthly window as text with the value only in the hover label", () => {
+    const markup = renderToStaticMarkup(
+      <ProviderRateLimitsMeter
+        providerLabel="OpenCode"
+        rateLimits={{
+          fiveHour: { remainingPercent: 68 },
+          weekly: { remainingPercent: 19 },
+          monthly: { remainingPercent: 39, resetsAt: 1786123200 },
+        }}
+      />,
+    );
+
+    expect(markup).toContain("Monthly");
+    expect(markup).toContain("Monthly OpenCode limit: 39% remaining");
+    // The monthly item is text-only: its percent appears once (aria-label),
+    // unlike the ring windows which also paint the percent inline.
+    expect(markup.match(/39%/g)).toHaveLength(1);
+    // Only the two ring windows render SVG; the monthly item must not.
+    expect(markup.match(/<svg/g) ?? []).toHaveLength(2);
+  });
+
+  it("renders the monthly window even when no ring windows are present", () => {
+    const markup = renderToStaticMarkup(
+      <ProviderRateLimitsMeter
+        providerLabel="OpenCode"
+        rateLimits={{ monthly: { remainingPercent: 12 } }}
+      />,
+    );
+
+    expect(markup).toContain("Monthly");
+    expect(markup).toContain("Monthly OpenCode limit: 12% remaining");
+    expect(markup.match(/<svg/g) ?? []).toHaveLength(0);
+  });
+
   it("renders only the weekly window when the provider omits the 5-hour limit", () => {
     const markup = renderToStaticMarkup(
       <ProviderRateLimitsMeter

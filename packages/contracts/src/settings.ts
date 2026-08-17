@@ -760,10 +760,23 @@ function readConfigBoolean(config: unknown, key: string): boolean | undefined {
  * report subscription windows the composer renders as usage meters; every
  * other driver never populates the field.
  */
-const RATE_LIMIT_DRIVERS: ReadonlySet<string> = new Set(["codex", "claudeAgent", "antigravity"]);
+const RATE_LIMIT_DRIVERS: ReadonlySet<string> = new Set([
+  "codex",
+  "claudeAgent",
+  "antigravity",
+  "opencode",
+]);
 
 export function providerSupportsRateLimits(driver: string | null | undefined): boolean {
   return driver !== null && driver !== undefined && RATE_LIMIT_DRIVERS.has(driver);
+}
+
+// Only OpenCode models served by the Go subscription provider (`opencode-go`)
+// have plan limits to meter, so UI surfaces gate on this slug prefix.
+export const OPENCODE_GO_PROVIDER_ID = "opencode-go";
+
+export function isOpencodeGoModelSlug(slug: string | null | undefined): boolean {
+  return slug !== null && slug !== undefined && slug.startsWith(`${OPENCODE_GO_PROVIDER_ID}/`);
 }
 
 export function shouldShowProviderRateLimits(

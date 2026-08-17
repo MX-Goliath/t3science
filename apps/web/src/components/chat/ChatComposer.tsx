@@ -226,7 +226,11 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
-import { shouldShowProviderRateLimits, type UnifiedSettings } from "@t3tools/contracts/settings";
+import {
+  isOpencodeGoModelSlug,
+  shouldShowProviderRateLimits,
+  type UnifiedSettings,
+} from "@t3tools/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
@@ -887,6 +891,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () => selectedProviderEntry?.snapshot ?? null,
     [selectedProviderEntry],
   );
+  // OpenCode rate limits only apply while a Go subscription model is
+  // selected, so non-Go OpenCode models hide the meter entirely.
+  const rateLimitsVisibleForSelection =
+    selectedProvider !== "opencode" || isOpencodeGoModelSlug(selectedModel);
   const providerRateLimits = useProviderRateLimits({
     environmentId,
     instanceId: selectedInstanceId,
@@ -896,12 +904,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ? String(routeThreadRef.threadId)
         : `draft:${String(draftId ?? routeThreadRef.threadId)}`,
     phase,
-    enabled: shouldShowProviderRateLimits(settings, selectedInstanceId),
+    enabled:
+      shouldShowProviderRateLimits(settings, selectedInstanceId) && rateLimitsVisibleForSelection,
     initialRateLimits: selectedProviderStatus?.rateLimits,
   });
   const rateLimitSchedule = useMemo(
-    () => resolveRateLimitSchedule(providerRateLimits ?? selectedProviderStatus?.rateLimits),
-    [providerRateLimits, selectedProviderStatus?.rateLimits],
+    () =>
+      resolveRateLimitSchedule(
+        rateLimitsVisibleForSelection
+          ? (providerRateLimits ?? selectedProviderStatus?.rateLimits)
+          : null,
+      ),
+    [providerRateLimits, rateLimitsVisibleForSelection, selectedProviderStatus?.rateLimits],
   );
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],

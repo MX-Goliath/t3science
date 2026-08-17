@@ -80,29 +80,72 @@ function ProviderRateLimit(props: {
   );
 }
 
+// Text-only limit item (no ring): the value stays hidden until hover,
+// used for longer windows like the monthly Go quota.
+function ProviderRateLimitText(props: {
+  label: string;
+  accessibleLabel: string;
+  window: ServerProviderRateLimitWindow;
+}) {
+  const remainingPercent = Math.max(0, Math.min(100, props.window.remainingPercent));
+  const resetTime = formatResetTime(props.window.resetsAt);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1 text-[11px] text-muted-foreground tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            tabIndex={0}
+            aria-label={`${props.accessibleLabel}: ${remainingPercent}% remaining`}
+          />
+        }
+      >
+        <span>{props.label}</span>
+      </TooltipTrigger>
+      <TooltipPopup side="top">
+        <span className="flex flex-col gap-0.5">
+          <span>
+            {props.accessibleLabel}: {remainingPercent}% remaining
+          </span>
+          {resetTime ? <span className="text-secondary-label">Resets {resetTime}</span> : null}
+        </span>
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 export function ProviderRateLimitsMeter(props: {
   rateLimits: ServerProviderRateLimits;
   providerLabel: string;
 }) {
-  if (!props.rateLimits.fiveHour && !props.rateLimits.weekly) return null;
+  const { fiveHour, weekly, monthly } = props.rateLimits;
+  if (!fiveHour && !weekly && !monthly) return null;
 
   return (
     <div
       className="flex shrink-0 items-center gap-0.5"
       aria-label={`${props.providerLabel} usage limits`}
     >
-      {props.rateLimits.fiveHour ? (
+      {fiveHour ? (
         <ProviderRateLimit
           label="5h"
           accessibleLabel={`5-hour ${props.providerLabel} limit`}
-          window={props.rateLimits.fiveHour}
+          window={fiveHour}
         />
       ) : null}
-      {props.rateLimits.weekly ? (
+      {weekly ? (
         <ProviderRateLimit
           label="Week"
           accessibleLabel={`Weekly ${props.providerLabel} limit`}
-          window={props.rateLimits.weekly}
+          window={weekly}
+        />
+      ) : null}
+      {monthly ? (
+        <ProviderRateLimitText
+          label="Monthly"
+          accessibleLabel={`Monthly ${props.providerLabel} limit`}
+          window={monthly}
         />
       ) : null}
     </div>

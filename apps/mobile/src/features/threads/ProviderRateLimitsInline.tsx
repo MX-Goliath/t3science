@@ -47,27 +47,44 @@ function RateLimitRing(props: {
   );
 }
 
+// Text-only limit item (no ring) for longer windows like the monthly
+// Go quota, which has no hover surface on mobile to hide behind.
+function RateLimitText(props: {
+  label: string;
+  providerLabel: string;
+  window: ServerProviderRateLimitWindow;
+}) {
+  const remainingPercent = Math.max(0, Math.min(100, props.window.remainingPercent));
+
+  return (
+    <View
+      className="flex-row items-center gap-1"
+      accessible
+      accessibilityLabel={`${props.label} ${props.providerLabel} limit: ${remainingPercent}% remaining`}
+    >
+      <Text className="text-2xs text-foreground-muted">{props.label}</Text>
+      <Text className="text-2xs font-t3-bold text-foreground">{remainingPercent}%</Text>
+    </View>
+  );
+}
+
 export function ProviderRateLimitsInline(props: {
   rateLimits: ServerProviderRateLimits;
   providerLabel: string;
 }) {
-  if (!props.rateLimits.fiveHour && !props.rateLimits.weekly) return null;
+  const { fiveHour, weekly, monthly } = props.rateLimits;
+  if (!fiveHour && !weekly && !monthly) return null;
 
   return (
     <View className="h-11 flex-row items-center gap-2 rounded-full bg-subtle px-2.5">
-      {props.rateLimits.fiveHour ? (
-        <RateLimitRing
-          label="5h"
-          providerLabel={props.providerLabel}
-          window={props.rateLimits.fiveHour}
-        />
+      {fiveHour ? (
+        <RateLimitRing label="5h" providerLabel={props.providerLabel} window={fiveHour} />
       ) : null}
-      {props.rateLimits.weekly ? (
-        <RateLimitRing
-          label="Week"
-          providerLabel={props.providerLabel}
-          window={props.rateLimits.weekly}
-        />
+      {weekly ? (
+        <RateLimitRing label="Week" providerLabel={props.providerLabel} window={weekly} />
+      ) : null}
+      {monthly ? (
+        <RateLimitText label="Monthly" providerLabel={props.providerLabel} window={monthly} />
       ) : null}
     </View>
   );
