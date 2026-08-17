@@ -59,6 +59,7 @@ import type { DraftComposerImageAttachment } from "../../lib/composerImages";
 import { CHAT_CONTENT_MAX_WIDTH, type LayoutVariant } from "../../lib/layout";
 import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import type { MobileContextWindowSnapshot } from "../../lib/contextWindow";
 import type {
   PendingApproval,
   PendingUserInput,
@@ -87,6 +88,7 @@ export interface ThreadDetailScreenProps {
   readonly connectionError: string | null;
   readonly environmentLabel: string | null;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
+  readonly contextWindow: MobileContextWindowSnapshot | null;
   readonly activeWorkStartedAt: string | null;
   readonly activePendingApproval: PendingApproval | null;
   readonly respondingApprovalId: ApprovalRequestId | null;
@@ -726,6 +728,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 environmentLabel={props.environmentLabel}
                 threadSyncPhase={threadSyncPhase}
                 selectedThread={props.selectedThread}
+                contextWindow={props.contextWindow}
                 serverConfig={props.serverConfig}
                 queueCount={props.selectedThreadQueueCount}
                 sendDisabledReason={props.sendDisabledReason}

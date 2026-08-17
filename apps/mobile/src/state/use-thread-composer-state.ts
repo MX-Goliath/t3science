@@ -20,6 +20,7 @@ import {
   pickComposerImages,
 } from "../lib/composerImages";
 import type { DraftComposerImageAttachment } from "../lib/composerImages";
+import { deriveLatestContextWindowSnapshot } from "../lib/contextWindow";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { buildThreadFeed } from "../lib/threadActivity";
 import { appAtomRegistry } from "../state/atom-registry";
@@ -92,6 +93,13 @@ export function useThreadComposerState() {
   );
   const selectedThreadFeed = useMemo(
     () => (selectedThreadDetail ? buildThreadFeed(selectedThreadDetail) : []),
+    [selectedThreadDetail],
+  );
+  const contextWindow = useMemo(
+    () =>
+      selectedThreadDetail
+        ? deriveLatestContextWindowSnapshot(selectedThreadDetail.activities)
+        : null,
     [selectedThreadDetail],
   );
 
@@ -302,6 +310,7 @@ export function useThreadComposerState() {
 
   return {
     selectedThreadFeed,
+    contextWindow,
     selectedThreadQueueCount,
     activeWorkStartedAt,
     draftMessage,

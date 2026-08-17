@@ -146,6 +146,33 @@ describe("ClientSettings web chat", () => {
 });
 
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
+  it("decodes Pi settings and trims its configurable paths", () => {
+    const settings = decodeServerSettings({
+      providers: { pi: { binaryPath: "  /opt/bin/pi  ", sessionDir: "  ~/.pi/sessions  " } },
+    });
+    expect(settings.providers.pi).toEqual({
+      enabled: true,
+      binaryPath: "/opt/bin/pi",
+      sessionDir: "~/.pi/sessions",
+      customModels: [],
+    });
+    expect(
+      decodeServerSettingsPatch({ providers: { pi: { sessionDir: "  /tmp/pi  " } } }).providers?.pi
+        ?.sessionDir,
+    ).toBe("/tmp/pi");
+  });
+
+  it("rejects invalid custom Pi model slugs before they are persisted", () => {
+    expect(() =>
+      decodeServerSettingsPatch({ providers: { pi: { customModels: ["missing-provider"] } } }),
+    ).toThrow();
+    expect(
+      decodeServerSettingsPatch({
+        providers: { pi: { customModels: ["openrouter/anthropic/claude-sonnet"] } },
+      }).providers?.pi?.customModels,
+    ).toEqual(["openrouter/anthropic/claude-sonnet"]);
+  });
+
   it("defaults OpenCode token streaming off and preserves an explicit opt-in", () => {
     expect(decodeServerSettings({}).providers.opencode.enableLegacyTokenStreaming).toBe(false);
     expect(

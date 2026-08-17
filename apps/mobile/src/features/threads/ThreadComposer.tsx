@@ -38,6 +38,7 @@ import { useThemeColor } from "../../lib/useThemeColor";
 import { themeColorWithAlpha } from "../../lib/mobileTheme";
 import { armAgentAwarenessLiveActivityForLocalWork } from "../agent-awareness/remoteRegistration";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { formatCompactTokens, type MobileContextWindowSnapshot } from "../../lib/contextWindow";
 
 import { AppText as Text } from "../../components/AppText";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
@@ -111,6 +112,7 @@ export interface ThreadComposerProps {
    */
   readonly threadSyncPhase?: "loading" | "syncing" | null;
   readonly selectedThread: OrchestrationThreadShell;
+  readonly contextWindow: MobileContextWindowSnapshot | null;
   readonly serverConfig: T3ServerConfig | null;
   readonly queueCount: number;
   readonly sendDisabledReason: string | null;
@@ -907,6 +909,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     rateLimits={providerRateLimits}
                     providerLabel={selectedProviderStatus?.displayName?.trim() || "Provider"}
                   />
+                ) : null}
+                {props.contextWindow ? (
+                  <View
+                    accessibilityLabel={`Context window ${formatCompactTokens(props.contextWindow.usedTokens)} tokens used${props.contextWindow.usedPercentage === null ? "" : `, ${props.contextWindow.usedPercentage} percent`}`}
+                    className="h-8 flex-row items-center rounded-full bg-subtle px-2.5"
+                  >
+                    <Text className="text-xs font-t3-medium text-foreground-muted">
+                      {props.contextWindow.usedPercentage === null
+                        ? `${formatCompactTokens(props.contextWindow.usedTokens)} ctx`
+                        : `${props.contextWindow.usedPercentage}% ctx`}
+                    </Text>
+                  </View>
                 ) : null}
                 {showStopAction ? (
                   <ComposerToolbarButton

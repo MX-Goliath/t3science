@@ -69,6 +69,7 @@ const PRIMARY_PROVIDER_DRIVERS: ReadonlySet<string> = new Set([
   "claudeAgent",
   "codex",
   "antigravity",
+  "pi",
 ]);
 /**
  * Keep measured row changes stable, but let catalog mutations use the list's

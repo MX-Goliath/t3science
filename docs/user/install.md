@@ -68,6 +68,7 @@ to use, then authenticate it.
 | Grok Build  | [Grok Build CLI](https://x.ai/cli)                                     | `grok`         | `grok login`          |
 | Antigravity | [Antigravity CLI](https://antigravity.google/docs/cli-getting-started) | `agy`          | Run `agy`             |
 | OpenCode    | [OpenCode](https://opencode.ai)                                        | `opencode`     | `opencode auth login` |
+| Pi          | [Pi](https://pi.dev)                                                   | `pi`           | Run `pi`              |
 
 Cursor is the one to watch: install Cursor CLI, which provides the `cursor-agent` binary that
 T3 Code looks for, but authenticate with `agent login`, not `cursor-agent login`.
@@ -90,7 +91,8 @@ authenticated shows its status in **Settings** and fails at session start with t
 to run.
 
 For provider-specific setup, see [Codex](./providers-codex.md),
-[Claude](./providers-claude.md), and [Antigravity](./providers-antigravity.md).
+[Claude](./providers-claude.md), [Antigravity](./providers-antigravity.md), and
+[Pi](./providers-pi.md).
 
 ### Switching Providers In An Existing Chat
 
