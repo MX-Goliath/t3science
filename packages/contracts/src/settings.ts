@@ -1095,6 +1095,13 @@ export const resolveProviderInstanceEnabled = (
   return instance.enabled ?? configEnabled ?? defaultEnabledForDriver(instance.driver);
 };
 
+/** Upstream provider id used by OpenCode's Go subscription models and quota endpoint. */
+export const OPENCODE_GO_PROVIDER_ID = "opencode-go";
+
+export function isOpencodeGoModelSlug(slug: string | null | undefined): boolean {
+  return slug !== null && slug !== undefined && slug.startsWith(`${OPENCODE_GO_PROVIDER_ID}/`);
+}
+
 export const ServerSettingsOperation = Schema.Literals([
   "normalize",
   "check-exists",

@@ -4,6 +4,7 @@ import {
   type ServerProviderModel,
   type ServerProviderSkill,
 } from "@t3tools/contracts";
+import { OPENCODE_GO_PROVIDER_ID } from "@t3tools/contracts/settings";
 import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
@@ -25,6 +26,7 @@ import {
   openCodeRuntimeErrorDetail,
   type OpenCodeInventory,
 } from "../opencodeRuntime.ts";
+import { loadOpenCodeGoUsage } from "./OpenCodeGoUsage.ts";
 import type { Agent, ProviderListResponse } from "@opencode-ai/sdk/v2";
 import * as OpenCodeServerOwner from "../OpenCodeServerOwner.ts";
 
@@ -520,6 +522,11 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
   );
   const skills = openCodeSkillsToServerProviderSkills(inventoryExit.value.inventory.skills);
   const connectedCount = inventoryExit.value.inventory.providerList.connected.length;
+  const usageLimits = inventoryExit.value.inventory.providerList.connected.includes(
+    OPENCODE_GO_PROVIDER_ID,
+  )
+    ? yield* loadOpenCodeGoUsage(resolvedEnvironment, checkedAt)
+    : undefined;
   return buildServerProvider({
     presentation: OPENCODE_PRESENTATION,
     enabled: true,
@@ -535,6 +542,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         status: connectedCount > 0 ? "authenticated" : "unknown",
         type: "opencode",
       },
+      ...(usageLimits ? { usageLimits } : {}),
       message:
         connectedCount > 0
           ? `${connectedCount} upstream provider${connectedCount === 1 ? "" : "s"} connected through ${isExternalServer ? "the configured OpenCode server" : "OpenCode"}.`
