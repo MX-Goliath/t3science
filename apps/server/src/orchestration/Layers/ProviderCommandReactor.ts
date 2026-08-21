@@ -581,9 +581,9 @@ const make = Effect.gen(function* () {
     ) {
       return;
     }
-    // A driver change starts a fresh provider conversation and transfers the
-    // portable transcript. Provider capabilities that require a new thread
-    // only apply to model changes within the same driver.
+    // A provider conversation change starts a fresh provider session and
+    // transfers the portable transcript. Provider capabilities that require a
+    // new thread only apply to model changes within the same conversation.
     if (
       input.currentProviderDriver !== undefined &&
       input.requestedProviderDriver !== undefined &&
@@ -698,6 +698,12 @@ const make = Effect.gen(function* () {
     }
     const preferredProvider: ProviderDriverKind = desiredDriverKind;
     const providerChanged = currentDriverKind !== desiredInfo.driverKind;
+    const continuationChanged =
+      currentInfo === undefined
+        ? currentInstanceId !== desiredInstanceId
+        : currentInfo.continuationIdentity.continuationKey !==
+          desiredInfo.continuationIdentity.continuationKey;
+    const conversationTransfer = providerChanged || continuationChanged;
     if (options?.pendingTurnStart === true && thread.session?.status !== "running") {
       yield* setThreadSession({
         threadId,
@@ -733,24 +739,6 @@ const make = Effect.gen(function* () {
         currentProviderDriver: currentDriverKind,
         requestedProviderDriver: desiredInfo.driverKind,
       });
-    }
-    if (
-      thread.session !== null &&
-      requestedModelSelection !== undefined &&
-      requestedModelSelection.instanceId !== currentInstanceId
-    ) {
-      if (
-        currentDriverKind === desiredInfo.driverKind &&
-        (currentInfo === undefined ||
-          currentInfo.continuationIdentity.continuationKey !==
-            desiredInfo.continuationIdentity.continuationKey)
-      ) {
-        return yield* new ProviderAdapterRequestError({
-          provider: preferredProvider,
-          method: "thread.turn.start",
-          detail: `Thread '${threadId}' cannot switch from instance '${currentInstanceId}' to '${desiredInstanceId}' because their provider resume state is incompatible.`,
-        });
-      }
     }
     const project = yield* resolveProject(thread.projectId);
     const effectiveCwd = resolveThreadWorkspaceCwd({
@@ -833,7 +821,7 @@ const make = Effect.gen(function* () {
       }
 
       const resumeCursor =
-        shouldRestartForModelChange || currentDriverKind !== desiredInfo.driverKind
+        shouldRestartForModelChange || conversationTransfer
           ? undefined
           : (activeSession?.resumeCursor ?? undefined);
       yield* Effect.logInfo("provider command reactor restarting provider session", {
@@ -867,12 +855,12 @@ const make = Effect.gen(function* () {
         cwd: restartedSession.cwd,
       });
       yield* bindSessionToThread(restartedSession);
-      return { threadId: restartedSession.threadId, conversationTransfer: providerChanged };
+      return { threadId: restartedSession.threadId, conversationTransfer };
     }
 
     const startedSession = yield* startProviderSession(undefined);
     yield* bindSessionToThread(startedSession);
-    return { threadId: startedSession.threadId, conversationTransfer: providerChanged };
+    return { threadId: startedSession.threadId, conversationTransfer };
   });
 
   const buildSendTurnRequestForThread = Effect.fnUntraced(function* (input: {

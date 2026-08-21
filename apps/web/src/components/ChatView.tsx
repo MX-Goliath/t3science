@@ -2084,9 +2084,9 @@ function ChatViewContent(props: ChatViewProps) {
     activeThread?.modelSelection.instanceId ??
     activeProject?.defaultModelSelection?.instanceId ??
     null;
-  // A started thread can continue with another provider driver. The server
+  // A started thread can continue with another provider instance. The server
   // creates a fresh provider session and sends a portable transcript when the
-  // selected driver changes, so the picker must remain cross-provider.
+  // provider conversation changes, so the picker must remain cross-provider.
   const lockedProvider: ProviderDriverKind | null = null;
   // Once a thread selects an environment, never substitute the primary
   // environment's config while the selected environment is still loading.
@@ -6297,21 +6297,6 @@ function ChatViewContent(props: ChatViewProps) {
       if (!activeThread) {
         return null;
       }
-      const currentInstanceId =
-        activeThread.session?.providerInstanceId ?? activeThread.modelSelection.instanceId;
-      const currentEntry = providerStatuses.find(
-        (snapshot) => snapshot.instanceId === currentInstanceId,
-      );
-      const nextEntry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
-      if (
-        activeThread.session !== null &&
-        currentEntry?.driver === nextEntry?.driver &&
-        currentEntry?.continuation?.groupKey &&
-        nextEntry?.continuation?.groupKey &&
-        currentEntry.continuation.groupKey !== nextEntry.continuation.groupKey
-      ) {
-        return "This provider account does not share conversation history with the current account. Start a new thread to use it.";
-      }
       const reason = getStartedThreadModelChangeBlockReason({
         providers: providerStatuses,
         hasStartedSession: activeThread.session !== null,
@@ -6330,23 +6315,6 @@ function ChatViewContent(props: ChatViewProps) {
       // Look up the configured instance so model normalization and custom
       // model lookup stay scoped to that exact instance. Unknown instance ids
       // are rejected by returning early; the server remains authoritative too.
-      const entry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
-      const resolvedDriverKind = entry?.driver ?? null;
-      const currentInstanceId =
-        activeThread.session?.providerInstanceId ?? activeThread.modelSelection.instanceId;
-      const currentEntry = providerStatuses.find(
-        (snapshot) => snapshot.instanceId === currentInstanceId,
-      );
-      if (activeThread.session !== null && currentEntry?.driver === resolvedDriverKind) {
-        if (
-          currentEntry?.continuation?.groupKey &&
-          entry?.continuation?.groupKey &&
-          currentEntry.continuation.groupKey !== entry.continuation.groupKey
-        ) {
-          scheduleComposerFocus();
-          return;
-        }
-      }
       const resolvedModel = resolveAppModelSelectionForInstance(
         instanceId,
         settings,

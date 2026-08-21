@@ -248,6 +248,7 @@ describe("ProviderCommandReactor", () => {
     readonly threadModelSelection?: ModelSelection;
     readonly sessionModelSwitch?: "unsupported" | "in-session";
     readonly requiresNewThreadForModelChange?: boolean;
+    readonly codexContinuationKeys?: Readonly<Record<string, string>>;
     readonly titleRegenerationCompletionDispatchFailures?: number;
     readonly titleRegenerationBeforeStart?: "one" | "two";
     readonly startSessionEffect?: (
@@ -444,7 +445,7 @@ describe("ProviderCommandReactor", () => {
             driverKind,
             continuationKey:
               driverKind === ProviderDriverKind.make("codex")
-                ? "codex:home:/shared-codex"
+                ? (input?.codexContinuationKeys?.[raw] ?? "codex:home:/shared-codex")
                 : `${driverKind}:instance:${instanceId}`,
           },
         });
@@ -2089,6 +2090,67 @@ describe("ProviderCommandReactor", () => {
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
+  });
+
+  it("transfers history when switching to a Codex instance with another account", async () => {
+    const harness = await createHarness({
+      codexContinuationKeys: {
+        codex: "codex:home:/shared-codex",
+        codex_work: "codex:home:/work-codex",
+      },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-incompatible-codex-1"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-incompatible-codex-1"),
+          role: "user",
+          text: "first",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-incompatible-codex-2"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-incompatible-codex-2"),
+          role: "user",
+          text: "second",
+          attachments: [],
+        },
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex_work"),
+          model: "gpt-5-codex",
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+    expect(harness.startSession).toHaveBeenCalledTimes(2);
+    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+      provider: ProviderDriverKind.make("codex"),
+      providerInstanceId: ProviderInstanceId.make("codex_work"),
+    });
+    expect(harness.startSession.mock.calls[1]?.[1]).not.toHaveProperty("resumeCursor");
+    const transferredTurn = harness.sendTurn.mock.calls[1]?.[0] as { input?: string } | undefined;
+    expect(transferredTurn?.input).toContain("[user]\nfirst");
+    expect(transferredTurn?.input).toContain("<current_user_message>\nsecond");
   });
 
   it("restarts the provider session when the thread workspace changes", async () => {
