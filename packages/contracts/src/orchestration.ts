@@ -939,11 +939,20 @@ const ThreadSessionStopCommand = Schema.Struct({
   onlyIfSettled: Schema.optional(Schema.Boolean),
 });
 
+const ThreadPortableImportCommand = Schema.Struct({
+  type: Schema.Literal("thread.portable.import"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  thread: OrchestrationThread,
+  createdAt: IsoDateTime,
+});
+
 const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
+  ThreadPortableImportCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
   ThreadUnarchiveCommand,
@@ -972,6 +981,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
+  ThreadPortableImportCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
   ThreadUnarchiveCommand,
@@ -1018,14 +1028,6 @@ const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   turnId: Schema.optional(TurnId),
-  createdAt: IsoDateTime,
-});
-
-const ThreadPortableImportCommand = Schema.Struct({
-  type: Schema.Literal("thread.portable.import"),
-  commandId: CommandId,
-  projectId: ProjectId,
-  thread: OrchestrationThread,
   createdAt: IsoDateTime,
 });
 
@@ -1086,7 +1088,6 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
-  ThreadPortableImportCommand,
   ThreadPortableContextRestoreCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,

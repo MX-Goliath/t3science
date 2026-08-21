@@ -5,6 +5,7 @@ import {
   type EnvironmentId,
   type MessageId,
   type ModelSelection,
+  type OrchestrationThread,
   type ProjectScript,
   type ProjectId,
   type ProviderApprovalDecision,
@@ -1276,6 +1277,9 @@ function ChatViewContent(props: ChatViewProps) {
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
+  const importPortableThread = useAtomCommand(threadEnvironment.importPortable, {
+    reportFailure: false,
+  });
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
@@ -6434,6 +6438,79 @@ function ChatViewContent(props: ChatViewProps) {
     void onRevertToTurnCountRef.current(targetTurnCount);
   }, []);
 
+  const onForkMessage = useCallback(
+    async (messageId: MessageId) => {
+      if (!activeThread || activeThread.messages.length === 0) {
+        return;
+      }
+      const messageIndex = activeThread.messages.findIndex((message) => message.id === messageId);
+      if (messageIndex < 0) {
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      const forkThreadId = newThreadId();
+      const messages = activeThread.messages
+        .slice(0, messageIndex + 1)
+        .map((message) => ({ ...message, streaming: false }));
+      const forkedThread: OrchestrationThread = {
+        ...activeThread,
+        id: forkThreadId,
+        title: truncate(`Fork: ${activeThread.title}`),
+        branch: null,
+        worktreePath: null,
+        latestTurn: null,
+        createdAt,
+        updatedAt: createdAt,
+        archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
+        snoozedUntil: null,
+        snoozedAt: null,
+        pinnedAt: null,
+        pinOrderKey: null,
+        titleRegeneration: null,
+        deletedAt: null,
+        messages,
+        proposedPlans: [],
+        activities: [],
+        checkpoints: [],
+        session: null,
+      };
+
+      const result = await importPortableThread({
+        environmentId: activeThread.environmentId,
+        input: {
+          projectId: activeThread.projectId,
+          thread: forkedThread,
+          createdAt,
+        },
+      });
+      if (result._tag === "Failure") {
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add({
+            type: "error",
+            title: "Could not fork conversation",
+            description: error instanceof Error ? error.message : "The fork could not be created.",
+          });
+        }
+        return;
+      }
+
+      await settlePromise(() =>
+        navigate({
+          to: "/$environmentId/$threadId",
+          params: {
+            environmentId: activeThread.environmentId,
+            threadId: forkThreadId,
+          },
+        }),
+      );
+    },
+    [activeThread, importPortableThread, navigate],
+  );
+
   // Empty state: no active thread
   if (!activeThread) {
     return <NoActiveThreadState />;
@@ -6711,6 +6788,7 @@ function ChatViewContent(props: ChatViewProps) {
                 onOpenTurnDiff={onOpenTurnDiff}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
+                onForkMessage={onForkMessage}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 markdownCwd={gitCwd ?? undefined}
