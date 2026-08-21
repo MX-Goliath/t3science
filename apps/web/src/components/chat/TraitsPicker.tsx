@@ -96,9 +96,10 @@ function getSelectedTraits(
   prompt: string,
   modelOptions: ProviderOptions | null | undefined,
   allowPromptInjectedEffort: boolean,
+  planModeEnabled: boolean,
   descriptorIds?: ReadonlyArray<string>,
 ) {
-  const caps = getProviderModelCapabilities(models, model, provider);
+  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
   const descriptors = getProviderOptionDescriptors({
     caps,
     selections: modelOptions,
@@ -172,6 +173,7 @@ function getTraitsSectionVisibility(input: {
   prompt: string;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  planModeEnabled: boolean;
   descriptorIds?: ReadonlyArray<string>;
 }) {
   const selected = getSelectedTraits(
@@ -181,6 +183,7 @@ function getTraitsSectionVisibility(input: {
     input.prompt,
     input.modelOptions,
     input.allowPromptInjectedEffort ?? true,
+    input.planModeEnabled,
     input.descriptorIds,
   );
 
@@ -208,6 +211,7 @@ export function shouldRenderTraitsControls(input: {
   prompt: string;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  planModeEnabled: boolean;
   descriptorIds?: ReadonlyArray<string>;
 }): boolean {
   return getTraitsSectionVisibility(input).hasAnyControls;
@@ -222,6 +226,7 @@ export interface TraitsMenuContentProps {
   onPromptChange: (prompt: string) => void;
   modelOptions?: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  planModeEnabled: boolean;
   descriptorIds?: ReadonlyArray<string>;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
@@ -236,6 +241,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   onPromptChange,
   modelOptions,
   allowPromptInjectedEffort = true,
+  planModeEnabled,
   descriptorIds,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
@@ -273,6 +279,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     prompt,
     modelOptions,
     allowPromptInjectedEffort,
+    planModeEnabled,
     ...(descriptorIds ? { descriptorIds } : {}),
   });
   const updateDescriptors = (nextDescriptors: ReadonlyArray<ProviderOptionDescriptor>) => {
@@ -462,6 +469,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   onPromptChange,
   modelOptions,
   allowPromptInjectedEffort = true,
+  planModeEnabled,
   descriptorIds,
   triggerVariant,
   triggerClassName,
@@ -476,6 +484,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       prompt,
       modelOptions,
       allowPromptInjectedEffort,
+      planModeEnabled,
       ...(descriptorIds ? { descriptorIds } : {}),
     });
   if (
@@ -486,6 +495,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       prompt,
       modelOptions,
       allowPromptInjectedEffort,
+      planModeEnabled,
       ...(descriptorIds ? { descriptorIds } : {}),
     })
   ) {
@@ -557,6 +567,7 @@ export const TraitsPicker = memo(function TraitsPicker({
           onPromptChange={onPromptChange}
           modelOptions={modelOptions}
           allowPromptInjectedEffort={allowPromptInjectedEffort}
+          planModeEnabled={planModeEnabled}
           {...(descriptorIds ? { descriptorIds } : {})}
           {...persistence}
         />

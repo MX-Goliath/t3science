@@ -25,6 +25,7 @@ import {
   keybindingValueForCommand,
   decodeProjectScriptKeybindingRule,
 } from "~/lib/projectScriptKeybindings";
+import { useClientSettings } from "~/hooks/useSettings";
 import { keybindingFromKeyboardEvent } from "~/components/settings/KeybindingsSettings.logic";
 import { commandForProjectScript, nextProjectScriptId } from "~/projectScripts";
 import type { ProviderInstanceEntry } from "~/providerInstances";
@@ -173,6 +174,7 @@ export function ProjectScriptEditorDialog({
   };
 }) {
   const formId = React.useId();
+  const planModeEnabled = useClientSettings((settings) => settings.planModeEnabled);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"command" | "prompt">("command");
   const [command, setCommand] = useState("");
@@ -438,6 +440,7 @@ export function ProjectScriptEditorDialog({
                         {selectedModelEntry ? (
                           <TraitsPicker
                             provider={selectedModelEntry.driverKind}
+                            planModeEnabled={planModeEnabled}
                             models={selectedModelEntry.models}
                             model={modelSelection.model}
                             prompt={prompt}

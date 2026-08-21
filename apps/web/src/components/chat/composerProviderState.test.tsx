@@ -82,6 +82,7 @@ describe("getComposerProviderState", () => {
         ]),
       ]),
       modelOptions: undefined,
+      planModeEnabled: true,
     });
 
     expect(state).toEqual({
@@ -103,6 +104,7 @@ describe("getComposerProviderState", () => {
         booleanDescriptor("fastMode"),
       ]),
       modelOptions: selections(["effort", "low"], ["fastMode", true]),
+      planModeEnabled: true,
     });
 
     expect(state).toEqual({
@@ -121,6 +123,7 @@ describe("getComposerProviderState", () => {
         booleanDescriptor("fastMode"),
       ]),
       modelOptions: selections(["effort", "high"], ["fastMode", false]),
+      planModeEnabled: true,
     });
 
     expect(state.modelOptionsForDispatch).toEqual(
@@ -134,6 +137,7 @@ describe("getComposerProviderState", () => {
       model: MODEL,
       models: modelWith([booleanDescriptor("thinking")]),
       modelOptions: selections(["effort", "max"], ["thinking", false]),
+      planModeEnabled: true,
     });
 
     expect(state).toEqual({
@@ -159,6 +163,7 @@ describe("getComposerProviderState", () => {
         ]),
       ]),
       modelOptions: selections(["agent", "plan"]),
+      planModeEnabled: true,
     });
 
     expect(state.promptEffort).toBe("high");
@@ -167,12 +172,65 @@ describe("getComposerProviderState", () => {
     );
   });
 
+  it("drops the plan agent from dispatch when legacy plan mode is disabled", () => {
+    const state = getComposerProviderState({
+      provider: PROVIDER,
+      model: MODEL,
+      models: modelWith([
+        selectDescriptor("agent", [
+          { id: "build", label: "Build", isDefault: true },
+          { id: "plan", label: "Plan" },
+        ]),
+      ]),
+      modelOptions: selections(["agent", "plan"]),
+      planModeEnabled: false,
+    });
+
+    expect(state.modelOptionsForDispatch).toEqual(selections(["agent", "build"]));
+  });
+
+  it("drops the agent descriptor entirely when plan is the only option and plan mode is disabled", () => {
+    const state = getComposerProviderState({
+      provider: PROVIDER,
+      model: MODEL,
+      models: modelWith([
+        selectDescriptor("agent", [{ id: "plan", label: "Plan", isDefault: true }]),
+      ]),
+      modelOptions: selections(["agent", "plan"]),
+      planModeEnabled: false,
+    });
+
+    expect(state).toEqual({
+      provider: PROVIDER,
+      promptEffort: null,
+      modelOptionsForDispatch: undefined,
+    });
+  });
+
+  it("falls back to a surviving agent when plan was the descriptor default and plan mode is disabled", () => {
+    const state = getComposerProviderState({
+      provider: PROVIDER,
+      model: MODEL,
+      models: modelWith([
+        selectDescriptor("agent", [
+          { id: "plan", label: "Plan", isDefault: true },
+          { id: "research", label: "Research" },
+        ]),
+      ]),
+      modelOptions: undefined,
+      planModeEnabled: false,
+    });
+
+    expect(state.modelOptionsForDispatch).toEqual(selections(["agent", "research"]));
+  });
+
   it("returns undefined dispatch options when the model declares no descriptors", () => {
     const state = getComposerProviderState({
       provider: PROVIDER,
       model: MODEL,
       models: modelWith([]),
       modelOptions: selections(["anything", "value"]),
+      planModeEnabled: true,
     });
 
     expect(state).toEqual({
@@ -201,6 +259,7 @@ describe("getComposerProviderState", () => {
         "Ultrathink:\nInvestigate this failure",
       ),
       modelOptions: selections(["effort", "medium"]),
+      planModeEnabled: true,
     });
 
     expect(state).toEqual({
@@ -222,6 +281,7 @@ describe("getComposerProviderState", () => {
         "Ultrathink:\nInvestigate this failure",
       ),
       modelOptions: undefined,
+      planModeEnabled: true,
     });
 
     expect(state).not.toHaveProperty("composerFrameClassName");
@@ -242,6 +302,7 @@ describe("provider traits render guards", () => {
       modelOptions: undefined,
       prompt: "",
       onPromptChange: () => {},
+      planModeEnabled: true,
     };
 
     expect(renderProviderTraitsPicker(args)).toBeNull();
@@ -260,6 +321,7 @@ describe("provider traits render guards", () => {
       modelOptions: undefined,
       prompt: "",
       onPromptChange: () => {},
+      planModeEnabled: true,
     });
 
     expect(isValidElement(rendered)).toBe(true);
