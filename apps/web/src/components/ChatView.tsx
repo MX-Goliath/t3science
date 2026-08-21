@@ -7781,21 +7781,6 @@ export default function ChatView(props: ChatViewProps) {
       if (!activeThread) {
         return null;
       }
-      const currentInstanceId =
-        activeThread.session?.providerInstanceId ?? activeThread.modelSelection.instanceId;
-      const currentEntry = providerStatuses.find(
-        (snapshot) => snapshot.instanceId === currentInstanceId,
-      );
-      const nextEntry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
-      if (
-        activeThread.session !== null &&
-        currentEntry?.driver === nextEntry?.driver &&
-        currentEntry?.continuation?.groupKey &&
-        nextEntry?.continuation?.groupKey &&
-        currentEntry.continuation.groupKey !== nextEntry.continuation.groupKey
-      ) {
-        return "This provider account does not share conversation history with the current account. Start a new thread to use it.";
-      }
       const reason = getStartedThreadModelChangeBlockReason({
         providers: providerStatuses,
         hasStartedSession: activeThread.session !== null,
@@ -7814,23 +7799,6 @@ export default function ChatView(props: ChatViewProps) {
       // Look up the configured instance so model normalization and custom
       // model lookup stay scoped to that exact instance. Unknown instance ids
       // are rejected by returning early; the server remains authoritative too.
-      const entry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
-      const resolvedDriverKind = entry?.driver ?? null;
-      const currentInstanceId =
-        activeThread.session?.providerInstanceId ?? activeThread.modelSelection.instanceId;
-      const currentEntry = providerStatuses.find(
-        (snapshot) => snapshot.instanceId === currentInstanceId,
-      );
-      if (activeThread.session !== null && currentEntry?.driver === resolvedDriverKind) {
-        if (
-          currentEntry?.continuation?.groupKey &&
-          entry?.continuation?.groupKey &&
-          currentEntry.continuation.groupKey !== entry.continuation.groupKey
-        ) {
-          scheduleComposerFocus();
-          return;
-        }
-      }
       const resolvedModel = resolveAppModelSelectionForInstance(
         instanceId,
         settings,
