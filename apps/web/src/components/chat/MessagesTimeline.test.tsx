@@ -240,6 +240,20 @@ function buildAssistantTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("renders a fork action beside user and assistant message actions", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          buildUserTimelineEntry("Question"),
+          buildAssistantTimelineEntry("Answer"),
+        ]}
+      />,
+    );
+
+    expect(markup.match(/aria-label="Fork conversation"/g)).toHaveLength(2);
+  });
+
   it.each([
     { toolLifecycleStatus: "inProgress", isAtEnd: true },
     { toolLifecycleStatus: "inProgress", isAtEnd: false },
