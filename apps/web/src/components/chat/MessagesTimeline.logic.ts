@@ -806,10 +806,6 @@ export function deriveMessagesTimelineRows(input: {
       continue;
     }
 
-    if (isWorking && index === activeTurnHeaderIndex) {
-      appendWorkingRow();
-    }
-
     if (timelineEntry.id === activeWorkPlacementEntryId) {
       appendActiveWorkRows();
     }
@@ -1045,7 +1041,7 @@ export function deriveMessagesTimelineRows(input: {
     });
   }
 
-  if (workingRowVisible && activeTurnHeaderIndex === input.timelineEntries.length) {
+  if (workingRowVisible) {
     appendWorkingRow();
   }
 

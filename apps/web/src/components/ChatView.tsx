@@ -6498,6 +6498,29 @@ function ChatViewContent(props: ChatViewProps) {
         return;
       }
 
+      const forkReady = await settlePromise(() =>
+        waitForStartedServerThread(scopeThreadRef(activeThread.environmentId, forkThreadId), 5_000),
+      );
+      if (forkReady._tag === "Failure") {
+        if (!isAtomCommandInterrupted(forkReady)) {
+          const error = squashAtomCommandFailure(forkReady);
+          toastManager.add({
+            type: "error",
+            title: "Could not open fork",
+            description: error instanceof Error ? error.message : "The fork is not available yet.",
+          });
+        }
+        return;
+      }
+      if (!forkReady.value) {
+        toastManager.add({
+          type: "error",
+          title: "Could not open fork",
+          description: "The fork was created, but it is not available yet.",
+        });
+        return;
+      }
+
       await settlePromise(() =>
         navigate({
           to: "/$environmentId/$threadId",

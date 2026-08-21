@@ -1359,36 +1359,34 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
     use(TimelineRowActivityCtx);
   const settledLabel = row.settled !== null ? WORKING_ROW_SETTLED_LABELS[row.settled] : null;
   return (
-    <div className="py-0.5 pl-1.5">
-      <div className="border-b border-border/60 pb-2 pt-1">
-        <div className="flex min-w-0 items-center gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-          <WorkingPetIndicator
-            animation={workingPetAnimation}
-            providerInstanceId={activeProviderInstanceId}
-          />
-          <span className="shrink-0">
-            {settledLabel !== null ? (
-              settledLabel
-            ) : row.createdAt ? (
-              <>
-                Working for <WorkingTimer createdAt={row.createdAt} />
-              </>
-            ) : (
-              "Working..."
-            )}
-          </span>
-          {settledLabel === null && workingStepLabel ? (
-            <span className="ml-2 min-w-0 truncate text-muted-foreground/55">
-              · {workingStepLabel}
-            </span>
-          ) : null}
-        </div>
-      </div>
+    <div className="border-t border-border/60 pb-2 pl-1.5 pt-1">
       {row.showThinking ? (
         <div className="mt-1">
           <ThinkingActivityRow />
         </div>
       ) : null}
+      <div className="flex min-w-0 items-center gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+        <WorkingPetIndicator
+          animation={workingPetAnimation}
+          providerInstanceId={activeProviderInstanceId}
+        />
+        <span className="shrink-0">
+          {settledLabel !== null ? (
+            settledLabel
+          ) : row.createdAt ? (
+            <>
+              Working for <WorkingTimer createdAt={row.createdAt} />
+            </>
+          ) : (
+            "Working..."
+          )}
+        </span>
+        {settledLabel === null && workingStepLabel ? (
+          <span className="ml-2 min-w-0 truncate text-muted-foreground/55">
+            · {workingStepLabel}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

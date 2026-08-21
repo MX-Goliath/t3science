@@ -1013,6 +1013,7 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("Working for");
     expect(markup).toContain("Thinking");
     expect(markup).toContain("gap-1.5 py-0.5 px-1");
+    expect(markup.indexOf("Thinking")).toBeLessThan(markup.indexOf("Working for"));
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {
