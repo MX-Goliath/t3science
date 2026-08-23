@@ -10,6 +10,7 @@ import {
 import {
   type ArchiveThreadInput,
   type CreateThreadInput,
+  type ForkThreadInput,
   type PortableImportThreadInput,
   type DeleteThreadInput,
   type InterruptThreadTurnInput,
@@ -31,6 +32,7 @@ import {
   type UpdateThreadMetadataInput,
   archiveThread,
   createThread,
+  forkThread,
   importPortableThread,
   deleteThread,
   interruptThreadTurn,
@@ -56,6 +58,7 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 export type {
   ArchiveThreadInput,
   CreateThreadInput,
+  ForkThreadInput,
   PortableImportThreadInput,
   DeleteThreadInput,
   InterruptThreadTurnInput,
@@ -91,6 +94,11 @@ export function createThreadEnvironmentAtoms<R, E>(
     key: ({ environmentId, input }: { environmentId: string; input: { thread: { id: string } } }) =>
       JSON.stringify([environmentId, input.thread.id]),
   };
+  const forkConcurrency = {
+    mode: "serial" as const,
+    key: ({ environmentId, input }: { environmentId: string; input: { newThreadId: string } }) =>
+      JSON.stringify([environmentId, input.newThreadId]),
+  };
   return {
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
@@ -103,6 +111,12 @@ export function createThreadEnvironmentAtoms<R, E>(
       execute: (input: PortableImportThreadInput) => importPortableThread(input),
       scheduler,
       concurrency: portableImportConcurrency,
+    }),
+    fork: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:fork",
+      execute: (input: ForkThreadInput) => forkThread(input),
+      scheduler,
+      concurrency: forkConcurrency,
     }),
     delete: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:delete",

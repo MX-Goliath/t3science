@@ -1411,7 +1411,7 @@ export default function ChatView(props: ChatViewProps) {
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
-  const importPortableThread = useAtomCommand(threadEnvironment.importPortable, {
+  const forkThread = useAtomCommand(threadEnvironment.fork, {
     reportFailure: false,
   });
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
@@ -7939,49 +7939,20 @@ export default function ChatView(props: ChatViewProps) {
 
   const onForkMessage = useCallback(
     async (messageId: MessageId) => {
-      if (!activeThread || activeThread.messages.length === 0) {
-        return;
-      }
-      const messageIndex = activeThread.messages.findIndex((message) => message.id === messageId);
-      if (messageIndex < 0) {
+      if (!activeThread) {
         return;
       }
 
       const createdAt = new Date().toISOString();
       const forkThreadId = newThreadId();
-      const messages = activeThread.messages
-        .slice(0, messageIndex + 1)
-        .map((message) => ({ ...message, streaming: false }));
-      const forkedThread: OrchestrationThread = {
-        ...activeThread,
-        id: forkThreadId,
-        title: truncate(`Fork: ${activeThread.title}`),
-        branch: null,
-        worktreePath: null,
-        latestTurn: null,
-        createdAt,
-        updatedAt: createdAt,
-        archivedAt: null,
-        settledOverride: null,
-        settledAt: null,
-        snoozedUntil: null,
-        snoozedAt: null,
-        pinnedAt: null,
-        pinOrderKey: null,
-        titleRegeneration: null,
-        deletedAt: null,
-        messages,
-        proposedPlans: [],
-        activities: [],
-        checkpoints: [],
-        session: null,
-      };
 
-      const result = await importPortableThread({
+      const result = await forkThread({
         environmentId: activeThread.environmentId,
         input: {
           projectId: activeThread.projectId,
-          thread: forkedThread,
+          sourceThreadId: activeThread.id,
+          messageId,
+          newThreadId: forkThreadId,
           createdAt,
         },
       });
@@ -8030,7 +8001,7 @@ export default function ChatView(props: ChatViewProps) {
         }),
       );
     },
-    [activeThread, importPortableThread, navigate],
+    [activeThread, forkThread, navigate],
   );
 
   // Empty state: no active thread

@@ -429,6 +429,88 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.fork": {
+      yield* requireProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+      const sourceThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.sourceThreadId,
+      });
+      yield* requireThreadAbsent({
+        readModel,
+        command,
+        threadId: command.newThreadId,
+      });
+      if (sourceThread.projectId !== command.projectId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Source thread '${command.sourceThreadId}' belongs to a different project.`,
+        });
+      }
+      const messageIndex = sourceThread.messages.findIndex(
+        (message) => message.id === command.messageId,
+      );
+      if (messageIndex < 0) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Message '${command.messageId}' does not exist on thread '${command.sourceThreadId}'.`,
+        });
+      }
+
+      const messages = sourceThread.messages
+        .slice(0, messageIndex + 1)
+        .map((message) => ({ ...message, streaming: false }));
+
+      const truncate = (text: string, maxLength = 50): string => {
+        const trimmed = text.trim();
+        return trimmed.length <= maxLength ? trimmed : `${trimmed.slice(0, maxLength)}...`;
+      };
+
+      const forkedThread = {
+        ...sourceThread,
+        id: command.newThreadId,
+        projectId: command.projectId,
+        title: truncate(`Fork: ${sourceThread.title}`),
+        branch: null,
+        worktreePath: null,
+        latestTurn: null,
+        createdAt: command.createdAt,
+        updatedAt: command.createdAt,
+        archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
+        snoozedUntil: null,
+        snoozedAt: null,
+        pinnedAt: null,
+        pinOrderKey: null,
+        titleRegeneration: null,
+        deletedAt: null,
+        messages,
+        proposedPlans: [],
+        activities: [],
+        checkpoints: [],
+        session: null,
+      };
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: forkedThread.id,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.portable-imported",
+        payload: {
+          projectId: command.projectId,
+          thread: forkedThread,
+        },
+      };
+    }
+
     case "thread.portable-context.restore": {
       yield* requireThread({
         readModel,
