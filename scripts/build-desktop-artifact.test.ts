@@ -44,6 +44,7 @@ import {
   renderLinuxElectronLauncher,
   renderMacPasskeyEntitlements,
   resolveClerkPasskeyNativeArtifacts,
+  resolveDesktopArtifactName,
   resolveMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
   resolveMacStageDependencies,
@@ -60,6 +61,7 @@ import {
   resolveMockUpdateServerPort,
   resolveMockUpdateServerUrl,
   resolvePackageManagerUserAgent,
+  resolveLocalNightlyRunNumber,
   stageLinuxIconSize,
   stageDesktopDmgBackground,
   stageResourceMonitor,
@@ -2089,6 +2091,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         target: Option.none(),
         arch: Option.none(),
         buildVersion: Option.none(),
+        nightly: Option.none(),
         outputDir: Option.none(),
         skipBuild: Option.none(),
         keepStage: Option.none(),
@@ -2129,6 +2132,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
             target: Option.none(),
             arch: Option.some("universal"),
             buildVersion: Option.none(),
+            nightly: Option.none(),
             outputDir: Option.none(),
             skipBuild: Option.none(),
             keepStage: Option.none(),
@@ -2153,6 +2157,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         target: Option.none(),
         arch: Option.some("arm64"),
         buildVersion: Option.none(),
+        nightly: Option.none(),
         outputDir: Option.some("release-test"),
         skipBuild: Option.some(false),
         keepStage: Option.some(false),
@@ -2184,6 +2189,85 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(resolved.mockUpdates, false);
     }),
   );
+
+  it.effect("derives a nightly version from the source tree when the nightly flag is set", () =>
+    Effect.gen(function* () {
+      const resolved = yield* resolveBuildOptions({
+        platform: Option.some("linux"),
+        target: Option.none(),
+        arch: Option.some("x64"),
+        buildVersion: Option.none(),
+        nightly: Option.some(true),
+        outputDir: Option.none(),
+        skipBuild: Option.none(),
+        keepStage: Option.none(),
+        signed: Option.none(),
+        verbose: Option.none(),
+        mockUpdates: Option.none(),
+        mockUpdateServerPort: Option.none(),
+        wslPrebuild: Option.none(),
+      });
+
+      assert.match(resolved.version ?? "", /^0\.0\.\d+-nightly\.\d{8}\.\d+$/);
+      assert.equal(resolveDesktopUpdateChannel(resolved.version ?? ""), "nightly");
+      assert.equal(resolveDesktopProductName(resolved.version ?? ""), "T3 Science (Nightly)");
+      assert.equal(
+        resolveDesktopArtifactName(resolved.version ?? ""),
+        `T3-Science-Nightly-${resolved.version?.split("-nightly.")[0]}-\${arch}.\${ext}`,
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make((command) => {
+            const gitCommand = command as unknown as {
+              readonly command: string;
+            };
+            assert.equal(gitCommand.command, "git");
+            return Effect.succeed(mockProcess(1));
+          }),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("explicit build version wins over the nightly flag", () =>
+    Effect.gen(function* () {
+      const resolved = yield* resolveBuildOptions({
+        platform: Option.some("linux"),
+        target: Option.none(),
+        arch: Option.some("x64"),
+        buildVersion: Option.some("9.9.9"),
+        nightly: Option.some(true),
+        outputDir: Option.none(),
+        skipBuild: Option.none(),
+        keepStage: Option.none(),
+        signed: Option.none(),
+        verbose: Option.none(),
+        mockUpdates: Option.none(),
+        mockUpdateServerPort: Option.none(),
+        wslPrebuild: Option.none(),
+      });
+
+      assert.equal(resolved.version, "9.9.9");
+    }),
+  );
+
+  it("keeps stable artifact names on the latest channel and nightly names otherwise", () => {
+    assert.equal(resolveDesktopArtifactName("0.0.35"), "T3-Science-${version}-${arch}.${ext}");
+    assert.equal(
+      resolveDesktopArtifactName("0.0.36-nightly.20260828.43200"),
+      "T3-Science-Nightly-0.0.36-${arch}.${ext}",
+    );
+  });
+
+  it("never derives a zero nightly run number", () => {
+    assert.equal(resolveLocalNightlyRunNumber(new Date("2026-08-28T00:00:00Z")), 1);
+    assert.equal(
+      resolveLocalNightlyRunNumber(new Date("2026-08-28T12:34:56Z")),
+      12 * 3600 + 34 * 60 + 56,
+    );
+  });
 });
 
 // The self-containment check runs the packaged tree in a scratch directory. Its

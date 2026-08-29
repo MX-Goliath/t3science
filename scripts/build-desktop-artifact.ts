@@ -32,6 +32,10 @@ import {
 
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
 import {
+  readDesktopBaseVersion,
+  resolveNightlyReleaseMetadata,
+} from "./resolve-nightly-release.ts";
+import {
   BRAND_ASSET_PATHS,
   resolveWebAssetBrandForChannel,
   type WebAssetBrand,
@@ -163,6 +167,7 @@ interface BuildCliInput {
   readonly target: Option.Option<string>;
   readonly arch: Option.Option<typeof BuildArch.Type>;
   readonly buildVersion: Option.Option<string>;
+  readonly nightly: Option.Option<boolean>;
   readonly outputDir: Option.Option<string>;
   readonly skipBuild: Option.Option<boolean>;
   readonly keepStage: Option.Option<boolean>;
@@ -1572,6 +1577,7 @@ const BuildEnvConfig = Config.all({
   target: Config.string("T3CODE_DESKTOP_TARGET").pipe(Config.option),
   arch: Config.schema(BuildArch, "T3CODE_DESKTOP_ARCH").pipe(Config.option),
   version: Config.string("T3CODE_DESKTOP_VERSION").pipe(Config.option),
+  nightly: Config.boolean("T3CODE_DESKTOP_NIGHTLY").pipe(Config.withDefault(false)),
   outputDir: Config.string("T3CODE_DESKTOP_OUTPUT_DIR").pipe(Config.option),
   skipBuild: Config.boolean("T3CODE_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
   keepStage: Config.boolean("T3CODE_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
@@ -1650,6 +1656,16 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     });
   }
   const version = mergeOptions(input.buildVersion, env.version, undefined);
+  const nightly = resolveBooleanFlag(input.nightly, env.nightly);
+  const resolvedVersion =
+    version ??
+    (nightly
+      ? yield* Effect.flatMap(readDesktopBaseVersion(undefined), (baseVersion) =>
+          Effect.map(resolveGitCommitHash(repoRoot), (sha) =>
+            resolveLocalNightlyVersion({ baseVersion, now: new Date(), sha }),
+          ),
+        )
+      : undefined);
   const releaseDir = resolveBooleanFlag(input.mockUpdates, env.mockUpdates)
     ? "release-mock"
     : "release";
@@ -1682,7 +1698,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     platform,
     target,
     arch,
-    version,
+    version: resolvedVersion,
     outputDir,
     skipBuild,
     keepStage,
@@ -2527,6 +2543,25 @@ export function resolveDesktopUpdateChannel(version: string): "latest" | "nightl
   return /-nightly\.\d{8}\.\d+$/.test(version) ? "nightly" : "latest";
 }
 
+// Nightly builds without CI metadata (local `dist:desktop:*:nightly` runs)
+// derive their run number from UTC wall-clock time so repeated builds on the
+// same day produce distinct, sortable versions.
+export function resolveLocalNightlyRunNumber(now: Date): number {
+  const secondsSinceMidnight =
+    now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+  return Math.max(1, secondsSinceMidnight);
+}
+
+export function resolveLocalNightlyVersion(input: {
+  readonly baseVersion: string;
+  readonly now: Date;
+  readonly sha: string;
+}): string {
+  const date = input.now.toISOString().slice(0, 10).replaceAll("-", "");
+  const runNumber = resolveLocalNightlyRunNumber(input.now);
+  return resolveNightlyReleaseMetadata(input.baseVersion, date, runNumber, input.sha).version;
+}
+
 function isDesktopPreviewVersion(version: string): boolean {
   return /-pr\./.test(version);
 }
@@ -2598,6 +2633,19 @@ export function resolveDesktopProductName(version: string): string {
     : (desktopPackageJson.productName ?? DESKTOP_APP_BASE_NAME);
 }
 
+// Nightly artifacts carry the channel in their file name on top of the
+// version suffix, so installed/updated files are distinguishable at a glance.
+// The rolling nightly suffix (date/run number) stays out of the file name so
+// the download URL is stable per base version; update feeds match on the
+// package version, not the file name.
+export function resolveDesktopArtifactName(version: string): string {
+  if (resolveDesktopUpdateChannel(version) !== "nightly") {
+    return `${DESKTOP_ARTIFACT_BASE_NAME}-\${version}-\${arch}.\${ext}`;
+  }
+  const baseVersion = version.replace(/-nightly\.\d{8}\.\d+$/u, "");
+  return `${DESKTOP_ARTIFACT_BASE_NAME}-Nightly-${baseVersion}-\${arch}.\${ext}`;
+}
+
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   platform: typeof BuildPlatform.Type,
   target: string,
@@ -2620,7 +2668,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: `${DESKTOP_ARTIFACT_BASE_NAME}-\${version}-\${arch}.\${ext}`,
+    artifactName: resolveDesktopArtifactName(version),
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -3931,6 +3979,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   ),
   buildVersion: Flag.string("build-version").pipe(
     Flag.withDescription("Artifact version metadata (env: T3CODE_DESKTOP_VERSION)."),
+    Flag.optional,
+  ),
+  nightly: Flag.boolean("nightly").pipe(
+    Flag.withDescription(
+      "Derive a nightly version (X.Y.Z-nightly.YYYYMMDD.N) from the current source when no explicit version is set (env: T3CODE_DESKTOP_NIGHTLY).",
+    ),
     Flag.optional,
   ),
   outputDir: Flag.string("output-dir").pipe(
