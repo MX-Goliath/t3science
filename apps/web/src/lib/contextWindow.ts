@@ -40,8 +40,6 @@ export function formatProviderDisplayName(provider: string | null | undefined): 
       return "OpenCode";
     case "pi":
       return "Pi";
-    case "qwenCode":
-      return "Qwen Code";
     default: {
       // Title-case unknown driver kinds so they read reasonably.
       const trimmed = provider.replace(/Agent$/i, "").trim();

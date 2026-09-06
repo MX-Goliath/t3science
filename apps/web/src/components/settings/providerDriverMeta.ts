@@ -6,7 +6,6 @@ import {
   GrokSettings,
   OpenCodeSettings,
   PiSettings,
-  QwenCodeSettings,
   ProviderDriverKind,
 } from "@t3tools/contracts";
 import type * as Schema from "effect/Schema";
@@ -19,7 +18,6 @@ import {
   OpenAI,
   OpenCodeIcon,
   PiIcon,
-  QwenCodeIcon,
 } from "../Icons";
 
 type ProviderSettingsSchema = {
@@ -92,13 +90,6 @@ const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = [
     icon: PiIcon,
     badgeLabel: "Early Access",
     settingsSchema: PiSettings,
-  },
-  {
-    value: ProviderDriverKind.make("qwenCode"),
-    label: "Qwen Code",
-    icon: QwenCodeIcon,
-    badgeLabel: "Early Access",
-    settingsSchema: QwenCodeSettings,
   },
 ];
 
