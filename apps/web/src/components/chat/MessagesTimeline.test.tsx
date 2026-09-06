@@ -1,4 +1,10 @@
-import { CheckpointRef, EnvironmentId, MessageId, TurnId } from "@t3tools/contracts";
+import {
+  CheckpointRef,
+  EnvironmentId,
+  MessageId,
+  ProviderInstanceId,
+  TurnId,
+} from "@t3tools/contracts";
 import { codexFeedbackMessage } from "@t3tools/client-runtime/state/threads";
 import { act, createRef, useLayoutEffect, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -241,17 +247,29 @@ function buildAssistantTimelineEntry(text: string) {
 
 describe("MessagesTimeline", () => {
   it("renders a fork action beside user and assistant message actions", () => {
+    const assistantEntry = buildAssistantTimelineEntry("Answer");
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
         timelineEntries={[
           buildUserTimelineEntry("Question"),
-          buildAssistantTimelineEntry("Answer"),
+          {
+            ...assistantEntry,
+            message: {
+              ...assistantEntry.message,
+              modelSelection: {
+                instanceId: ProviderInstanceId.make("codex"),
+                model: "gpt-5.6-sol",
+                options: [{ id: "reasoningEffort", value: "high" }],
+              },
+            },
+          },
         ]}
       />,
     );
 
     expect(markup.match(/aria-label="Fork conversation"/g)).toHaveLength(2);
+    expect(markup).toContain("gpt-5.6-sol · high");
   });
 
   it.each([

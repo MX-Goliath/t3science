@@ -2900,6 +2900,10 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(firstMessage?.text).toBe("first half");
     expect(firstMessage?.streaming).toBe(false);
+    expect(firstMessage?.modelSelection).toEqual({
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5-codex",
+    });
     expect(resumedMessage?.text).toBe(" second half");
     expect(resumedMessage?.streaming).toBe(false);
 
@@ -2916,6 +2920,10 @@ describe("ProviderRuntimeIngestion", () => {
     expect(assistantEvents).toHaveLength(4);
     expect(assistantEvents[0]?.payload.streaming).toBe(true);
     expect(assistantEvents[0]?.payload.text).toBe("first half");
+    expect(assistantEvents[0]?.payload.modelSelection).toEqual({
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5-codex",
+    });
     expect(assistantEvents[1]?.payload.streaming).toBe(false);
     expect(assistantEvents[1]?.payload.text).toBe("");
     expect(assistantEvents[2]?.payload.messageId).toBe(

@@ -72,6 +72,23 @@ export function getModelSelectionBooleanOptionValue(
   return getProviderOptionBooleanSelectionValue(modelSelection?.options, id);
 }
 
+const REASONING_OPTION_IDS = ["reasoningEffort", "effort", "reasoning", "variant"] as const;
+
+export function resolveModelSelectionDisplayMeta(
+  modelSelection: ModelSelection | null | undefined,
+): { model: string; reasoning: string | null; label: string } | null {
+  if (!modelSelection) return null;
+  const reasoning =
+    REASONING_OPTION_IDS.map((id) => getModelSelectionStringOptionValue(modelSelection, id)).find(
+      (value) => value !== undefined,
+    ) ?? null;
+  return {
+    model: modelSelection.model,
+    reasoning,
+    label: reasoning ? `${modelSelection.model} · ${reasoning}` : modelSelection.model,
+  };
+}
+
 function resolveDescriptorChoiceValue(
   descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
   raw: string | null | undefined,

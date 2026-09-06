@@ -11,6 +11,7 @@ import type {
   TurnId,
 } from "@t3tools/contracts";
 import { renderAssistantCitationsAsText } from "@t3tools/shared/assistantCitations";
+import { resolveModelSelectionDisplayMeta } from "@t3tools/shared/model";
 import {
   codexArtifactTemplatePresentationLabel,
   type CodexArtifactTemplate,
@@ -1468,6 +1469,7 @@ function renderFeedEntry(
       props.terminalAssistantMessageIds.has(message.id) &&
       !assistantTurnStillInProgress &&
       !message.streaming;
+    const modelMeta = resolveModelSelectionDisplayMeta(message.modelSelection);
 
     if (isUser) {
       const enterAnimated = isFreshTimestamp(message.createdAt);
@@ -1600,6 +1602,14 @@ function renderFeedEntry(
               buttonSize={28}
               iconSize={13}
             />
+            {modelMeta ? (
+              <Text
+                className="max-w-[60%] font-t3-medium text-xs text-adaptive-neutral-600-400"
+                numberOfLines={1}
+              >
+                {modelMeta.label}
+              </Text>
+            ) : null}
             <Text className="font-t3-medium text-xs tabular-nums text-adaptive-neutral-600-400">
               {timestampLabel}
             </Text>

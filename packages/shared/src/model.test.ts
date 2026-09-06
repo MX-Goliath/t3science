@@ -11,6 +11,7 @@ import {
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
   readCustomModelEntries,
+  resolveModelSelectionDisplayMeta,
   toCustomModelSetting,
   getProviderOptionBooleanSelectionValue,
   getProviderOptionStringSelectionValue,
@@ -162,6 +163,28 @@ describe("descriptor helpers", () => {
     ).toBeUndefined();
     expect(getModelSelectionStringOptionValue(selection, "reasoningEffort")).toBe("high");
     expect(getModelSelectionBooleanOptionValue(selection, "fastMode")).toBe(true);
+  });
+
+  it("formats model metadata with provider-specific reasoning options", () => {
+    expect(
+      resolveModelSelectionDisplayMeta(
+        createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-sol", [
+          { id: "reasoningEffort", value: "high" },
+        ]),
+      ),
+    ).toEqual({
+      model: "gpt-5.6-sol",
+      reasoning: "high",
+      label: "gpt-5.6-sol · high",
+    });
+    expect(
+      resolveModelSelectionDisplayMeta(
+        createModelSelection(ProviderInstanceId.make("cursor"), "composer-2", [
+          { id: "reasoning", value: "medium" },
+        ]),
+      )?.reasoning,
+    ).toBe("medium");
+    expect(resolveModelSelectionDisplayMeta(undefined)).toBeNull();
   });
 });
 

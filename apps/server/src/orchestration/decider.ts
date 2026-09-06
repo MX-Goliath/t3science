@@ -1455,7 +1455,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Message id '${command.messageId}' uses the reserved imported-session namespace.`,
         });
       }
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
@@ -1473,6 +1473,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           messageId: command.messageId,
           role: "assistant",
           text: command.delta,
+          modelSelection: thread.modelSelection,
           turnId: command.turnId ?? null,
           streaming: true,
           createdAt: command.createdAt,
@@ -1488,7 +1489,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Message id '${command.messageId}' uses the reserved imported-session namespace.`,
         });
       }
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
@@ -1506,6 +1507,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           messageId: command.messageId,
           role: "assistant",
           text: "",
+          modelSelection: thread.modelSelection,
           turnId: command.turnId ?? null,
           streaming: false,
           createdAt: command.createdAt,

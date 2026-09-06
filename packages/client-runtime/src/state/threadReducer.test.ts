@@ -353,7 +353,12 @@ describe("applyThreadDetailEvent", () => {
   });
 
   describe("thread.message-sent", () => {
-    it("appends a new message", () => {
+    it("appends a new message with its historical model selection", () => {
+      const modelSelection = {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5.6-sol",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      };
       const result = applyThreadDetailEvent(baseThread, {
         ...baseEventFields,
         sequence: 6,
@@ -366,6 +371,7 @@ describe("applyThreadDetailEvent", () => {
           messageId: MessageId.make("msg-1"),
           role: "user",
           text: "Hello, world!",
+          modelSelection,
           turnId: null,
           streaming: false,
           createdAt: "2026-04-01T06:00:00.000Z",
@@ -377,6 +383,7 @@ describe("applyThreadDetailEvent", () => {
       if (result.kind === "updated") {
         expect(result.thread.messages).toHaveLength(1);
         expect(result.thread.messages[0]?.text).toBe("Hello, world!");
+        expect(result.thread.messages[0]?.modelSelection).toEqual(modelSelection);
       }
     });
 

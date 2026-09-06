@@ -29,6 +29,7 @@ const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
 const NOOP_FORK_MESSAGE = (_messageId: MessageId) => {};
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { toolActivityFaviconUrl } from "@t3tools/shared/favicon";
+import { resolveModelSelectionDisplayMeta } from "@t3tools/shared/model";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { getProjectFaviconCacheKey } from "@t3tools/shared/projectFavicon";
 import { observeVisibleAnimation } from "../../lib/visibleAnimation";
@@ -1677,6 +1678,7 @@ function AssistantMessageMeta({
   alwaysVisible?: boolean;
 }) {
   const ctx = use(TimelineRowCtx);
+  const modelMeta = resolveModelSelectionDisplayMeta(message.modelSelection);
 
   return (
     <div
@@ -1695,6 +1697,19 @@ function AssistantMessageMeta({
       />
       {!message.streaming ? (
         <MessageForkButton onFork={() => ctx.onForkMessage(message.id)} />
+      ) : null}
+      {!message.streaming && modelMeta ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={<p className="max-w-56 truncate text-xs text-muted-foreground tabular-nums" />}
+          >
+            {modelMeta.label}
+          </TooltipTrigger>
+          <TooltipPopup>
+            <p>Model: {modelMeta.model}</p>
+            {modelMeta.reasoning ? <p>Reasoning: {modelMeta.reasoning}</p> : null}
+          </TooltipPopup>
+        </Tooltip>
       ) : null}
       {!message.streaming && (
         <Tooltip>

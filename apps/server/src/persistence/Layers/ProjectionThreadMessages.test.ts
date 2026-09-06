@@ -1,4 +1,4 @@
-import { MessageId, ThreadId, TurnId } from "@t3tools/contracts";
+import { MessageId, ProviderInstanceId, ThreadId, TurnId } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -82,6 +82,11 @@ layer("ProjectionThreadMessageRepository", (it) => {
           sizeBytes: 5,
         },
       ];
+      const modelSelection = {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5.6-sol",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      };
 
       yield* repository.appendStreaming({
         messageId,
@@ -90,6 +95,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
         role: "assistant",
         text: "hello",
         attachments,
+        modelSelection,
         createdAt,
         updatedAt: createdAt,
       });
@@ -107,6 +113,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
       assert.equal(rowWithPreservedAttachments._tag, "Some");
       if (rowWithPreservedAttachments._tag === "Some") {
         assert.deepEqual(rowWithPreservedAttachments.value.attachments, attachments);
+        assert.deepEqual(rowWithPreservedAttachments.value.modelSelection, modelSelection);
       }
 
       yield* repository.appendStreaming({
