@@ -150,18 +150,14 @@ function parseTimestampMs(isoDate: string): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-/**
- * v2 sort: static order, newest anchor on top. Activity NEVER reorders the
- * list — a row holds its position between lifecycle transitions. The anchor
- * is creation time until an un-settle re-anchors it (see
- * activeThreadAnchorTimestampMs), so an un-settled thread surfaces at the
- * top instead of sinking back to its creation-order slot. Mirrors web's
- * sortThreadsForSidebar.
- */
+/** Active threads follow user activity, while un-settling also surfaces an
+    older thread. Mirrors web's sortThreadsForSidebar. */
 export function sortThreadsForListV2<
   T extends {
     readonly id: string;
     readonly createdAt: string;
+    readonly updatedAt: string;
+    readonly latestUserMessageAt?: string | null | undefined;
     readonly unsettledAt?: string | null | undefined;
   },
 >(threads: readonly T[]): T[] {

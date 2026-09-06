@@ -231,6 +231,7 @@ import {
   resolveAgentCompletionScheduleTarget,
   resolveRunningAgentScheduleTargets,
   resolveRateLimitSchedule,
+  shouldDispatchAgentCompletionSend,
   type ScheduledSendState,
 } from "../../scheduledSend";
 import { ScheduleSendDialog } from "./ScheduleSendDialog";
@@ -1856,6 +1857,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [composerMenuAnchor, setComposerMenuAnchor] = useState<HTMLDivElement | null>(null);
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [agentCompletionSendDue, setAgentCompletionSendDue] = useState<ScheduledSendState | null>(
+    null,
+  );
   const [isTasksDrawerOpen, setIsTasksDrawerOpen] = useState(false);
   const [stashPulse, setStashPulse] = useState<{ key: number; active: boolean }>({
     key: 0,
@@ -2956,6 +2960,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const armCurrentScheduledSend = useCallback(
     (nextScheduledSend: ScheduledSendState) => {
       const onDue = () => {
+        if (nextScheduledSend.source === "agent-completion") {
+          setAgentCompletionSendDue(nextScheduledSend);
+          return;
+        }
         setComposerScheduledSend(composerDraftTarget, null);
         submitComposer();
       };
@@ -3003,6 +3011,40 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     armCurrentScheduledSend(scheduledSend);
     return () => cancelArmedScheduledSend(scheduledSendRuntimeKey);
   }, [armCurrentScheduledSend, scheduledSend, scheduledSendRuntimeKey]);
+  useEffect(() => {
+    if (agentCompletionSendDue === null) return;
+    if (scheduledSend !== agentCompletionSendDue) {
+      setAgentCompletionSendDue(null);
+      return;
+    }
+    if (
+      !shouldDispatchAgentCompletionSend({
+        scheduledSend,
+        dueScheduledSend: agentCompletionSendDue,
+        phase,
+        isSendBusy,
+        isConnecting,
+        isSendDisabled,
+        noProviderAvailable,
+      })
+    ) {
+      return;
+    }
+    setAgentCompletionSendDue(null);
+    setComposerScheduledSend(composerDraftTarget, null);
+    submitComposer();
+  }, [
+    agentCompletionSendDue,
+    composerDraftTarget,
+    isConnecting,
+    isSendBusy,
+    isSendDisabled,
+    noProviderAvailable,
+    phase,
+    scheduledSend,
+    setComposerScheduledSend,
+    submitComposer,
+  ]);
   const handleSendContextMenu = useCallback(
     async (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.preventDefault();

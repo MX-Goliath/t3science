@@ -60,7 +60,7 @@ function getFirstSortableTimestamp(...values: Array<string | null | undefined>):
   return null;
 }
 
-function getLatestUserMessageTimestamp(thread: ThreadSortInput): number {
+function findLatestUserMessageTimestamp(thread: ThreadSortInput): number | null {
   if (thread.latestUserMessageAt) {
     const latestUserMessageTimestamp = toSortableTimestamp(thread.latestUserMessageAt);
     if (latestUserMessageTimestamp !== null) {
@@ -84,6 +84,12 @@ function getLatestUserMessageTimestamp(thread: ThreadSortInput): number {
     return latestUserMessageTimestamp;
   }
 
+  return null;
+}
+
+function getLatestUserMessageTimestamp(thread: ThreadSortInput): number {
+  const latestUserMessageTimestamp = findLatestUserMessageTimestamp(thread);
+  if (latestUserMessageTimestamp !== null) return latestUserMessageTimestamp;
   return getFirstSortableTimestamp(thread.updatedAt, thread.createdAt) ?? Number.NEGATIVE_INFINITY;
 }
 
@@ -99,20 +105,18 @@ export function getThreadSortTimestamp(
   return getLatestUserMessageTimestamp(thread);
 }
 
-/**
- * Sort anchor for the active thread list: creation time, re-anchored to
- * unsettledAt when the thread last re-entered the active list (an explicit
- * un-settle, or a settled thread waking on activity). The list stays static
- * between lifecycle transitions, but an un-settled thread surfaces at the
- * top instead of sinking back to its creation-order slot. Shared by web and
- * mobile so both render the same order. Malformed timestamps sink to 0.
- */
-export function activeThreadAnchorTimestampMs(thread: {
-  readonly createdAt: string;
-  readonly unsettledAt?: string | null | undefined;
-}): number {
+/** Active-list recency shared by web and mobile. A new user message moves a
+    thread to the top; un-settling also surfaces it even when its last message
+    is older. Malformed timestamps sink to 0. */
+export function activeThreadAnchorTimestampMs(
+  thread: ThreadSortInput & {
+    readonly unsettledAt?: string | null | undefined;
+  },
+): number {
   return Math.max(
-    toSortableTimestamp(thread.createdAt) ?? 0,
+    findLatestUserMessageTimestamp(thread) ??
+      getFirstSortableTimestamp(thread.createdAt, thread.updatedAt) ??
+      0,
     toSortableTimestamp(thread.unsettledAt ?? undefined) ?? 0,
   );
 }

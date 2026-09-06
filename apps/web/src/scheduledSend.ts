@@ -77,6 +77,27 @@ export function isScheduledSendOverdue(
   return scheduledAtMs === null || scheduledAtMs <= nowMs;
 }
 
+export function shouldDispatchAgentCompletionSend(input: {
+  scheduledSend: ScheduledSendState | null;
+  dueScheduledSend: ScheduledSendState | null;
+  phase: string;
+  isSendBusy: boolean;
+  isConnecting: boolean;
+  isSendDisabled: boolean;
+  noProviderAvailable: boolean;
+}): boolean {
+  return (
+    input.scheduledSend !== null &&
+    input.scheduledSend === input.dueScheduledSend &&
+    input.scheduledSend.source === "agent-completion" &&
+    input.phase !== "running" &&
+    !input.isSendBusy &&
+    !input.isConnecting &&
+    !input.isSendDisabled &&
+    !input.noProviderAvailable
+  );
+}
+
 export function resolveAgentCompletionScheduleTarget(
   thread: Pick<EnvironmentThreadShell, "environmentId" | "id" | "title" | "session">,
 ): ScheduledSendAgentTarget | null {

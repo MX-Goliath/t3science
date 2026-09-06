@@ -9,6 +9,7 @@ import {
   resolveAgentCompletionScheduleTarget,
   resolveRunningAgentScheduleTargets,
   resolveRateLimitSchedule,
+  shouldDispatchAgentCompletionSend,
   shouldPlaceScheduledSendInSidebarSection,
 } from "./scheduledSend";
 
@@ -234,6 +235,32 @@ describe("scheduled send runtime", () => {
     notify();
     expect(onDue).toHaveBeenCalledOnce();
     expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it("waits for the composer to observe agent completion before dispatching", () => {
+    const scheduledSend = {
+      scheduledAt: "2026-08-09T12:00:00.000Z",
+      source: "agent-completion" as const,
+    };
+    const input = {
+      scheduledSend,
+      dueScheduledSend: scheduledSend,
+      phase: "running",
+      isSendBusy: false,
+      isConnecting: false,
+      isSendDisabled: false,
+      noProviderAvailable: false,
+    };
+
+    expect(shouldDispatchAgentCompletionSend(input)).toBe(false);
+    expect(shouldDispatchAgentCompletionSend({ ...input, phase: "idle" })).toBe(true);
+    expect(
+      shouldDispatchAgentCompletionSend({
+        ...input,
+        scheduledSend: { ...scheduledSend },
+        phase: "idle",
+      }),
+    ).toBe(false);
   });
 
   it("offers only running turns from other chats", () => {

@@ -877,19 +877,25 @@ describe("reduceSidebarProjectScopeMenuState", () => {
 });
 
 describe("sortThreadsForSidebar", () => {
-  const sortable = (input: { id: string; createdAt: string }) => ({
+  const sortable = (input: { id: string; createdAt: string; latestUserMessageAt?: string }) => ({
     id: input.id,
     createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    latestUserMessageAt: input.latestUserMessageAt ?? null,
   });
 
-  it("orders by creation time, newest first, ignoring activity", () => {
+  it("moves the thread with the latest user message to the top", () => {
     const sorted = sortThreadsForSidebar([
-      sortable({ id: "oldest", createdAt: "2026-03-09T08:00:00.000Z" }),
+      sortable({
+        id: "oldest",
+        createdAt: "2026-03-09T08:00:00.000Z",
+        latestUserMessageAt: "2026-03-09T13:00:00.000Z",
+      }),
       sortable({ id: "newest", createdAt: "2026-03-09T12:00:00.000Z" }),
       sortable({ id: "middle", createdAt: "2026-03-09T10:00:00.000Z" }),
     ]);
 
-    expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "oldest"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["oldest", "newest", "middle"]);
   });
 
   it("breaks creation-time ties by id so the order is stable", () => {
@@ -906,6 +912,7 @@ describe("sortThreadsForSidebar", () => {
       {
         id: "old-unsettled",
         createdAt: "2026-03-09T08:00:00.000Z",
+        updatedAt: "2026-03-09T08:00:00.000Z",
         unsettledAt: "2026-03-09T13:00:00.000Z",
       },
       sortable({ id: "newest", createdAt: "2026-03-09T12:00:00.000Z" }),
@@ -920,6 +927,7 @@ describe("sortThreadsForSidebar", () => {
       {
         id: "stale-stamp",
         createdAt: "2026-03-09T10:00:00.000Z",
+        updatedAt: "2026-03-09T10:00:00.000Z",
         unsettledAt: "2026-03-09T09:00:00.000Z",
       },
       sortable({ id: "newest", createdAt: "2026-03-09T12:00:00.000Z" }),
