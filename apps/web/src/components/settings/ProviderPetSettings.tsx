@@ -44,8 +44,8 @@ export function ProviderPetSettings({
 
       {!state.enabled ? (
         <p className="text-xs text-muted-foreground">
-          Desktop pets are turned off in General settings, so nothing is shown while this provider
-          works.
+          Desktop pets are turned off in Desktop pets settings, so nothing is shown while this
+          provider works.
         </p>
       ) : null}
 

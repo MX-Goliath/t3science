@@ -19,6 +19,7 @@ import {
   KeyboardIcon,
   Link2Icon,
   PaletteIcon,
+  PawPrintIcon,
   SearchIcon,
   Settings2Icon,
   XIcon,
@@ -30,6 +31,7 @@ import { Collapsible, CollapsiblePanel } from "../ui/collapsible";
 import { Input } from "../ui/input";
 import { Kbd } from "../ui/kbd";
 import { cn } from "../../lib/utils";
+import { isElectron } from "../../env";
 import {
   SidebarContent,
   SidebarFooter,
@@ -72,6 +74,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   Record<SettingsPath, ComponentType<{ className?: string }>>
 > = {
   "/settings/general": Settings2Icon,
+  "/settings/desktop-pets": PawPrintIcon,
   "/settings/appearance": PaletteIcon,
   "/settings/projects": PanelsTopLeftIcon,
   "/settings/keybindings": KeyboardIcon,
@@ -86,11 +89,13 @@ const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   label: string;
   to: SettingsPath;
   icon: ComponentType<{ className?: string }>;
-}> = (Object.keys(SETTINGS_SECTION_LABELS) as SettingsPath[]).map((to) => ({
-  to,
-  label: SETTINGS_SECTION_LABELS[to],
-  icon: SETTINGS_SECTION_ICONS[to],
-}));
+}> = (Object.keys(SETTINGS_SECTION_LABELS) as SettingsPath[])
+  .filter((to) => to !== "/settings/desktop-pets" || isElectron)
+  .map((to) => ({
+    to,
+    label: SETTINGS_SECTION_LABELS[to],
+    icon: SETTINGS_SECTION_ICONS[to],
+  }));
 
 const SETTINGS_PAGE_SECTIONS: Partial<
   Readonly<Record<SettingsPath, ReadonlyArray<{ label: string; targetId: string }>>>

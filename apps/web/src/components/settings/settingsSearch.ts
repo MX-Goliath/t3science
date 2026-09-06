@@ -4,6 +4,7 @@ import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/uti
 export type SettingsPath =
   | "/settings/projects"
   | "/settings/general"
+  | "/settings/desktop-pets"
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/providers"
@@ -49,6 +50,7 @@ export interface SettingsSearchAvailability {
  */
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/general": "General",
+  "/settings/desktop-pets": "Desktop pets",
   "/settings/appearance": "Appearance",
   "/settings/projects": "Projects",
   "/settings/keybindings": "Keybindings",
@@ -120,15 +122,17 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "desktop-pets",
     title: "Desktop pets",
-    to: "/settings/general",
+    to: "/settings/desktop-pets",
     searchTerms: ["pet", "pets", "desktop pet", "питомец", "питомцы", "openpets"],
+    desktopOnly: true,
   },
   {
     id: "desktop-pets-enabled",
     title: "Show desktop pets",
-    to: "/settings/general",
+    to: "/settings/desktop-pets",
     targetId: "desktop-pets",
     searchTerms: ["pet", "pets", "питомец", "питомцы", "openpets"],
+    desktopOnly: true,
   },
   {
     id: "interface-font",

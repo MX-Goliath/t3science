@@ -244,13 +244,21 @@ describe("searchSettings", () => {
   });
 
   it("indexes desktop pet aliases", () => {
-    expect(searchSettings("openpets").map((item) => item.id)).toEqual([
+    const desktopPetItems = SETTINGS_SEARCH_ITEMS.filter(
+      (item) => item.id === "desktop-pets" || item.id === "desktop-pets-enabled",
+    ).map(({ desktopOnly: _, ...item }) => item);
+
+    expect(searchSettings("openpets", desktopPetItems).map((item) => item.id)).toEqual([
       "desktop-pets",
       "desktop-pets-enabled",
     ]);
-    expect(searchSettings("питомец").map((item) => item.id)).toEqual([
+    expect(searchSettings("питомец", desktopPetItems).map((item) => item.id)).toEqual([
       "desktop-pets",
       "desktop-pets-enabled",
     ]);
+    expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === "desktop-pets")).toMatchObject({
+      to: "/settings/desktop-pets",
+      desktopOnly: true,
+    });
   });
 });

@@ -6,7 +6,7 @@ This feature is available only in the Desktop app. Web and mobile clients contin
 
 ## Turn pets on
 
-Open **Settings → General → Desktop pets** and turn on **Show pets**. The same section lists every installed pet and is where archives are imported and removed. There is no shared companion: which pet appears is decided per provider.
+Open **Settings → Desktop pets** and turn on **Show pets**. The same page lists every installed pet and is where archives are imported and removed. There is no shared companion: which pet appears is decided per provider.
 
 ## Assign a pet to a provider
 

@@ -3066,7 +3066,6 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <DesktopSystemIntegrationSection />
-      <DesktopPetsSettings />
 
       <SettingsSection id="about" title="About">
         {isElectron || HOSTED_APP_CHANNEL ? (
@@ -3089,6 +3088,14 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <LegacyFeaturesSection />
+    </SettingsPageContainer>
+  );
+}
+
+export function DesktopPetsSettingsPanel() {
+  return (
+    <SettingsPageContainer>
+      <DesktopPetsSettings />
     </SettingsPageContainer>
   );
 }
