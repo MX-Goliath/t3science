@@ -14,6 +14,7 @@ import {
   ThreadId,
   TurnId,
   type OrchestrationEvent,
+  type OrchestrationThread,
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -114,6 +115,102 @@ const hasMetricSnapshot = (
   );
 
 describe("OrchestrationEngine", () => {
+  it("forks a persisted conversation after the server restarts", async () => {
+    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-thread-fork-"));
+    const databasePath = NodePath.join(directory, "state.sqlite");
+    let system = await createOrchestrationSystem(databasePath);
+    const projectId = ProjectId.make("fork-project");
+    const sourceThreadId = ThreadId.make("fork-source");
+    const assistantMessageId = MessageId.make("assistant:msg-1");
+    try {
+      await system.run(
+        system.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("fork-project-create"),
+          projectId,
+          title: "Fork project",
+          workspaceRoot: "/tmp/fork-project",
+          createdAt: now(),
+        }),
+      );
+      const sourceThread: OrchestrationThread = {
+        id: sourceThreadId,
+        projectId,
+        title: "Original conversation",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        latestTurn: null,
+        createdAt: now(),
+        updatedAt: now(),
+        archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
+        deletedAt: null,
+        messages: [
+          {
+            id: MessageId.make("user:msg-1"),
+            role: "user",
+            text: "Question",
+            turnId: null,
+            streaming: false,
+            createdAt: now(),
+            updatedAt: now(),
+          },
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            text: "Answer",
+            turnId: null,
+            streaming: false,
+            createdAt: "2026-01-01T00:00:00.500Z",
+            updatedAt: "2026-01-01T00:00:00.500Z",
+          },
+        ],
+        proposedPlans: [],
+        activities: [],
+        checkpoints: [],
+        session: null,
+      };
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.portable.import",
+          commandId: CommandId.make("fork-source-import"),
+          projectId,
+          thread: sourceThread,
+          createdAt: now(),
+        }),
+      );
+
+      await system.dispose();
+      system = await createOrchestrationSystem(databasePath);
+
+      const forkedThreadId = ThreadId.make("fork-target");
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.fork",
+          commandId: CommandId.make("fork-after-restart"),
+          projectId,
+          sourceThreadId,
+          messageId: assistantMessageId,
+          newThreadId: forkedThreadId,
+          createdAt: "2026-01-01T00:00:01.000Z",
+        }),
+      );
+
+      const forkedThread = Option.getOrThrow(await system.readThread(forkedThreadId));
+      expect(forkedThread.messages.map((message) => message.id)).toEqual([
+        MessageId.make("user:msg-1"),
+        assistantMessageId,
+      ]);
+    } finally {
+      await system.dispose();
+      await NodeFSP.rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it.each(["running", "stopped"] as const)(
     "sends async answers with a %s session and rejects old duplicate replies",
     async (status) => {

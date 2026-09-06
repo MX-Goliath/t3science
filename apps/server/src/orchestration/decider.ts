@@ -192,10 +192,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
   command,
   readModel,
   userInputActivity,
+  forkSourceThread,
 }: {
   readonly command: OrchestrationCommand;
   readonly readModel: OrchestrationReadModel;
   readonly userInputActivity?: OrchestrationThreadActivity;
+  readonly forkSourceThread?: OrchestrationThread;
 }): Effect.fn.Return<
   DecideOrchestrationCommandResult,
   OrchestrationCommandRejection | PlatformError.PlatformError,
@@ -435,11 +437,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         projectId: command.projectId,
       });
-      const sourceThread = yield* requireThread({
+      const sourceThreadShell = yield* requireThread({
         readModel,
         command,
         threadId: command.sourceThreadId,
       });
+      const sourceThread = forkSourceThread ?? sourceThreadShell;
       yield* requireThreadAbsent({
         readModel,
         command,

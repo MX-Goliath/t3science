@@ -211,12 +211,20 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           envelope.command.type === "thread.user-input.respond"
             ? yield* projectionSnapshotQuery.getUserInputActivity(envelope.command)
             : Option.none();
+        // Startup command snapshots omit message bodies. Forking is the rare
+        // command that needs the complete source history, so hydrate it only
+        // for this dispatch instead of making every command carry messages.
+        const forkSourceThread =
+          envelope.command.type === "thread.fork"
+            ? yield* projectionSnapshotQuery.getThreadDetailById(envelope.command.sourceThreadId)
+            : Option.none();
         const eventBase = yield* decideOrchestrationCommand({
           command: envelope.command,
           readModel: commandReadModel,
           ...(Option.isSome(userInputActivity)
             ? { userInputActivity: userInputActivity.value }
             : {}),
+          ...(Option.isSome(forkSourceThread) ? { forkSourceThread: forkSourceThread.value } : {}),
         }).pipe(
           Effect.provideService(Crypto.Crypto, crypto),
           Effect.mapError((cause) =>
