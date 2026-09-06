@@ -12,6 +12,7 @@ import type {
   RuntimeMode,
   ScopedThreadRef,
   ServerProvider,
+  ServerProviderUsageLimits,
   ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -190,6 +191,7 @@ import {
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
+import { ProviderUsageLimitsMeter } from "./ProviderUsageLimitsMeter";
 import {
   providerSupportsManualCompaction,
   resolveContextWindowModelDisplayName,
@@ -1044,6 +1046,8 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
 
 const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   compact: boolean;
+  providerUsageLimits: ServerProviderUsageLimits | null;
+  providerLabel: string;
   activeContextWindow: ContextWindowSnapshot | null;
   activeThreadModelDisplayName: string | null;
   isPreparingWorktree: boolean;
@@ -1073,6 +1077,12 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 }) {
   return (
     <>
+      {props.providerUsageLimits ? (
+        <ProviderUsageLimitsMeter
+          limits={props.providerUsageLimits}
+          providerLabel={props.providerLabel}
+        />
+      ) : null}
       {props.activeContextWindow ? (
         <ContextWindowMeter
           usage={props.activeContextWindow}
@@ -5627,6 +5637,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
+                    providerUsageLimits={selectedProviderStatus?.usageLimits ?? null}
+                    providerLabel={selectedProviderStatus?.displayName?.trim() || "Provider"}
                     activeContextWindow={
                       settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }

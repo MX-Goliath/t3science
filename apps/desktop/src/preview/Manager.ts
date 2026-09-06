@@ -1890,7 +1890,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.off("before-input-event", beforeInput);
         wc.ipc.off(HUMAN_INPUT_CHANNEL, humanInput);
         wc.ipc.off(MOUSE_NAVIGATE_CHANNEL, mouseNavigate);
-        downloadSession?.off("will-download", willDownload);
+        if (typeof downloadSession?.off === "function") {
+          downloadSession.off("will-download", willDownload);
+        }
       }).pipe(Effect.ignore),
     );
     const install = Effect.fn("PreviewManager.installWebContentsListeners")(function* () {
@@ -1909,7 +1911,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.on("audio-state-changed", audioStateChanged);
         wc.ipc.on(HUMAN_INPUT_CHANNEL, humanInput);
         wc.ipc.on(MOUSE_NAVIGATE_CHANNEL, mouseNavigate);
-        downloadSession?.on("will-download", willDownload);
+        if (typeof downloadSession?.on === "function") {
+          downloadSession.on("will-download", willDownload);
+        }
         wc.setWindowOpenHandler((details) => {
           if (previewWindowOpenAction(details) === "popup") {
             return { action: "allow", overrideBrowserWindowOptions: POPUP_WINDOW_OPTIONS };

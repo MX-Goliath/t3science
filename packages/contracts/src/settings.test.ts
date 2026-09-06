@@ -10,7 +10,6 @@ import {
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
-  shouldShowCodexRateLimits,
 } from "./settings.ts";
 
 const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
@@ -417,24 +416,6 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     // Legacy `providers` struct is still hydrated with its per-driver defaults
     // so existing call sites keep working through the migration.
     expect(decoded.providers.codex.enabled).toBe(true);
-    expect(decoded.providers.codex.showRateLimits).toBe(true);
-  });
-
-  it("resolves Codex limit visibility per provider instance", () => {
-    const settings = decodeServerSettings({
-      providerInstances: {
-        codex_personal: {
-          driver: "codex",
-          config: { showRateLimits: false },
-        },
-      },
-    });
-
-    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex"))).toBe(true);
-    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex_personal"))).toBe(
-      false,
-    );
-    expect(shouldShowCodexRateLimits(settings, ProviderInstanceId.make("codex_work"))).toBe(true);
   });
 
   it("decodes a multi-instance map mixing first-party and fork drivers", () => {

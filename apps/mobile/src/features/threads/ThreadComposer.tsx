@@ -94,6 +94,7 @@ import {
   useThreadSettingsSheetPresentation,
   type NavigationWithFinishTransitioning,
 } from "./use-thread-settings-sheet-presentation";
+import { ProviderUsageLimitsInline } from "./ProviderUsageLimitsInline";
 
 /**
  * Height of the collapsed composer (pill + vertical padding, excluding safe-area inset).
@@ -848,6 +849,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     </View>
                   </View>
                 )}
+                {selectedProviderStatus?.usageLimits ? (
+                  <ProviderUsageLimitsInline
+                    limits={selectedProviderStatus.usageLimits}
+                    providerLabel={selectedProviderStatus.displayName?.trim() || "Provider"}
+                  />
+                ) : null}
                 <View className="shrink-0 flex-row items-center">
                   <ComposerDictationPrimaryAction
                     state={voiceInput.state}
