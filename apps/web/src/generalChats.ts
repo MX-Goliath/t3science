@@ -40,6 +40,7 @@ export function buildGeneralChatsProjectSnapshot(input: {
     allRemoteMembersAreDesktopLocal:
       remoteMembers.length > 0 &&
       remoteMembers.every((project) => isDesktopLocal(project.environmentId)),
+    allRemoteMembersAreWsl: false,
     memberProjects: members,
     memberProjectRefs: members.map((project) => ({
       environmentId: project.environmentId,
