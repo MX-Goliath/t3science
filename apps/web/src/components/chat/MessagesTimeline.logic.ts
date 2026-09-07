@@ -981,10 +981,6 @@ export function deriveMessagesTimelineRows(input: {
       continue;
     }
 
-    if (input.isWorking && index === activeTurnHeaderIndex) {
-      appendWorkingRow();
-    }
-
     if (timelineEntry.id === activeWorkPlacementEntryId) {
       appendActiveWorkRows();
     }
@@ -1213,15 +1209,15 @@ export function deriveMessagesTimelineRows(input: {
     });
   }
 
-  if (workingRowVisible && activeTurnHeaderIndex === input.timelineEntries.length) {
-    appendWorkingRow();
-  }
   if (isWorking && (!hasActivityRow || latestToolFailed)) {
     nextRows.push({
       kind: "thinking",
       id: LIVE_ACTIVITY_ROW_ID,
       createdAt: input.activeTurnStartedAt,
     });
+  }
+  if (workingRowVisible) {
+    appendWorkingRow();
   }
 
   return attachTrailingToolGroupsToAssistant(nextRows);

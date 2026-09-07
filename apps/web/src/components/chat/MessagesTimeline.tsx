@@ -1783,7 +1783,7 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
   } = use(TimelineRowActivityCtx);
   const settledLabel = settledTurnState ? WORKING_ROW_SETTLED_LABELS[settledTurnState] : null;
   return (
-    <div className="border-b border-border/60 pb-2 pt-1">
+    <div className="border-t border-border/60 pb-2 pt-1">
       <div className="flex h-6 min-w-0 items-center gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
         <WorkingPetIndicator
           animation={workingPetAnimation}
