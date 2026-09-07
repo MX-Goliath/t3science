@@ -306,7 +306,7 @@ describe("ProviderCommandReactor", () => {
       model: "gpt-5-codex",
     };
     const startSessionEffect = input?.startSessionEffect;
-    const startSession = vi.fn((_: unknown, input: unknown) => {
+    const startSession = vi.fn((_: unknown, input: unknown, _options?: unknown) => {
       const sessionIndex = nextSessionIndex++;
       const resumeCursor =
         typeof input === "object" && input !== null && "resumeCursor" in input
@@ -2849,12 +2849,12 @@ describe("ProviderCommandReactor", () => {
     expect(harness.stopSession.mock.calls.length).toBe(0);
   });
 
-  it("restarts an existing Codex thread on a compatible requested instance", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
+  effectIt.effect("restarts an existing Codex thread on a compatible requested instance", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness());
+      const now = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-compatible-codex-1"),
         threadId: ThreadId.make("thread-1"),
@@ -2871,13 +2871,11 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
-      }),
-    );
+      });
 
-    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+      yield* Effect.promise(() => harness.drain());
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-compatible-codex-2"),
         threadId: ThreadId.make("thread-1"),
@@ -2894,34 +2892,36 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: "2026-01-01T00:00:00.000Z",
-      }),
-    );
+      });
 
-    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+      yield* Effect.promise(() => harness.drain());
 
-    expect(harness.startSession).toHaveBeenCalledTimes(2);
-    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
-      provider: ProviderDriverKind.make("codex"),
-      providerInstanceId: ProviderInstanceId.make("codex_work"),
-      resumeCursor: { opaque: "resume-1" },
-    });
+      expect(harness.startSession).toHaveBeenCalledTimes(2);
+      expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: ProviderInstanceId.make("codex_work"),
+        resumeCursor: { opaque: "resume-1" },
+      });
 
-    const readModel = await harness.readModel();
-    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
-  });
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
+    }),
+  );
 
-  it("transfers history when switching to a Codex instance with another account", async () => {
-    const harness = await createHarness({
-      codexContinuationKeys: {
-        codex: "codex:home:/shared-codex",
-        codex_work: "codex:home:/work-codex",
-      },
-    });
-    const now = "2026-01-01T00:00:00.000Z";
+  effectIt.effect("transfers history when switching to a Codex instance with another account", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          codexContinuationKeys: {
+            codex: "codex:home:/shared-codex",
+            codex_work: "codex:home:/work-codex",
+          },
+        }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-incompatible-codex-1"),
         threadId: ThreadId.make("thread-1"),
@@ -2934,12 +2934,10 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
-      }),
-    );
-    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+      });
+      yield* Effect.promise(() => harness.drain());
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-incompatible-codex-2"),
         threadId: ThreadId.make("thread-1"),
@@ -2956,21 +2954,22 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
-      }),
-    );
+      });
 
-    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+      yield* Effect.promise(() => harness.drain());
 
-    expect(harness.startSession).toHaveBeenCalledTimes(2);
-    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
-      provider: ProviderDriverKind.make("codex"),
-      providerInstanceId: ProviderInstanceId.make("codex_work"),
-    });
-    expect(harness.startSession.mock.calls[1]?.[1]).not.toHaveProperty("resumeCursor");
-    const transferredTurn = harness.sendTurn.mock.calls[1]?.[0] as { input?: string } | undefined;
-    expect(transferredTurn?.input).toContain("[user]\nfirst");
-    expect(transferredTurn?.input).toContain("<current_user_message>\nsecond");
-  });
+      expect(harness.startSession).toHaveBeenCalledTimes(2);
+      expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: ProviderInstanceId.make("codex_work"),
+      });
+      expect(harness.startSession.mock.calls[1]?.[2]).toEqual({ conversationTransfer: true });
+      expect(harness.startSession.mock.calls[1]?.[1]).not.toHaveProperty("resumeCursor");
+      const transferredTurn = harness.sendTurn.mock.calls[1]?.[0] as { input?: string } | undefined;
+      expect(transferredTurn?.input).toContain("[user]\nfirst");
+      expect(transferredTurn?.input).toContain("<current_user_message>\nsecond");
+    }),
+  );
 
   it("restarts the provider session when the thread workspace changes", async () => {
     const harness = await createHarness({

@@ -45,6 +45,10 @@ export interface ProviderServiceShape {
   readonly startSession: (
     threadId: ThreadId,
     input: ProviderSessionStartInput,
+    options?: {
+      /** Start a new native conversation and carry history through portable context. */
+      readonly conversationTransfer?: boolean;
+    },
   ) => Effect.Effect<ProviderSession, ProviderServiceError>;
 
   /**

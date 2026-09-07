@@ -1179,6 +1179,81 @@ antigravityInstanceRouting.layer("ProviderServiceLive instance-owned conversatio
   );
 });
 
+const primaryTransferCodex = makeFakeCodexAdapter();
+const secondaryTransferCodex = makeFakeCodexAdapter();
+const portableConversationTransfer = makeProviderServiceLayer({
+  registry: makeStaticInstanceRegistry([
+    [codexInstanceId, primaryTransferCodex.adapter],
+    [ProviderInstanceId.make("codex_work"), secondaryTransferCodex.adapter],
+  ]),
+});
+portableConversationTransfer.layer("ProviderServiceLive portable conversation transfer", (it) => {
+  it.effect("rejects incompatible native resume even when portable transfer is requested", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const threadId = asThreadId("thread-transfer-native-resume");
+      const session = yield* provider.startSession(threadId, {
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "approval-required",
+      });
+      const originalBinding = yield* directory.getBinding(threadId);
+      secondaryTransferCodex.startSession.mockClear();
+
+      for (const conversationTransfer of [false, true]) {
+        const error = yield* provider
+          .startSession(
+            threadId,
+            {
+              providerInstanceId: ProviderInstanceId.make("codex_work"),
+              threadId,
+              runtimeMode: "approval-required",
+              ...(conversationTransfer ? { resumeCursor: session.resumeCursor } : {}),
+            },
+            { conversationTransfer },
+          )
+          .pipe(Effect.flip);
+
+        assert.instanceOf(error, ProviderValidationError);
+        assert.include(error.issue, "provider resume state is incompatible");
+        assert.equal(secondaryTransferCodex.startSession.mock.calls.length, 0);
+        assert.deepEqual(yield* directory.getBinding(threadId), originalBinding);
+      }
+    }),
+  );
+
+  it.effect("starts a fresh conversation on an incompatible instance", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const threadId = asThreadId("thread-portable-conversation-transfer");
+
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "approval-required",
+      });
+      secondaryTransferCodex.startSession.mockClear();
+
+      yield* provider.startSession(
+        threadId,
+        {
+          provider: CODEX_DRIVER,
+          providerInstanceId: ProviderInstanceId.make("codex_work"),
+          threadId,
+          runtimeMode: "approval-required",
+        },
+        { conversationTransfer: true },
+      );
+
+      const transferredStart = secondaryTransferCodex.startSession.mock.calls[0]?.[0];
+      assert.exists(transferredStart);
+      assert.notProperty(transferredStart, "resumeCursor");
+    }),
+  );
+});
+
 const unsupportedRollback = makeProviderServiceLayer({ supportsConversationRollback: false });
 unsupportedRollback.layer("ProviderServiceLive unsupported rewind", (it) => {
   it.effect("rejects rewind without starting or changing the provider conversation", () =>

@@ -1171,7 +1171,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   });
 
   const startSession: ProviderServiceMethod<"startSession"> = Effect.fn("startSession")(
-    function* (threadId, rawInput) {
+    function* (threadId, rawInput, options) {
       const parsed = yield* decodeInputOrValidationError({
         operation: "ProviderService.startSession",
         schema: ProviderSessionStartInput,
@@ -1214,7 +1214,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         if (
           persistedBinding?.provider === resolvedProvider &&
           persistedBinding.providerInstanceId !== resolvedInstanceId &&
-          (input.resumeCursor != null || persistedBinding.resumeCursor != null)
+          (input.resumeCursor != null ||
+            (persistedBinding.resumeCursor != null && options?.conversationTransfer !== true))
         ) {
           const previousInstanceId = yield* requireBindingInstanceId(
             "ProviderService.startSession",
