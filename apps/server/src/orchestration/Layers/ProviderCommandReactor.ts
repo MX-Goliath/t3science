@@ -685,7 +685,7 @@ const make = Effect.gen(function* () {
       activeSession !== undefined &&
       activeSession.providerInstanceId !== undefined
         ? activeSession.providerInstanceId
-        : thread.modelSelection.instanceId;
+        : (thread.session?.providerInstanceId ?? thread.modelSelection.instanceId);
     const desiredModelSelection = requestedModelSelection ?? thread.modelSelection;
     const desiredInstanceId = desiredModelSelection.instanceId;
     const currentInfo = yield* providerService.getInstanceInfo(currentInstanceId).pipe(
@@ -739,7 +739,7 @@ const make = Effect.gen(function* () {
         createdAt,
       });
     }
-    if (thread.session !== null) {
+    if (thread.session !== null && currentInfo.driverKind === desiredInfo.driverKind) {
       yield* rejectStartedThreadModelChangeIfRequired({
         threadId,
         currentModelSelection:
@@ -757,21 +757,9 @@ const make = Effect.gen(function* () {
       thread.session !== null &&
       requestedModelSelection !== undefined &&
       requestedModelSelection.instanceId !== currentInstanceId &&
-      currentInfo.continuationIdentity.continuationKey !==
-        desiredInfo.continuationIdentity.continuationKey;
-    if (
-      thread.session !== null &&
-      requestedModelSelection !== undefined &&
-      requestedModelSelection.instanceId !== currentInstanceId
-    ) {
-      if (currentInfo.driverKind !== desiredInfo.driverKind) {
-        return yield* new ProviderAdapterRequestError({
-          provider: preferredProvider,
-          method: "thread.turn.start",
-          detail: `Thread '${threadId}' is bound to driver '${currentInfo.driverKind}' and cannot switch to '${desiredInfo.driverKind}'.`,
-        });
-      }
-    }
+      (currentInfo.driverKind !== desiredInfo.driverKind ||
+        currentInfo.continuationIdentity.continuationKey !==
+          desiredInfo.continuationIdentity.continuationKey);
     const pendingPortableContext = yield* portableContext.isPending(threadId);
     const project = yield* resolveProject(thread.projectId);
     const effectiveCwd = resolveThreadWorkspaceCwd({
@@ -909,11 +897,12 @@ const make = Effect.gen(function* () {
       };
     }
 
+    const transferHistory = incompatibleInstance || pendingPortableContext;
     const startedSession = yield* startProviderSession(
-      pendingPortableContext ? { conversationTransfer: true } : undefined,
+      transferHistory ? { conversationTransfer: true } : undefined,
     );
     yield* bindSessionToThread(startedSession);
-    return { conversationTransfer: pendingPortableContext, pendingPortableContext };
+    return { conversationTransfer: transferHistory, pendingPortableContext };
   });
 
   const buildSendTurnRequestForThread = Effect.fnUntraced(function* (input: {
