@@ -217,10 +217,18 @@ describe("OrchestrationEngine", () => {
       );
 
       const forkedThread = Option.getOrThrow(await system.readThread(forkedThreadId));
-      expect(forkedThread.messages.map((message) => message.id)).toEqual([
+      const originalThread = Option.getOrThrow(await system.readThread(sourceThreadId));
+      expect(originalThread.messages.map((message) => message.id)).toEqual([
         MessageId.make("user:msg-1"),
         assistantMessageId,
       ]);
+      expect(forkedThread.messages.map((message) => message.text)).toEqual([
+        "Question",
+        "Answer",
+      ]);
+      expect(forkedThread.messages.every((message) =>
+        originalThread.messages.every((original) => original.id !== message.id),
+      )).toBe(true);
     } finally {
       await system.dispose();
       await NodeFSP.rm(directory, { recursive: true, force: true });

@@ -1464,6 +1464,10 @@ export default function ChatView(props: ChatViewProps) {
   );
   const routeServerThreadShell = useThreadShell(routeKind === "server" ? routeThreadRef : null);
   const serverThread = useThread(routeThreadRef, { waitForShell: draftThread !== null });
+  const forkableMessageIds = useMemo(
+    () => new Set(serverThread?.messages.map((message) => message.id) ?? []),
+    [serverThread?.messages],
+  );
   const loadingServerThread = useMemo(
     () =>
       threadDetailLoading && routeServerThreadShell
@@ -7783,7 +7787,7 @@ export default function ChatView(props: ChatViewProps) {
 
   const onForkMessage = useCallback(
     async (messageId: MessageId) => {
-      if (!activeThread) {
+      if (!activeThread || !forkableMessageIds.has(messageId)) {
         return;
       }
 
@@ -7812,25 +7816,15 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
 
-      const forkReady = await settlePromise(() =>
-        waitForStartedServerThread(scopeThreadRef(activeThread.environmentId, forkThreadId), 5_000),
+      const forkReady = await waitForStartedServerThread(
+        scopeThreadRef(activeThread.environmentId, forkThreadId),
+        30_000,
       );
-      if (forkReady._tag === "Failure") {
-        if (!isAtomCommandInterrupted(forkReady)) {
-          const error = squashAtomCommandFailure(forkReady);
-          toastManager.add({
-            type: "error",
-            title: "Could not open fork",
-            description: error instanceof Error ? error.message : "The fork is not available yet.",
-          });
-        }
-        return;
-      }
-      if (!forkReady.value) {
+      if (!forkReady) {
         toastManager.add({
-          type: "error",
-          title: "Could not open fork",
-          description: "The fork was created, but it is not available yet.",
+          type: "info",
+          title: "Fork created",
+          description: "This device is still syncing. Open the fork from the sidebar when it appears.",
         });
         return;
       }
@@ -7845,7 +7839,7 @@ export default function ChatView(props: ChatViewProps) {
         }),
       );
     },
-    [activeThread, forkThread, navigate],
+    [activeThread, forkThread, forkableMessageIds, navigate],
   );
 
   // Empty state: no active thread
@@ -8170,6 +8164,7 @@ export default function ChatView(props: ChatViewProps) {
                 onRevertToTurnCount={onRevertTimelineTurn}
                 onUseArtifactTemplate={useArtifactTemplate}
                 onForkMessage={onForkMessage}
+                forkableMessageIds={forkableMessageIds}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 onFileOpen={openFileAttachment}

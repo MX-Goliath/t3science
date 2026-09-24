@@ -212,6 +212,7 @@ interface TimelineRowSharedState {
   onRevertToTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
   onForkMessage: (messageId: MessageId) => void;
+  forkableMessageIds: ReadonlySet<MessageId> | null;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
   onFileDownload: (attachment: ChatFileAttachment) => void;
@@ -336,6 +337,7 @@ interface MessagesTimelineProps {
   onRevertToTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
   onForkMessage?: (messageId: MessageId) => void;
+  forkableMessageIds?: ReadonlySet<MessageId>;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen?: (attachment: ChatFileAttachment) => void;
@@ -398,6 +400,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onRevertToTurnCount,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
   onForkMessage = NOOP_FORK_MESSAGE,
+  forkableMessageIds = null,
   isRevertingCheckpoint,
   onImageExpand,
   onFileOpen = NOOP_OPEN_ATTACHMENT,
@@ -759,6 +762,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertToTurnCount,
       onUseArtifactTemplate,
       onForkMessage,
+      forkableMessageIds,
       onImageExpand,
       onFileOpen,
       onFileDownload,
@@ -784,6 +788,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertToTurnCount,
       onUseArtifactTemplate,
       onForkMessage,
+      forkableMessageIds,
       onImageExpand,
       onFileOpen,
       onFileDownload,
@@ -1549,7 +1554,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {displayedUserMessage.copyText && (
               <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
             )}
-            <MessageForkButton onFork={() => ctx.onForkMessage(row.message.id)} />
+            {(!ctx.forkableMessageIds || ctx.forkableMessageIds.has(row.message.id)) && (
+              <MessageForkButton onFork={() => ctx.onForkMessage(row.message.id)} />
+            )}
           </div>
         </div>
       </div>
@@ -1695,7 +1702,7 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
-      {!message.streaming ? (
+      {!message.streaming && (!ctx.forkableMessageIds || ctx.forkableMessageIds.has(message.id)) ? (
         <MessageForkButton onFork={() => ctx.onForkMessage(message.id)} />
       ) : null}
       {!message.streaming && modelMeta ? (

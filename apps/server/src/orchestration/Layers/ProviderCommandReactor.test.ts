@@ -72,6 +72,7 @@ import {
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import { PortableConversationContext } from "../Services/PortableConversationContext.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
@@ -270,6 +271,80 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
+  it("sends the selected fork history to its first provider session", async () => {
+    const harness = await createHarness();
+    const sourceThreadId = ThreadId.make("thread-1");
+    const forkThreadId = ThreadId.make("forked-thread");
+    const now = "2026-01-01T00:00:00.000Z";
+    const source = Option.getOrThrow(
+      await harness.runEffect(harness.snapshotQuery.getThreadDetailById(sourceThreadId)),
+    );
+    const history = [
+      {
+        id: MessageId.make("fork-history-user"),
+        role: "user" as const,
+        text: "Remember the cache decision",
+        turnId: null,
+        streaming: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: MessageId.make("fork-history-assistant"),
+        role: "assistant" as const,
+        text: "Use the local cache",
+        turnId: null,
+        streaming: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.portable.import",
+        commandId: CommandId.make("import-fork-source"),
+        projectId: asProjectId("project-1"),
+        thread: { ...source, messages: history },
+        createdAt: now,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.make("fork-source-thread"),
+        projectId: asProjectId("project-1"),
+        sourceThreadId,
+        messageId: MessageId.make("fork-history-assistant"),
+        newThreadId: forkThreadId,
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("start-fork-turn"),
+        threadId: forkThreadId,
+        message: {
+          messageId: MessageId.make("fork-current-user"),
+          role: "user",
+          text: "Continue with tests",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.waitForFirstSend();
+
+    expect(harness.startSession.mock.calls[0]?.[2]).toEqual({ conversationTransfer: true });
+    const sent = harness.sendTurn.mock.calls[0]?.[0] as { input?: string } | undefined;
+    expect(sent?.input).toContain("[user]\nRemember the cache decision");
+    expect(sent?.input).toContain("[assistant]\nUse the local cache");
+    expect(sent?.input?.match(/Continue with tests/g)).toHaveLength(1);
+  });
+
   async function createHarness(input?: {
     readonly baseDir?: string;
     readonly initialTitle?: string;
@@ -305,6 +380,8 @@ describe("ProviderCommandReactor", () => {
     );
     let nextSessionIndex = 1;
     const runtimeSessions: Array<ProviderSession> = [];
+    const portablePending = new Set<ThreadId>();
+    const firstTurnSent = Effect.runSync(Deferred.make<void>());
     const unconfiguredProviderInstanceIds = new Set<string>();
     const modelSelection = input?.threadModelSelection ?? {
       instanceId: ProviderInstanceId.make("codex"),
@@ -376,7 +453,7 @@ describe("ProviderCommandReactor", () => {
       Effect.succeed({
         threadId: ThreadId.make("thread-1"),
         turnId: asTurnId("turn-1"),
-      }),
+      }).pipe(Effect.tap(() => Deferred.succeed(firstTurnSent, undefined))),
     );
     const compactThread = vi.fn((_: ThreadId) => input?.compactThreadEffect?.() ?? Effect.void);
     const interruptTurn = vi.fn((_: unknown) => input?.interruptTurnEffect?.() ?? Effect.void);
@@ -578,6 +655,13 @@ describe("ProviderCommandReactor", () => {
     const layer = ProviderCommandReactorLive.pipe(
       Layer.provideMerge(reactorOrchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
+      Layer.provide(
+        Layer.succeed(PortableConversationContext, {
+          isPending: (threadId) => Effect.succeed(portablePending.has(threadId)),
+          markPending: (threadId) => Effect.sync(() => void portablePending.add(threadId)),
+          markRestored: (threadId) => Effect.sync(() => void portablePending.delete(threadId)),
+        }),
+      ),
       Layer.provideMerge(Layer.succeed(ProviderService, service)),
       Layer.provide(Layer.mock(ProviderAuthService, { tryHandlePromptCommand })),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),
@@ -728,6 +812,7 @@ describe("ProviderCommandReactor", () => {
       tryHandlePromptCommand,
       startSession,
       sendTurn,
+      waitForFirstSend: () => Effect.runPromise(Deferred.await(firstTurnSent)),
       compactThread,
       interruptTurn,
       respondToRequest,

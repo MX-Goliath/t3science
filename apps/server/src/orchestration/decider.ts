@@ -507,9 +507,34 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
 
-      const messages = sourceThread.messages
-        .slice(0, messageIndex + 1)
-        .map((message) => ({ ...message, streaming: false }));
+      // Projection rows are keyed by message id across threads; reusing ids would move the source history.
+      const crypto = yield* Crypto.Crypto;
+      const messages = yield* Effect.forEach(
+        sourceThread.messages.slice(0, messageIndex + 1),
+        (message) =>
+          crypto.randomUUIDv4.pipe(
+            Effect.map((id) => ({
+              ...message,
+              id: MessageId.make(id),
+              turnId: null,
+              streaming: false,
+            })),
+          ),
+      );
+      const latestCompaction = sourceThread.activities.findLast(
+        (activity) =>
+          activity.kind === "context-compaction" &&
+          activity.createdAt <= sourceThread.messages[messageIndex]!.createdAt,
+      );
+      const activities = latestCompaction
+        ? [
+            {
+              ...latestCompaction,
+              id: EventId.make(yield* crypto.randomUUIDv4),
+              turnId: null,
+            },
+          ]
+        : [];
 
       const truncate = (text: string, maxLength = 50): string => {
         const trimmed = text.trim();
@@ -521,8 +546,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         id: command.newThreadId,
         projectId: command.projectId,
         title: truncate(`Fork: ${sourceThread.title}`),
-        branch: null,
-        worktreePath: null,
+        branch: sourceThread.branch,
+        worktreePath: sourceThread.worktreePath,
         latestTurn: null,
         createdAt: command.createdAt,
         updatedAt: command.createdAt,
@@ -537,7 +562,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         deletedAt: null,
         messages,
         proposedPlans: [],
-        activities: [],
+        activities,
         checkpoints: [],
         session: null,
       };
