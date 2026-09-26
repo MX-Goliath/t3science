@@ -1,21 +1,10 @@
 import { useAuth } from "@clerk/expo";
-import { AuthView, type UserProfileCustomPage, UserProfileView } from "@clerk/expo/native";
+import { AuthView, UserProfileView } from "@clerk/expo/native";
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { View } from "react-native";
 
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
-import { T3ConnectProfilePage } from "../cloud/T3ConnectProfilePage";
-
-// Custom rows in Clerk's native profile. Mirrors the web UserButton pages.
-const USER_PROFILE_CUSTOM_PAGES = [
-  {
-    path: "t3-connect",
-    label: "T3 Connect",
-    icon: "globe",
-    content: <T3ConnectProfilePage />,
-  },
-] satisfies UserProfileCustomPage[];
 
 export function SettingsAuthRouteScreen() {
   const navigation = useNavigation();
@@ -51,11 +40,7 @@ function ConfiguredSettingsAuthRouteScreen() {
     <View collapsable={false} className="flex-1 overflow-hidden bg-sheet">
       {isLoaded ? (
         hasBeenSignedIn.current ? (
-          <UserProfileView
-            customPages={USER_PROFILE_CUSTOM_PAGES}
-            isDismissible={false}
-            onHostBack={handleHostBack}
-          />
+          <UserProfileView isDismissible={false} onHostBack={handleHostBack} />
         ) : (
           <AuthView isDismissible={false} onHostBack={handleHostBack} />
         )

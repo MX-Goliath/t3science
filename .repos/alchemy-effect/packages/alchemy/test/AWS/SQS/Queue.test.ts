@@ -282,7 +282,7 @@ provider(
         const state = yield* yield* State;
         yield* state.delete({
           stack: stack.name,
-          stage: stack.stage,
+          stage: "test",
           fqn: "AdoptableQueue",
         });
       }).pipe(Effect.provide(stack.state));
@@ -321,7 +321,7 @@ provider("foreign-tagged queue requires adopt(true) to take over", (stack) =>
       const state = yield* yield* State;
       yield* state.delete({
         stack: stack.name,
-        stage: stack.stage,
+        stage: "test",
         fqn: "Original",
       });
     }).pipe(Effect.provide(stack.state));

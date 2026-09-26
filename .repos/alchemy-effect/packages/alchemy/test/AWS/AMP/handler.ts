@@ -15,7 +15,7 @@ export class AmpTestFunction extends Lambda.Function<Lambda.Function>()(
 export default AmpTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const workspace = yield* AMP.Workspace("BindingsWorkspace", {

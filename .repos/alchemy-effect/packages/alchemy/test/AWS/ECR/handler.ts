@@ -41,7 +41,7 @@ export class EcrTestFunction extends Lambda.Function<Lambda.Function>()(
 export default EcrTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     // A push fans out several registry calls; AWS's 3s default would
     // intermittently time out.
     timeout: Duration.seconds(60),

@@ -54,7 +54,7 @@ export const FixtureGraphLive = Layer.effect(
 export const NeptuneGraphTestFunctionLive = NeptuneGraphTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

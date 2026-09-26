@@ -32,10 +32,6 @@ test.provider("list returns the organization singleton", (stack) =>
         true,
       );
       expect(Array.isArray(org.availablePolicyTypes)).toBe(true);
-      if (org.managementAccountEmail != null) {
-        expect(typeof org.managementAccountEmail).toBe("string");
-        expect(org.managementAccountEmail.length).toBeGreaterThan(0);
-      }
     }
 
     yield* stack.destroy();

@@ -73,7 +73,7 @@ interface CommandResult {
   readonly exitCode: number;
 }
 
-export class IconExportFileSystemError extends Schema.TaggedError<IconExportFileSystemError>()(
+export class IconExportFileSystemError extends Schema.TaggedErrorClass<IconExportFileSystemError>()(
   "IconExportFileSystemError",
   {
     operation: Schema.Literals([
@@ -96,7 +96,7 @@ export class IconExportFileSystemError extends Schema.TaggedError<IconExportFile
   }
 }
 
-export class IconExportProcessError extends Schema.TaggedError<IconExportProcessError>()(
+export class IconExportProcessError extends Schema.TaggedErrorClass<IconExportProcessError>()(
   "IconExportProcessError",
   {
     operation: Schema.Literals(["spawn", "collect-stdout", "collect-stderr", "wait-for-exit"]),
@@ -110,7 +110,7 @@ export class IconExportProcessError extends Schema.TaggedError<IconExportProcess
   }
 }
 
-export class IconExportCommandFailedError extends Schema.TaggedError<IconExportCommandFailedError>()(
+export class IconExportCommandFailedError extends Schema.TaggedErrorClass<IconExportCommandFailedError>()(
   "IconExportCommandFailedError",
   {
     command: Schema.String,
@@ -127,7 +127,7 @@ export class IconExportCommandFailedError extends Schema.TaggedError<IconExportC
   }
 }
 
-export class IconExportToolResolutionError extends Schema.TaggedError<IconExportToolResolutionError>()(
+export class IconExportToolResolutionError extends Schema.TaggedErrorClass<IconExportToolResolutionError>()(
   "IconExportToolResolutionError",
   {
     reason: Schema.Literals(["configured-invalid", "configured-outdated", "not-found"]),
@@ -148,7 +148,7 @@ export class IconExportToolResolutionError extends Schema.TaggedError<IconExport
   }
 }
 
-export class IconExportSourceMissingError extends Schema.TaggedError<IconExportSourceMissingError>()(
+export class IconExportSourceMissingError extends Schema.TaggedErrorClass<IconExportSourceMissingError>()(
   "IconExportSourceMissingError",
   {
     sourcePath: Schema.String,
@@ -159,7 +159,7 @@ export class IconExportSourceMissingError extends Schema.TaggedError<IconExportS
   }
 }
 
-export class IconExportRenditionError extends Schema.TaggedError<IconExportRenditionError>()(
+export class IconExportRenditionError extends Schema.TaggedErrorClass<IconExportRenditionError>()(
   "IconExportRenditionError",
   {
     sourcePath: Schema.String,
@@ -179,7 +179,7 @@ export class IconExportRenditionError extends Schema.TaggedError<IconExportRendi
   }
 }
 
-export class IconExportEncodingError extends Schema.TaggedError<IconExportEncodingError>()(
+export class IconExportEncodingError extends Schema.TaggedErrorClass<IconExportEncodingError>()(
   "IconExportEncodingError",
   {
     variant: Schema.String,
@@ -191,7 +191,7 @@ export class IconExportEncodingError extends Schema.TaggedError<IconExportEncodi
   }
 }
 
-export class IconExportAssetsStaleError extends Schema.TaggedError<IconExportAssetsStaleError>()(
+export class IconExportAssetsStaleError extends Schema.TaggedErrorClass<IconExportAssetsStaleError>()(
   "IconExportAssetsStaleError",
   {
     paths: Schema.Array(Schema.String),
@@ -790,7 +790,7 @@ export const exportBrandIcons = Effect.fn("exportBrandIcons")(function* (checkOn
 export const exportBrandIconsCommand = Command.make(
   "export-brand-icons",
   {
-    check: Flag.Boolean("check").pipe(
+    check: Flag.boolean("check").pipe(
       Flag.withDescription("Verify generated icon assets without modifying files."),
       Flag.withDefault(false),
     ),

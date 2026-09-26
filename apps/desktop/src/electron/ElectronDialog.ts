@@ -6,7 +6,7 @@ import * as Schema from "effect/Schema";
 
 import * as Electron from "electron";
 
-export class ElectronDialogPickFolderError extends Schema.TaggedError<ElectronDialogPickFolderError>()(
+export class ElectronDialogPickFolderError extends Schema.TaggedErrorClass<ElectronDialogPickFolderError>()(
   "ElectronDialogPickFolderError",
   {
     ownerWindowId: Schema.NullOr(Schema.Number),
@@ -21,7 +21,7 @@ export class ElectronDialogPickFolderError extends Schema.TaggedError<ElectronDi
   }
 }
 
-export class ElectronDialogPickFilesError extends Schema.TaggedError<ElectronDialogPickFilesError>()(
+export class ElectronDialogPickFilesError extends Schema.TaggedErrorClass<ElectronDialogPickFilesError>()(
   "ElectronDialogPickFilesError",
   {
     ownerWindowId: Schema.NullOr(Schema.Number),
@@ -36,7 +36,7 @@ export class ElectronDialogPickFilesError extends Schema.TaggedError<ElectronDia
   }
 }
 
-export class ElectronDialogShowMessageBoxError extends Schema.TaggedError<ElectronDialogShowMessageBoxError>()(
+export class ElectronDialogShowMessageBoxError extends Schema.TaggedErrorClass<ElectronDialogShowMessageBoxError>()(
   "ElectronDialogShowMessageBoxError",
   {
     type: Schema.NullOr(Schema.Literals(["none", "info", "error", "question", "warning"])),
@@ -53,7 +53,7 @@ export class ElectronDialogShowMessageBoxError extends Schema.TaggedError<Electr
   }
 }
 
-export class ElectronDialogShowErrorBoxError extends Schema.TaggedError<ElectronDialogShowErrorBoxError>()(
+export class ElectronDialogShowErrorBoxError extends Schema.TaggedErrorClass<ElectronDialogShowErrorBoxError>()(
   "ElectronDialogShowErrorBoxError",
   {
     titleLength: Schema.Number,
@@ -102,7 +102,6 @@ export class ElectronDialog extends Context.Service<
   }
 >()("@t3tools/desktop/electron/ElectronDialog") {}
 
-/** @public Service construction is part of the canonical Effect module API. */
 export const make = ElectronDialog.of({
   pickFolder: Effect.fn("desktop.electron.dialog.pickFolder")(function* (input) {
     const ownerWindowId = Option.match(input.owner, {

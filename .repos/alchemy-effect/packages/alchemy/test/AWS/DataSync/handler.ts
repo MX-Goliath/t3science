@@ -60,7 +60,7 @@ export class DataSyncTestFunction extends Lambda.Function<Lambda.Function>()(
 export default DataSyncTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(60),
   },
   Effect.gen(function* () {

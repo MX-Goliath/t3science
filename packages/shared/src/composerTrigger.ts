@@ -1,9 +1,4 @@
-export type ComposerTriggerKind =
-  | "path"
-  | "pull-request"
-  | "slash-command"
-  | "slash-model"
-  | "skill";
+export type ComposerTriggerKind = "path" | "slash-command" | "slash-model" | "skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
 
 export interface ComposerTrigger {
@@ -100,19 +95,10 @@ export function detectComposerTrigger(
   const tokenStart = tokenIdx + 1;
 
   const token = text.slice(tokenStart, cursor);
-  const pullRequestMatch = /^#([\p{L}\p{N}][\p{L}\p{N}_-]*)?$/u.exec(token);
-  if (pullRequestMatch)
-    return {
-      kind: "pull-request",
-      query: pullRequestMatch[1] ?? "",
-      rangeStart: tokenStart,
-      rangeEnd: cursor,
-    };
-  const skillPrefix = /^\p{Sc}/u.exec(token);
-  if (skillPrefix) {
+  if (token.startsWith("$")) {
     return {
       kind: "skill",
-      query: token.slice(skillPrefix[0].length),
+      query: token.slice(1),
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };

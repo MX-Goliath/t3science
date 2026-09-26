@@ -116,7 +116,9 @@ describe("toCodecAnthropic", () => {
       assertJsonSchema(Schema.String.check(Schema.isStartsWith("a")), {
         "type": "string",
         "description": `a string starting with "a"`,
-        "pattern": "^a"
+        "allOf": [
+          { "pattern": "^a" }
+        ]
       })
     })
 
@@ -124,8 +126,8 @@ describe("toCodecAnthropic", () => {
       assertJsonSchema(Schema.String.check(Schema.isStartsWith("a"), Schema.isEndsWith("b")), {
         "type": "string",
         "description": `a string starting with "a" and a string ending with "b"`,
-        "pattern": "^a",
         "allOf": [
+          { "pattern": "^a" },
           { "pattern": "b$" }
         ]
       })
@@ -135,7 +137,9 @@ describe("toCodecAnthropic", () => {
       assertJsonSchema(Schema.String.check(Schema.isPattern(/^a/)), {
         "type": "string",
         "description": `a string matching the RegExp ^a`,
-        "pattern": "^a"
+        "allOf": [
+          { "pattern": "^a" }
+        ]
       })
     })
 
@@ -143,7 +147,9 @@ describe("toCodecAnthropic", () => {
       assertJsonSchema(Schema.String.check(Schema.isPattern(/^a/, { description: "description" })), {
         "type": "string",
         "description": "description",
-        "pattern": "^a"
+        "allOf": [
+          { "pattern": "^a" }
+        ]
       })
     })
   })
@@ -484,7 +490,7 @@ describe("toCodecAnthropic", () => {
       "required": ["name"],
       "additionalProperties": false,
       "$defs": {
-        "PersonEncoded": {
+        "PersonJsonEncoding": {
           "type": "object",
           "properties": {
             "name": { "type": "string" }
@@ -618,7 +624,7 @@ describe("toCodecAnthropic", () => {
       })
       await new TestSchema.Asserts(result.codec).decoding().fail(
         [{ 0: "a", 1: 1 }, { 0: "a", 1: 2 }],
-        `Expected a value with at least 2 entries`
+        `Expected a value with at least 2 entries, got {"a":2}`
       )
     })
 

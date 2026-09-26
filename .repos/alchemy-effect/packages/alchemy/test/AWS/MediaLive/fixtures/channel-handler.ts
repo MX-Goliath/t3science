@@ -67,7 +67,7 @@ export class MediaLiveChannelTestFunction extends Lambda.Function<Lambda.Functio
 export default MediaLiveChannelTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const role = yield* IAM.Role("ChannelBindingRole", {

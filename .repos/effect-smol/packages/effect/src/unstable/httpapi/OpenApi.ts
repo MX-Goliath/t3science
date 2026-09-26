@@ -14,7 +14,6 @@ import * as Context from "../../Context.ts"
 import * as Equal from "../../Equal.ts"
 import { constFalse } from "../../Function.ts"
 import * as InternalRecord from "../../internal/record.ts"
-import * as InternalToCodec from "../../internal/schema/toCodec.ts"
 import * as InternalToJsonSchemaDocument from "../../internal/schema/toJsonSchemaDocument.ts"
 import * as InternalToRepresentation from "../../internal/schema/toRepresentation.ts"
 import * as JsonPatch from "../../JsonPatch.ts"
@@ -23,7 +22,6 @@ import * as JsonSchema from "../../JsonSchema.ts"
 import * as Option from "../../Option.ts"
 import * as Schema from "../../Schema.ts"
 import * as SchemaAST from "../../SchemaAST.ts"
-import type * as SchemaRepresentation from "../../SchemaRepresentation.ts"
 import * as HttpMethod from "../http/HttpMethod.ts"
 import * as HttpApi from "./HttpApi.ts"
 import * as HttpApiEndpoint from "./HttpApiEndpoint.ts"
@@ -35,7 +33,7 @@ import type { HttpApiSecurity } from "./HttpApiSecurity.ts"
 /**
  * OpenAPI annotation for overriding generated identifiers, including operation ids.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Identifier extends Context.Service<Identifier, string>()("effect/httpapi/OpenApi/Identifier") {}
@@ -43,7 +41,7 @@ export class Identifier extends Context.Service<Identifier, string>()("effect/ht
 /**
  * OpenAPI annotation for setting the API title or group tag name.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Title extends Context.Service<Title, string>()("effect/httpapi/OpenApi/Title") {}
@@ -51,7 +49,7 @@ export class Title extends Context.Service<Title, string>()("effect/httpapi/Open
 /**
  * OpenAPI annotation for setting the generated API version.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Version extends Context.Service<Version, string>()("effect/httpapi/OpenApi/Version") {}
@@ -59,7 +57,7 @@ export class Version extends Context.Service<Version, string>()("effect/httpapi/
 /**
  * OpenAPI annotation for setting generated descriptions on APIs, groups, endpoints, or security schemes.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Description extends Context.Service<Description, string>()("effect/httpapi/OpenApi/Description") {}
@@ -67,7 +65,7 @@ export class Description extends Context.Service<Description, string>()("effect/
 /**
  * OpenAPI annotation for setting the generated API license metadata.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class License extends Context.Service<License, OpenAPISpecLicense>()("effect/httpapi/OpenApi/License") {}
@@ -75,7 +73,7 @@ export class License extends Context.Service<License, OpenAPISpecLicense>()("eff
 /**
  * OpenAPI annotation for adding external documentation metadata to groups or endpoints.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class ExternalDocs
@@ -85,7 +83,7 @@ export class ExternalDocs
 /**
  * OpenAPI annotation for setting the generated API server list.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Servers
@@ -95,7 +93,7 @@ export class Servers
 /**
  * OpenAPI annotation for setting the format metadata, such as a bearer token format on security schemes.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Format extends Context.Service<Format, string>()("effect/httpapi/OpenApi/Format") {}
@@ -103,7 +101,7 @@ export class Format extends Context.Service<Format, string>()("effect/httpapi/Op
 /**
  * OpenAPI annotation for setting generated summary text.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Summary extends Context.Service<Summary, string>()("effect/httpapi/OpenApi/Summary") {}
@@ -111,7 +109,7 @@ export class Summary extends Context.Service<Summary, string>()("effect/httpapi/
 /**
  * OpenAPI annotation for marking a generated endpoint operation as deprecated.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Deprecated extends Context.Service<Deprecated, boolean>()("effect/httpapi/OpenApi/Deprecated") {}
@@ -119,7 +117,7 @@ export class Deprecated extends Context.Service<Deprecated, boolean>()("effect/h
 /**
  * OpenAPI annotation for shallowly merging additional fields into a generated OpenAPI object.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Override extends Context.Service<Override, Record<string, unknown>>()("effect/httpapi/OpenApi/Override") {}
@@ -133,7 +131,7 @@ export class Override extends Context.Service<Override, Record<string, unknown>>
  * Use to hide internal, experimental, or otherwise undocumented HTTP API groups
  * and endpoints from generated OpenAPI output.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export const Exclude = Context.Reference<boolean>("effect/httpapi/OpenApi/Exclude", {
@@ -148,7 +146,7 @@ export const Exclude = Context.Reference<boolean>("effect/httpapi/OpenApi/Exclud
  * The function is applied during generation to the annotated API, group tag, or
  * endpoint operation.
  *
- * @category services
+ * @category annotations
  * @since 4.0.0
  */
 export class Transform extends Context.Service<
@@ -213,25 +211,18 @@ export const annotations: (
   transform: Transform
 })
 
-const defaultOptions: SchemaRepresentation.ToRepresentationOptions = {}
-const apiCache = new WeakMap<
-  SchemaRepresentation.ToRepresentationOptions,
-  WeakMap<HttpApi.Constraint, OpenAPISpec>
->()
+const apiCache = new WeakMap<HttpApi.Constraint, OpenAPISpec>()
 
-const cloneOpenAPISpec = <A>(value: A): A => {
-  if (Array.isArray(value)) {
-    return value.map(cloneOpenAPISpec) as A
-  }
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    const out: Record<string, unknown> = {}
-    for (const key of Object.keys(value)) {
-      InternalRecord.assignProperty(out, key, cloneOpenAPISpec((value as Record<string, unknown>)[key]))
-    }
-    return out as A
-  }
-  return value
-}
+type CompileSchemas = (
+  asts: readonly [SchemaAST.AST, ...Array<SchemaAST.AST>]
+) => JsonSchema.MultiDocument<"openapi-3.1">
+
+const compileSchemas: CompileSchemas = (asts) =>
+  JsonSchema.toMultiDocumentOpenApi3_1(
+    InternalToJsonSchemaDocument.toJsonSchemaMultiDocument(
+      InternalToRepresentation.toRepresentations(Arr.map(asts, Schema.toCodecJsonAST))
+    )
+  )
 
 /**
  * This function checks if a given tag exists within the provided context. If
@@ -250,11 +241,7 @@ function processAnnotation<Services, S, I>(
 }
 
 /**
- * Generates an OpenAPI 3.1 specification from an `HttpApi`.
- *
- * **When to use**
- *
- * Use when you need a programmatic OpenAPI document for an API definition.
+ * Converts an `HttpApi` instance into an OpenAPI Specification object.
  *
  * **Details**
  *
@@ -267,40 +254,27 @@ function processAnnotation<Services, S, I>(
  *
  * The function also deduplicates schemas, applies transformations, and
  * integrates annotations like descriptions, summaries, external documentation,
- * and overrides. The optional reference policy receives canonical JSON encoded
- * ASTs and controls which schemas are extracted into components. By default, only candidates with resolved identifiers
- * become references; anonymous non-recursive schemas remain inline.
- *
- * **Gotchas**
- *
- * Cached results are keyed by both the `HttpApi` instance and the identity of the options object. Reuse the same immutable
- * options object to reuse a cached result; mutating an options object after its first use does not invalidate the cached
- * specification. Each call returns a copy of the cached specification.
+ * and overrides. Cached results are used for better performance when the same
+ * `HttpApi` instance is processed multiple times.
  *
  * @category constructors
  * @since 4.0.0
  */
 export function fromApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
-  api: HttpApi.HttpApi<Id, Groups>,
-  options?: SchemaRepresentation.ToRepresentationOptions
+  api: HttpApi.HttpApi<Id, Groups>
 ): OpenAPISpec {
-  const resolvedOptions = options ?? defaultOptions
-  let cache = apiCache.get(resolvedOptions)
-  if (cache === undefined) {
-    cache = new WeakMap()
-    apiCache.set(resolvedOptions, cache)
-  }
-  const cached = cache.get(api)
-  if (cached !== undefined) return cloneOpenAPISpec(cached)
-  const spec = makeOpenApi(api, resolvedOptions)
-  cache.set(api, cloneOpenAPISpec(spec))
-  return spec
+  return fromApiWith(api, apiCache, compileSchemas)
 }
 
-function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
+function fromApiWith<Id extends string, Groups extends HttpApiGroup.Constraint>(
   api: HttpApi.HttpApi<Id, Groups>,
-  options: SchemaRepresentation.ToRepresentationOptions
+  cache: WeakMap<HttpApi.Constraint, OpenAPISpec>,
+  compileSchemas: CompileSchemas
 ): OpenAPISpec {
+  const cached = cache.get(api)
+  if (cached !== undefined) {
+    return cached
+  }
   let spec: OpenAPISpec = {
     openapi: "3.1.0",
     info: {
@@ -329,7 +303,6 @@ function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
   > = []
   const pathOperations = new Set<string>()
   const operationIds = new Set<string>()
-  const finalizeOperations: Array<() => void> = []
 
   processAnnotation(api.annotations, Title, (title) => {
     spec.info.title = title
@@ -380,7 +353,7 @@ function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
       if (Context.get(mergedAnnotations, Exclude)) {
         return
       }
-      const op: OpenAPISpecOperation = {
+      let op: OpenAPISpecOperation = {
         tags: [Context.getOrElse(group.annotations, Title, () => group.identifier)],
         operationId: Context.getOrElse(
           endpoint.annotations,
@@ -396,35 +369,16 @@ function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
       const method = endpoint.method.toLowerCase() as OpenAPISpecMethodName
 
       function processResponseBodies(bodies: ResponseBodies, defaultDescription: () => string) {
-        for (const [status, { content, descriptions, headers, streamContent }] of bodies) {
+        for (const [status, { content, descriptions, streamContent }] of bodies) {
           const description = descriptions.size > 0 ? Array.from(descriptions).join(" | ") : defaultDescription()
           InternalRecord.assignProperty(op.responses, status, {
             description
           })
-          for (const schema of headers) {
-            const ast = SchemaAST.getLastEncoding(schema.ast)
-            if (SchemaAST.isObjects(ast)) {
-              for (const ps of ast.propertySignatures) {
-                const name = String(ps.name).toLowerCase()
-                if (name === "content-type") continue
-                op.responses[status].headers ??= {}
-                InternalRecord.assignProperty(op.responses[status].headers, name, {
-                  schema: {},
-                  required: !SchemaAST.isOptional(ps.type)
-                })
-                pathOps.push({
-                  _tag: "parameter",
-                  ast: ps.type,
-                  path: ["paths", path, method, "responses", String(status), "headers", name, "schema"]
-                })
-              }
-            }
-          }
           if (content !== undefined) {
             content.forEach((map, encoding) => {
               map.forEach((schemas, contentType) => {
                 const asts = Array.from(schemas, SchemaAST.getAST)
-                const ast = asts.length === 1 ? asts[0] : new SchemaAST.Union(asts)
+                const ast = asts.length === 1 ? asts[0] : new SchemaAST.Union(asts, "anyOf")
 
                 pathOps.push({
                   _tag: "schema",
@@ -585,7 +539,7 @@ function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
           const content: OpenApiSpecContent = {}
           for (const [contentType, { encoding, schemas }] of schemasByContentType) {
             const asts = schemas.map(SchemaAST.getAST)
-            const ast = asts.length === 1 ? asts[0] : new SchemaAST.Union(asts)
+            const ast = asts.length === 1 ? asts[0] : new SchemaAST.Union(asts, "anyOf")
             pathOps.push({
               _tag: "schema",
               ast: toEncodingAST(ast, encoding._tag),
@@ -614,41 +568,38 @@ function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
       processResponseBodies(
         extractResponseBodies(
           HttpApiEndpoint.getErrorSchemas(endpoint),
-          HttpApiSchema.getStatusErrorSchema,
+          HttpApiSchema.getStatusError,
           resolveDescriptionOrIdentifier
         ),
         () => "Error"
       )
 
+      processAnnotation(endpoint.annotations, Override, (override) => {
+        // OpenAPI documents are JSON, so symbol keys are intentionally ignored.
+        for (const [key, value] of Object.entries(override)) {
+          InternalRecord.assignProperty(op as any, key, value)
+        }
+      })
+      processAnnotation(endpoint.annotations, Transform, (transformFn) => {
+        op = transformFn(op) as OpenAPISpecOperation
+      })
+
       const pathOperation = `${method} ${path.replace(/\{[^}]+\}/g, "{}")}`
       if (pathOperations.has(pathOperation)) {
         throw new globalThis.Error(`Duplicate OpenAPI operation for ${endpoint.method} ${path}`)
+      }
+      const operationId = op.operationId
+      if (operationId !== undefined) {
+        if (operationIds.has(operationId)) {
+          throw new globalThis.Error(`Duplicate OpenAPI operationId: ${operationId}`)
+        }
+        operationIds.add(operationId)
       }
       pathOperations.add(pathOperation)
       if (!Object.hasOwn(spec.paths, path)) {
         InternalRecord.assignProperty(spec.paths, path, {})
       }
       spec.paths[path][method] = op
-      finalizeOperations.push(() => {
-        let op = spec.paths[path][method]!
-        processAnnotation(endpoint.annotations, Override, (override) => {
-          // OpenAPI documents are JSON, so symbol keys are intentionally ignored.
-          for (const [key, value] of Object.entries(override)) {
-            InternalRecord.assignProperty(op as any, key, value)
-          }
-        })
-        processAnnotation(endpoint.annotations, Transform, (transformFn) => {
-          op = transformFn(op) as OpenAPISpecOperation
-        })
-        const operationId = op.operationId
-        if (operationId !== undefined) {
-          if (operationIds.has(operationId)) {
-            throw new globalThis.Error(`Duplicate OpenAPI operationId: ${operationId}`)
-          }
-          operationIds.add(operationId)
-        }
-        spec.paths[path][method] = op
-      })
     }
   })
 
@@ -674,15 +625,7 @@ function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
   }
 
   if (Arr.isArrayNonEmpty(pathOps)) {
-    const jsonSchemaMultiDocument = JsonSchema.toMultiDocumentOpenApi3_1(
-      InternalToJsonSchemaDocument.toJsonSchemaMultiDocument(
-        InternalToRepresentation.toRepresentations(
-          Arr.map(pathOps, (op) => InternalToCodec.toCodecJsonAST(op.ast)),
-          options
-        ),
-        { onExcessProperty: "error" }
-      )
-    )
+    const jsonSchemaMultiDocument = compileSchemas(Arr.map(pathOps, (op) => op.ast))
     const patchOps: Array<JsonPatch.JsonPatchOperation> = pathOps.map((op, i) => {
       const oppath = escapePath(op.path)
       const value = jsonSchemaMultiDocument.schemas[i]
@@ -704,10 +647,6 @@ function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
     spec = JsonPatch.apply(patchOps, spec as any) as any
   }
 
-  for (const finalize of finalizeOperations) {
-    finalize()
-  }
-
   Object.keys(spec.components.schemas).forEach((key) => {
     if (!JsonSchema.VALID_OPEN_API_COMPONENTS_SCHEMAS_KEY_REGEXP.test(key)) {
       throw new globalThis.Error(`Invalid component schema key: ${key}`)
@@ -724,6 +663,8 @@ function makeOpenApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
     spec = transformFn(spec) as OpenAPISpec
   })
 
+  cache.set(api, spec)
+
   return spec
 }
 
@@ -732,7 +673,6 @@ type ResponseBodies = Map<
   {
     descriptions: Set<string>
     content: Content | undefined // undefined means no content
-    headers: Array<Schema.Constraint>
     streamContent: StreamContent | undefined
   }
 >
@@ -742,20 +682,19 @@ const reservedStreamFailureEvent = "effect/httpapi/stream/failure"
 function extractSuccessResponseBodies(endpoint: HttpApiEndpoint.Top): ResponseBodies {
   return extractResponseBodies(
     HttpApiEndpoint.getSuccessSchemas(endpoint),
-    HttpApiSchema.getStatusSuccessSchema,
+    HttpApiSchema.getStatusSuccess,
     resolveDescriptionOrIdentifier
   )
 }
 
 function extractResponseBodies(
   schemas: Array<Schema.Constraint>,
-  getStatus: (schema: Schema.Constraint) => number,
+  getStatus: (ast: SchemaAST.AST) => number,
   getDescription: (ast: SchemaAST.AST) => string | undefined
 ): ResponseBodies {
   const map = new Map<number, {
     descriptions: Set<string>
     content: Content | undefined
-    headers: Array<Schema.Constraint>
     streamContent: StreamContent | undefined
   }>()
 
@@ -764,25 +703,16 @@ function extractResponseBodies(
   return map
 
   function process(schema: Schema.Constraint) {
-    const annotation = HttpApiSchema.getWithHeadersAnnotation(schema.ast)
-    const body = HttpApiSchema.isWithHeaders(schema) ? schema.schema : annotation?.body ?? schema
-    const headers = HttpApiSchema.isWithHeaders(schema) ? schema.headers : annotation?.headersCodec
-    const status = getStatus(schema)
-    const ast = body.ast
-    if (HttpApiSchema.isStreamSchema(body)) {
-      addStreamContent(body, status)
-    } else if (HttpApiSchema.isNoContent(ast)) {
-      addNoContent(status, getDescription(schema.ast) ?? getDescription(ast) ?? "<No Content>")
-    } else {
-      addContent(
-        body,
-        status,
-        HttpApiSchema.getResponseEncodingSchema(schema),
-        getDescription(schema.ast) ?? getDescription(ast)
-      )
+    if (HttpApiSchema.isStreamSchema(schema)) {
+      addStreamContent(schema)
+      return
     }
-    if (headers !== undefined) {
-      map.get(status)!.headers.push(headers)
+    const ast = schema.ast
+    const status = getStatus(ast)
+    if (HttpApiSchema.isNoContent(ast)) {
+      addNoContent(status, getDescription(schema.ast) ?? "<No Content>")
+    } else {
+      addContent(schema, status, HttpApiSchema.getResponseEncoding(ast))
     }
   }
 
@@ -792,7 +722,6 @@ function extractResponseBodies(
       map.set(status, {
         descriptions: new Set([description]),
         content: undefined,
-        headers: [],
         streamContent: undefined
       })
     } else {
@@ -802,19 +731,14 @@ function extractResponseBodies(
     }
   }
 
-  function addContent(
-    schema: Schema.Constraint,
-    status: number,
-    encoding: HttpApiSchema.Encoding,
-    description: string | undefined
-  ) {
+  function addContent(schema: Schema.Constraint, status: number, encoding: HttpApiSchema.Encoding) {
+    const description = getDescription(schema.ast)
     const statusMap = map.get(status)
     const { _tag, contentType } = encoding
     if (statusMap === undefined) {
       map.set(status, {
         descriptions: new Set(description !== undefined ? [description] : []),
         content: new Map([[_tag, new Map([[contentType, new Set([schema])]])]]),
-        headers: [],
         streamContent: undefined
       })
     } else {
@@ -841,24 +765,19 @@ function extractResponseBodies(
     }
   }
 
-  function addStreamContent(
-    stream: HttpApiSchema.StreamSchema,
-    status: number
-  ) {
+  function addStreamContent(stream: HttpApiSchema.StreamSchema) {
+    const status = HttpApiSchema.getStatusStream(stream)
     const statusMap = map.get(status)
     if (statusMap === undefined) {
       map.set(status, {
         descriptions: new Set(),
         content: undefined,
-        headers: [],
         streamContent: new Map([[stream.contentType, stream]])
       })
+    } else if (statusMap.streamContent === undefined) {
+      statusMap.streamContent = new Map([[stream.contentType, stream]])
     } else {
-      if (statusMap.streamContent === undefined) {
-        statusMap.streamContent = new Map([[stream.contentType, stream]])
-      } else {
-        statusMap.streamContent.set(stream.contentType, stream)
-      }
+      statusMap.streamContent.set(stream.contentType, stream)
     }
   }
 }
@@ -1074,18 +993,13 @@ export type OpenAPISpecMethodName =
 
 /**
  * Generated OpenAPI path item mapping HTTP methods to operations for a single route path.
- * Parameters declared here are shared by every operation on the path.
  *
  * @category models
  * @since 4.0.0
  */
-export type OpenAPISpecPathItem =
-  & {
-    [K in OpenAPISpecMethodName]?: OpenAPISpecOperation
-  }
-  & {
-    parameters?: Array<OpenAPISpecParameter>
-  }
+export type OpenAPISpecPathItem = {
+  [K in OpenAPISpecMethodName]?: OpenAPISpecOperation
+}
 
 /**
  * Generated OpenAPI parameter object for path, query, header, or cookie parameters.
@@ -1128,16 +1042,7 @@ export type OpenApiSpecContent = {
 export interface OpenApiSpecResponse {
   description: string
   content?: OpenApiSpecContent
-  headers?: Record<string, OpenAPISpecHeader>
 }
-
-/**
- * Generated OpenAPI response header object.
- *
- * @category models
- * @since 4.0.0
- */
-export type OpenAPISpecHeader = Omit<OpenAPISpecParameter, "name" | "in">
 
 /**
  * Generated OpenAPI media type object containing the JSON Schema for a request or response body.

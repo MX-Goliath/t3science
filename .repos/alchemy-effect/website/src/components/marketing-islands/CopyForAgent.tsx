@@ -26,7 +26,7 @@ export default function CopyForAgent() {
   };
 
   return (
-    <div className="alc-copy-agent" data-nosnippet="">
+    <div className="alc-copy-agent">
       <code className="alc-copy-agent__text">{PROMPT}</code>
       <button
         type="button"

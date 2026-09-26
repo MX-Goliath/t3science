@@ -20,22 +20,25 @@ const toFlagType = (single: Param.Single<"flag", unknown>): Completions.FlagType
   switch (tag) {
     case "Boolean":
       return { _tag: "Boolean" }
-    case "Int":
-      return { _tag: "Int" }
-    case "Finite":
-      return { _tag: "Finite" }
+    case "Integer":
+      return { _tag: "Integer" }
+    case "Float":
+      return { _tag: "Float" }
     case "Date":
       return { _tag: "Date" }
     case "Choice": {
       const keys = Primitive.getChoiceKeys(single.primitiveType)
       return { _tag: "Choice", values: keys ?? [] }
     }
-    case "Path":
-      return { _tag: "Path", pathType: Primitive.getPathType(single.primitiveType) ?? "either" }
-    case "FileText":
-    case "FileParse":
-    case "FileSchema":
-      return { _tag: "Path", pathType: "file" }
+    case "Path": {
+      const typeName = single.typeName
+      const pathType: "file" | "directory" | "either" = typeName === "file"
+        ? "file"
+        : typeName === "directory"
+        ? "directory"
+        : "either"
+      return { _tag: "Path", pathType }
+    }
     default:
       return { _tag: "String" }
   }
@@ -44,22 +47,25 @@ const toFlagType = (single: Param.Single<"flag", unknown>): Completions.FlagType
 const toArgumentType = (single: Param.Single<"argument", unknown>): Completions.ArgumentType => {
   const tag = single.primitiveType._tag
   switch (tag) {
-    case "Int":
-      return { _tag: "Int" }
-    case "Finite":
-      return { _tag: "Finite" }
+    case "Integer":
+      return { _tag: "Integer" }
+    case "Float":
+      return { _tag: "Float" }
     case "Date":
       return { _tag: "Date" }
     case "Choice": {
       const keys = Primitive.getChoiceKeys(single.primitiveType)
       return { _tag: "Choice", values: keys ?? [] }
     }
-    case "Path":
-      return { _tag: "Path", pathType: Primitive.getPathType(single.primitiveType) ?? "either" }
-    case "FileText":
-    case "FileParse":
-    case "FileSchema":
-      return { _tag: "Path", pathType: "file" }
+    case "Path": {
+      const typeName = single.typeName
+      const pathType: "file" | "directory" | "either" = typeName === "file"
+        ? "file"
+        : typeName === "directory"
+        ? "directory"
+        : "either"
+      return { _tag: "Path", pathType }
+    }
     default:
       return { _tag: "String" }
   }
@@ -70,25 +76,18 @@ const toArgumentType = (single: Param.Single<"argument", unknown>): Completions.
 // ---------------------------------------------------------------------------
 
 /** @internal */
-export const fromCommand = (
-  cmd: Command.Any,
-  inheritedFlags: ReadonlyArray<Param.AnyFlag> = []
-): Completions.CommandDescriptor => {
+export const fromCommand = (cmd: Command.Any): Completions.CommandDescriptor => {
   const impl = toImpl(cmd)
   const config = impl.config
 
   const flags: Array<Completions.FlagDescriptor> = []
-  const seen = new Set<string>()
-  // Match help's precedence: local flags first, then ancestors root to leaf.
-  for (const [index, flag] of [...config.flags, ...inheritedFlags].entries()) {
+  for (const flag of config.flags) {
     const singles = Param.extractSingleParams(flag)
     for (const single of singles) {
       if (single.kind !== "flag") continue
       // Omit hidden flags from completion scripts so tab-completion in the
       // shell does not advertise flags that are absent from --help.
       if (single.hidden) continue
-      if (index >= config.flags.length && seen.has(single.name)) continue
-      seen.add(single.name)
       flags.push({
         name: single.name,
         aliases: single.aliases,
@@ -115,17 +114,12 @@ export const fromCommand = (
   }
 
   const subcommands: Array<Completions.CommandDescriptor> = []
-  const sharedFlags = [...inheritedFlags, ...impl.contextConfig.flags]
   for (const group of cmd.subcommands) {
     for (const subcommand of group.commands) {
-      // Omit unlisted subcommands from completion scripts so tab-completion in
+      // Omit hidden subcommands from completion scripts so tab-completion in
       // the shell does not advertise commands that are absent from --help.
-      if (subcommand.unlisted) continue
-      const descriptor = fromCommand(subcommand, sharedFlags)
-      subcommands.push(descriptor)
-      if (subcommand.alias && subcommand.alias !== subcommand.name) {
-        subcommands.push({ ...descriptor, name: subcommand.alias })
-      }
+      if (subcommand.hidden) continue
+      subcommands.push(fromCommand(subcommand))
     }
   }
 

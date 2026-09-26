@@ -10,7 +10,7 @@ import * as Schema from "effect/Schema";
 
 import type { ApnsCredentials } from "../Config.ts";
 
-export class ApnsJwtEncodingError extends Schema.TaggedError<ApnsJwtEncodingError>()(
+export class ApnsJwtEncodingError extends Schema.TaggedErrorClass<ApnsJwtEncodingError>()(
   "ApnsJwtEncodingError",
   {
     component: Schema.Literals(["header", "payload"]),
@@ -25,7 +25,7 @@ export class ApnsJwtEncodingError extends Schema.TaggedError<ApnsJwtEncodingErro
   }
 }
 
-export class ApnsJwtSigningError extends Schema.TaggedError<ApnsJwtSigningError>()(
+export class ApnsJwtSigningError extends Schema.TaggedErrorClass<ApnsJwtSigningError>()(
   "ApnsJwtSigningError",
   {
     teamId: Schema.String,

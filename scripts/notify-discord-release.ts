@@ -49,7 +49,7 @@ interface DiscordWebhookPayload {
 
 const DISCORD_RELEASE_TARGETS = ["prerelease", "latest"] as const;
 const DiscordRoleIdSchema = Schema.String.check(Schema.isPattern(/^\d+$/));
-const DiscordWebhookUrl = Config.URL("DISCORD_WEBHOOK_URL");
+const DiscordWebhookUrl = Config.url("DISCORD_WEBHOOK_URL");
 
 const discordReleaseErrorContext = {
   target: Schema.Literals(["prerelease", "latest"]),
@@ -65,7 +65,7 @@ const discordReleaseErrorContext = {
   hasRoleMentionSyntax: Schema.Boolean,
 };
 
-export class DiscordReleaseWebhookRequestError extends Schema.TaggedError<DiscordReleaseWebhookRequestError>()(
+export class DiscordReleaseWebhookRequestError extends Schema.TaggedErrorClass<DiscordReleaseWebhookRequestError>()(
   "DiscordReleaseWebhookRequestError",
   {
     ...discordReleaseErrorContext,
@@ -77,7 +77,7 @@ export class DiscordReleaseWebhookRequestError extends Schema.TaggedError<Discor
   }
 }
 
-export class DiscordReleaseWebhookResponseError extends Schema.TaggedError<DiscordReleaseWebhookResponseError>()(
+export class DiscordReleaseWebhookResponseError extends Schema.TaggedErrorClass<DiscordReleaseWebhookResponseError>()(
   "DiscordReleaseWebhookResponseError",
   {
     ...discordReleaseErrorContext,
@@ -89,6 +89,13 @@ export class DiscordReleaseWebhookResponseError extends Schema.TaggedError<Disco
     return `Discord ${this.target} release webhook for "${this.tag}" returned status ${this.status}.`;
   }
 }
+
+export const DiscordReleaseAnnouncementError = Schema.Union([
+  DiscordReleaseWebhookRequestError,
+  DiscordReleaseWebhookResponseError,
+]);
+export type DiscordReleaseAnnouncementError = typeof DiscordReleaseAnnouncementError.Type;
+export const isDiscordReleaseAnnouncementError = Schema.is(DiscordReleaseAnnouncementError);
 
 const targetLabels = {
   prerelease: "Prerelease",
@@ -214,26 +221,26 @@ export const postDiscordWebhook = Effect.fn("postDiscordWebhook")(function* (
 export const notifyDiscordReleaseCommand = Command.make(
   "notify-discord-release",
   {
-    target: Argument.Literals("target", DISCORD_RELEASE_TARGETS).pipe(
+    target: Argument.choice("target", DISCORD_RELEASE_TARGETS).pipe(
       Argument.withDescription("Discord announcement target: prerelease or latest."),
     ),
-    roleId: Flag.String("role-id").pipe(
+    roleId: Flag.string("role-id").pipe(
       Flag.withSchema(DiscordRoleIdSchema),
       Flag.withDescription("Discord role ID to mention in the release announcement."),
     ),
-    releaseName: Flag.String("release-name").pipe(
+    releaseName: Flag.string("release-name").pipe(
       Flag.withSchema(Schema.NonEmptyString),
       Flag.withDescription("Human-readable release name."),
     ),
-    releaseVersion: Flag.String("release-version").pipe(
+    releaseVersion: Flag.string("release-version").pipe(
       Flag.withSchema(Schema.NonEmptyString),
       Flag.withDescription("Release version."),
     ),
-    tag: Flag.String("tag").pipe(
+    tag: Flag.string("tag").pipe(
       Flag.withSchema(Schema.NonEmptyString),
       Flag.withDescription("Git tag for the release."),
     ),
-    releaseUrl: Flag.String("release-url").pipe(
+    releaseUrl: Flag.string("release-url").pipe(
       Flag.withSchema(Schema.URLFromString),
       Flag.withDescription("Public GitHub release URL."),
     ),

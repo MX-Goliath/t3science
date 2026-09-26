@@ -5,7 +5,6 @@ import { VcsDriverKind } from "./vcs.ts";
 export const SourceControlProviderKind = Schema.Literals([
   "github",
   "gitlab",
-  "forgejo",
   "azure-devops",
   "bitbucket",
   "unknown",
@@ -155,7 +154,7 @@ export const SourceControlDiscoveryResult = Schema.Struct({
 });
 export type SourceControlDiscoveryResult = typeof SourceControlDiscoveryResult.Type;
 
-export class SourceControlProviderError extends Schema.TaggedError<SourceControlProviderError>()(
+export class SourceControlProviderError extends Schema.TaggedErrorClass<SourceControlProviderError>()(
   "SourceControlProviderError",
   {
     provider: SourceControlProviderKind,
@@ -173,7 +172,7 @@ export class SourceControlProviderError extends Schema.TaggedError<SourceControl
   }
 }
 
-export class SourceControlRepositoryError extends Schema.TaggedError<SourceControlRepositoryError>()(
+export class SourceControlRepositoryError extends Schema.TaggedErrorClass<SourceControlRepositoryError>()(
   "SourceControlRepositoryError",
   {
     provider: SourceControlProviderKind,

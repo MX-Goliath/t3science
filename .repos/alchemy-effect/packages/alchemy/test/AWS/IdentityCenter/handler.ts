@@ -24,7 +24,7 @@ export class IdentityCenterBindingsFunction extends Lambda.Function<Lambda.Funct
 export default IdentityCenterBindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(60),
   },
   Effect.gen(function* () {

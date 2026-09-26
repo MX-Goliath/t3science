@@ -40,7 +40,7 @@ const FLAG_HTTP_ONLY = 0x4;
 export const SafariCookieReadFailure = Schema.Literals(["needsFullDiskAccess", "readFailed"]);
 export type SafariCookieReadFailure = typeof SafariCookieReadFailure.Type;
 
-export class SafariCookieReadError extends Schema.TaggedError<SafariCookieReadError>()(
+export class SafariCookieReadError extends Schema.TaggedErrorClass<SafariCookieReadError>()(
   "SafariCookieReadError",
   {
     reason: SafariCookieReadFailure,
@@ -221,16 +221,6 @@ export const safariAccessDenied = Effect.fnUntraced(function* (cookiePath: strin
   return yield* fileSystem.open(cookiePath, { flag: "r" }).pipe(
     Effect.as(false),
     Effect.catch((cause) => Effect.succeed(isPermissionDenied(cause))),
-    Effect.scoped,
-  );
-});
-
-/** A missing or unreadable jar is never evidence that access was granted. */
-export const safariAccessGranted = Effect.fnUntraced(function* (cookiePath: string) {
-  const fileSystem = yield* FileSystem.FileSystem;
-  return yield* fileSystem.open(cookiePath, { flag: "r" }).pipe(
-    Effect.as(true),
-    Effect.orElseSucceed(() => false),
     Effect.scoped,
   );
 });

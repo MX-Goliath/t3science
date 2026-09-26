@@ -47,7 +47,7 @@ test.provider(
       yield* cleanupAsg;
       yield* stack.destroy();
 
-      const imageId = amazonLinux2023();
+      const imageId = (yield* amazonLinux2023()) ?? "ami-00000000000000000";
 
       const subnetId = yield* getAutoScalingTestSubnetId;
 

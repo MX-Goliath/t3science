@@ -32,7 +32,7 @@ export function ComposerInlineControl(props: {
   readonly icon?: ComponentProps<typeof SymbolView>["name"];
   readonly iconNode?: ReactNode;
   readonly label: string;
-  readonly maxWidth?: ViewStyle["maxWidth"];
+  readonly maxWidth?: number;
   readonly onPress?: () => void;
   readonly selected?: boolean;
   readonly static?: boolean;

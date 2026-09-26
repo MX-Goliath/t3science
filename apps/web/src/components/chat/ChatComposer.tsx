@@ -148,6 +148,7 @@ import {
   type TerminalContextSelection,
   INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
   insertInlineTerminalContextPlaceholder,
+  removeInlineTerminalContextPlaceholder,
 } from "../../lib/terminalContext";
 import { useComposerPathSearch } from "../../lib/composerPathSearchState";
 import { type ElementContextDraft } from "../../lib/elementContext";
@@ -167,7 +168,6 @@ import {
 import { measureRestingComposerControls } from "./restingComposerControlsMeasurement";
 import { observeResponsiveBreakpointFade, usePanelAnimationSettings } from "../../panelAnimations";
 import { type ComposerPromptEditorHandle, ComposerPromptEditor } from "../ComposerPromptEditor";
-import { composerContextRecordsFromDraft } from "../composerContextPresentation";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
@@ -1461,23 +1461,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerElementContexts = composerDraft.elementContexts;
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
   const composerReviewComments = composerDraft.reviewComments;
-  const composerContextRecords = useMemo(
-    () =>
-      composerContextRecordsFromDraft({
-        terminalContexts: composerTerminalContexts,
-        reviewComments: composerReviewComments,
-        previewAnnotations: composerPreviewAnnotations,
-        images: composerImages,
-        files: composerFiles,
-      }),
-    [
-      composerTerminalContexts,
-      composerReviewComments,
-      composerPreviewAnnotations,
-      composerImages,
-      composerFiles,
-    ],
-  );
   const scheduledSend = composerDraft.scheduledSend;
   const standaloneComposerImages = useMemo(() => {
     const previewAnnotationIds = new Set(
@@ -1521,6 +1504,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const setComposerDraftFileUpload = useComposerDraftStore((store) => store.setFileUpload);
   const insertComposerDraftTerminalContext = useComposerDraftStore(
     (store) => store.insertTerminalContext,
+  );
+  const removeComposerDraftTerminalContext = useComposerDraftStore(
+    (store) => store.removeTerminalContext,
   );
   const setComposerDraftTerminalContexts = useComposerDraftStore(
     (store) => store.setTerminalContexts,
@@ -2280,6 +2266,29 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [composerDraftTarget, composerFilesRef, removeComposerDraftFile],
   );
 
+  const removeComposerTerminalContextFromDraft = useCallback(
+    (contextId: string) => {
+      const contextIndex = composerTerminalContexts.findIndex(
+        (context) => context.id === contextId,
+      );
+      if (contextIndex < 0) return;
+      const removal = removeInlineTerminalContextPlaceholder(promptRef.current, contextIndex);
+      promptRef.current = removal.prompt;
+      setPrompt(removal.prompt);
+      removeComposerDraftTerminalContext(composerDraftTarget, contextId);
+      const nextCursor = collapseExpandedComposerCursor(removal.prompt, removal.cursor);
+      setComposerCursor(nextCursor);
+      setComposerTrigger(detectComposerTrigger(removal.prompt, removal.cursor));
+    },
+    [
+      composerDraftTarget,
+      composerTerminalContexts,
+      promptRef,
+      removeComposerDraftTerminalContext,
+      setPrompt,
+    ],
+  );
+
   // ------------------------------------------------------------------
   // Sync refs back to parent
   // ------------------------------------------------------------------
@@ -2703,7 +2712,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   } => {
     const editorSnapshot = composerEditorRef.current?.readSnapshot();
     if (editorSnapshot) {
-      return { ...editorSnapshot, terminalContextIds: editorSnapshot.contextIds };
+      return editorSnapshot;
     }
     return {
       value: promptRef.current,
@@ -3338,7 +3347,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // Callbacks: command key
   // ------------------------------------------------------------------
   const onComposerCommandKey = (
-    key: "ArrowDown" | "ArrowUp" | "Enter" | "Escape" | "Tab",
+    key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
     event: KeyboardEvent,
   ) => {
     if (key === "Tab" && event.shiftKey) {
@@ -4238,6 +4247,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ) : null}
       <ProviderModelPicker
         isComposerOwned
+        compact={composerControlsCompact}
         activeInstanceId={selectedInstanceId}
         model={selectedModelForPickerWithCustomFallback}
         lockedProvider={lockedProvider}
@@ -5667,7 +5677,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         : prompt
                   }
                   cursor={composerCursor}
-                  contextRecords={composerContextRecords}
+                  terminalContexts={
+                    !isComposerApprovalState && pendingUserInputs.length === 0
+                      ? composerTerminalContexts
+                      : []
+                  }
                   skills={selectedProviderSkills}
                   containerClassName={cn(isComposerResting && "min-w-0 flex-1")}
                   className={cn(
@@ -5679,6 +5693,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     isComposerResting &&
                       "flex items-center overflow-hidden whitespace-nowrap leading-8",
                   )}
+                  onRemoveTerminalContext={removeComposerTerminalContextFromDraft}
                   onChange={onPromptChange}
                   onVisibleSelectionChange={expandComposerForEditorChange}
                   onCommandKeyDown={onComposerCommandKey}

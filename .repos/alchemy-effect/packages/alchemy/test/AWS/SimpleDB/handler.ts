@@ -15,7 +15,7 @@ export class SimpleDBTestFunction extends Lambda.Function<Lambda.Function>()(
 export default SimpleDBTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const domain = yield* SimpleDB.Domain("BindingsDomain", {});

@@ -64,36 +64,6 @@ describe("AiError", () => {
         const error = new AiError.AuthenticationError({ kind: "Unknown" })
         assert.strictEqual(error._tag, "AuthenticationError")
       })
-
-      it("should render the description after the kind suggestion when present", () => {
-        const error = new AiError.AuthenticationError({
-          kind: "InsufficientPermissions",
-          description: "anthropic.claude-sonnet-5 is not available for this account"
-        })
-        assert.strictEqual(
-          error.message,
-          "InsufficientPermissions: Your API key lacks required permissions. anthropic.claude-sonnet-5 is not available for this account"
-        )
-      })
-
-      it("should render the message unchanged when description is absent", () => {
-        const error = new AiError.AuthenticationError({ kind: "InsufficientPermissions" })
-        assert.strictEqual(
-          error.message,
-          "InsufficientPermissions: Your API key lacks required permissions"
-        )
-        assert.isUndefined(error.description)
-      })
-
-      it("should round-trip the description through the schema", () => {
-        const error = new AiError.AuthenticationError({
-          kind: "ExpiredKey",
-          description: "The security token included in the request is expired"
-        })
-        const encoded = Schema.encodeUnknownSync(AiError.AuthenticationError)(error)
-        const decoded = Schema.decodeUnknownSync(AiError.AuthenticationError)(encoded)
-        assert.strictEqual(decoded.description, "The security token included in the request is expired")
-      })
     })
 
     describe("ContentPolicyError", () => {
@@ -270,6 +240,7 @@ describe("AiError", () => {
       it("should be retryable", () => {
         const error = new AiError.ToolParameterValidationError({
           toolName: "GetWeather",
+          toolParams: { location: "NYC" },
           description: "Expected string"
         })
         assert.isTrue(error.isRetryable)
@@ -278,6 +249,7 @@ describe("AiError", () => {
       it("should format message with tool name", () => {
         const error = new AiError.ToolParameterValidationError({
           toolName: "GetWeather",
+          toolParams: { location: "NYC" },
           description: "Expected string"
         })
         assert.match(error.message, /Invalid parameters for tool 'GetWeather'/)
@@ -286,23 +258,26 @@ describe("AiError", () => {
       it("should format message with validation message", () => {
         const error = new AiError.ToolParameterValidationError({
           toolName: "GetWeather",
+          toolParams: { location: 123 },
           description: "Expected string, got number"
         })
         assert.match(error.message, /Expected string, got number/)
       })
 
-      it("should construct when validated params contain non-JSON values", () => {
+      it("should store tool params", () => {
+        const params = { location: 123 }
         const error = new AiError.ToolParameterValidationError({
           toolName: "GetWeather",
-          description: `Expected finite number, got NaN at ["city"]`
+          toolParams: params,
+          description: "Expected string"
         })
-        assert.strictEqual(error._tag, "ToolParameterValidationError")
-        assert.match(error.message, /NaN/)
+        assert.deepStrictEqual(error.toolParams, params)
       })
 
       it("should have _tag set correctly", () => {
         const error = new AiError.ToolParameterValidationError({
           toolName: "Test",
+          toolParams: {},
           description: "Error"
         })
         assert.strictEqual(error._tag, "ToolParameterValidationError")
@@ -577,18 +552,6 @@ describe("AiError", () => {
         }
       })
 
-      it("should thread the description into 401/403 AuthenticationError", () => {
-        const reason = AiError.reasonFromHttpStatus({
-          status: 403,
-          description: "User is not authorized to perform: bedrock:InvokeModel"
-        })
-        assert.strictEqual(reason._tag, "AuthenticationError")
-        if (reason._tag === "AuthenticationError") {
-          assert.strictEqual(reason.description, "User is not authorized to perform: bedrock:InvokeModel")
-          assert.include(reason.message, "User is not authorized to perform: bedrock:InvokeModel")
-        }
-      })
-
       it("should map 429 to RateLimitError", () => {
         const reason = AiError.reasonFromHttpStatus({ status: 429 })
         assert.strictEqual(reason._tag, "RateLimitError")
@@ -763,6 +726,7 @@ describe("AiError", () => {
       Effect.gen(function*() {
         const error = new AiError.ToolParameterValidationError({
           toolName: "GetWeather",
+          toolParams: { location: 123 },
           description: "Expected string"
         })
         const encoded = yield* Schema.encodeEffect(AiError.ToolParameterValidationError)(error)
@@ -848,6 +812,7 @@ describe("AiError", () => {
 
         const paramError: AiError.AiErrorReason = new AiError.ToolParameterValidationError({
           toolName: "Test",
+          toolParams: {},
           description: "Error"
         })
         const paramEncoded = yield* Schema.encodeEffect(AiError.AiErrorReason)(paramError)

@@ -38,7 +38,7 @@ const errorTagged = <A, E extends { _tag: string }, R>(
 export default GrafanaWorkspaceTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(60),
   },
   Effect.gen(function* () {

@@ -23,7 +23,7 @@ import { WorkerError, WorkerSendError } from "./WorkerError.ts"
  * Service that spawns effect `Worker` instances for numeric worker ids using
  * the configured `Spawner`.
  *
- * @category services
+ * @category models
  * @since 4.0.0
  */
 export class WorkerPlatform extends Context.Service<WorkerPlatform, {
@@ -60,7 +60,7 @@ export interface Worker<O = unknown, I = unknown> {
  * platform ready/data messages and running the optional `onSpawn` effect when
  * the worker reports readiness.
  *
- * @category constructors
+ * @category models
  * @since 4.0.0
  */
 export const makeUnsafe = (options: {
@@ -165,17 +165,6 @@ export const makePlatform = <W>() =>
         const spawn = (yield* Spawner) as SpawnerFn<W>
         let currentPort: P | undefined
         const buffer: Array<[unknown, ReadonlyArray<unknown> | undefined]> = []
-        const sendToPort = (port: P, message: unknown, transfers?: ReadonlyArray<unknown>) =>
-          Effect.try({
-            try: () => port.postMessage([0, message], transfers as any),
-            catch: (cause) =>
-              new WorkerError({
-                reason: new WorkerSendError({
-                  message: "Failed to send message to worker",
-                  cause
-                })
-              })
-          })
 
         const run = <A, E, R>(
           handler: (_: O) => Effect.Effect<A, E, R>,
@@ -216,13 +205,11 @@ export const makePlatform = <W>() =>
                   },
                   deferred: fiberSet.deferred as any
                 })
-                // Fail fast if the worker dies before signalling readiness,
-                // and allow interruption while waiting for the handshake.
-                yield* restore(Effect.raceFirst(ready.await, FiberSet.join(fiberSet)))
+                yield* ready.await
                 currentPort = port
                 if (buffer.length > 0) {
                   for (const [message, transfers] of buffer) {
-                    yield* sendToPort(port, message, transfers)
+                    port.postMessage([0, message], transfers as any)
                   }
                   buffer.length = 0
                 }
@@ -237,7 +224,19 @@ export const makePlatform = <W>() =>
               buffer.push([message, transfers])
               return Effect.void
             }
-            return sendToPort(currentPort, message, transfers)
+            try {
+              currentPort.postMessage([0, message], transfers as any)
+              return Effect.void
+            } catch (cause) {
+              return Effect.fail(
+                new WorkerError({
+                  reason: new WorkerSendError({
+                    message: "Failed to send message to worker",
+                    cause
+                  })
+                })
+              )
+            }
           })
 
         return { run, send }

@@ -59,8 +59,9 @@ export interface QueryMetricsClient {
  * {@link Workspace}'s Prometheus-compatible query API (`api/v1/query` and
  * `api/v1/query_range`), SigV4-signed with the host Function's credentials.
  *
- * ### Querying Metrics
- * **Example:** Instant Query
+ * @binding
+ * @section Querying Metrics
+ * @example Instant Query
  * ```typescript
  * const metrics = yield* AMP.QueryMetrics(workspace);
  *
@@ -72,7 +73,7 @@ export interface QueryMetricsClient {
  * }
  * ```
  *
- * **Example:** Range Query
+ * @example Range Query
  * ```typescript
  * const result = yield* metrics.queryRange({
  *   query: "rate(http_requests_total[5m])",
@@ -81,8 +82,6 @@ export interface QueryMetricsClient {
  *   step: "30 seconds",
  * });
  * ```
- *
- * @binding
  */
 export interface QueryMetrics extends Binding.Service<
   QueryMetrics,

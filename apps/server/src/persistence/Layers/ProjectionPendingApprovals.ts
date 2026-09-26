@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema";
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
   GetProjectionPendingApprovalInput,
+  DeleteProjectionPendingApprovalInput,
   ListProjectionPendingApprovalsInput,
   ProjectionPendingApproval,
   ProjectionPendingApprovalRepository,
@@ -96,6 +97,15 @@ const makeProjectionPendingApprovalRepository = Effect.gen(function* () {
       `,
   });
 
+  const deleteProjectionPendingApprovalRow = SqlSchema.void({
+    Request: DeleteProjectionPendingApprovalInput,
+    execute: ({ requestId }) =>
+      sql`
+        DELETE FROM projection_pending_approvals
+        WHERE request_id = ${requestId}
+      `,
+  });
+
   const deleteProjectionPendingApprovalRowsByThread = SqlSchema.void({
     Request: ListProjectionPendingApprovalsInput,
     execute: ({ threadId }) =>
@@ -133,6 +143,15 @@ const makeProjectionPendingApprovalRepository = Effect.gen(function* () {
       ),
     );
 
+  const deleteByRequestId: ProjectionPendingApprovalRepositoryShape["deleteByRequestId"] = (
+    input,
+  ) =>
+    deleteProjectionPendingApprovalRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("ProjectionPendingApprovalRepository.deleteByRequestId:query"),
+      ),
+    );
+
   const deleteByThreadId: ProjectionPendingApprovalRepositoryShape["deleteByThreadId"] = (input) =>
     deleteProjectionPendingApprovalRowsByThread(input).pipe(
       Effect.mapError(
@@ -145,6 +164,7 @@ const makeProjectionPendingApprovalRepository = Effect.gen(function* () {
     listByThreadId,
     countPendingByThreadId,
     getByRequestId,
+    deleteByRequestId,
     deleteByThreadId,
   } satisfies ProjectionPendingApprovalRepositoryShape;
 });

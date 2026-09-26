@@ -1,5 +1,5 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { ExternalLinkIcon } from "lucide-react";
+import { ExternalLinkIcon, GitPullRequestIcon } from "lucide-react";
 
 import { Button } from "../ui/button";
 import {
@@ -10,7 +10,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "../ui/empty";
-import { PullRequestGlyph } from "./pullRequestIcons";
 
 export function PullRequestsUnavailableState({
   title = "Could not load pull requests",
@@ -26,9 +25,9 @@ export function PullRequestsUnavailableState({
   gitHubUrl?: string;
 }) {
   return (
-    <Empty className="min-h-0 justify-center-safe overflow-y-auto px-4 py-16 md:px-4 [&>*]:shrink-0">
+    <Empty className="px-4 py-16 md:px-4">
       <EmptyMedia variant="icon">
-        <PullRequestGlyph.pullRequest />
+        <GitPullRequestIcon />
       </EmptyMedia>
       <EmptyHeader>
         <EmptyTitle>{title}</EmptyTitle>
@@ -46,7 +45,7 @@ export function PullRequestsUnavailableState({
               disabled={refreshing}
               aria-busy={refreshing}
             >
-              <RefreshIcon size="sm" refreshing={refreshing} />
+              <RefreshIcon className="size-3.5" refreshing={refreshing} />
               Retry
             </Button>
           ) : null}

@@ -1,7 +1,7 @@
 import * as Planetscale from "@/Planetscale";
 import * as Provider from "@/Provider";
 import * as Test from "@/Test/Alchemy";
-import * as ps from "@distilled.cloud/planetscale";
+import * as ops from "@distilled.cloud/planetscale/Operations";
 import { describe, expect } from "alchemy-test";
 import { Data, Schedule } from "effect";
 import * as Effect from "effect/Effect";
@@ -75,12 +75,7 @@ test.provider("diff tracks Postgres branch replica intent", () =>
         hasReadOnlyReplicas: false,
       }),
     });
-    // A non-renaming update advertises `name` as stable so downstream
-    // consumers keep resolving `branch.name` at plan time.
-    expect(exactHaCountChanged).toEqual({
-      action: "update",
-      stables: ["organization", "database", "name"],
-    });
+    expect(exactHaCountChanged).toEqual({ action: "update" });
   }),
 );
 
@@ -121,7 +116,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST)("Branch", () => {
             hasReadOnlyReplicas: false,
           });
 
-          const live = yield* ps.getBranch({
+          const live = yield* ops.getBranch({
             organization,
             database: dbName,
             branch: branchName,
@@ -218,7 +213,7 @@ const waitForDatabaseToBeDeleted = Effect.fn(function* (
   database: string,
   organization: string,
 ) {
-  yield* ps
+  yield* ops
     .getDatabase({
       organization,
       database,
@@ -239,7 +234,7 @@ const waitForBranchToBeDeleted = Effect.fn(function* (
   branch: string,
   organization: string,
 ) {
-  yield* ps
+  yield* ops
     .getBranch({
       organization,
       database,
@@ -260,7 +255,7 @@ const deleteBranchIfExists = (
   branch: string,
   organization: string,
 ) =>
-  ps.deleteBranch({ organization, database, branch }).pipe(
+  ops.deleteBranch({ organization, database, branch }).pipe(
     Effect.catchTag("NotFound", () => Effect.void),
     Effect.flatMap(() =>
       waitForBranchToBeDeleted(database, branch, organization),

@@ -355,13 +355,11 @@ export const ChatHeader = memo(function ChatHeader({
                   }
                 >
                   <ProjectFavicon
-                    project={{
-                      environmentId: activeThreadEnvironmentId,
-                      workspaceRoot: activeProjectCwd ?? "",
-                      title: activeProjectName,
-                      faviconPath: activeProjectFaviconPath,
-                      projectIcon: activeProjectIcon,
-                    }}
+                    environmentId={activeThreadEnvironmentId}
+                    cwd={activeProjectCwd ?? ""}
+                    projectName={activeProjectName}
+                    faviconPath={activeProjectFaviconPath}
+                    projectIcon={activeProjectIcon}
                     className="size-3.5"
                   />
                   <span className="max-w-40 truncate">{activeProjectName}</span>

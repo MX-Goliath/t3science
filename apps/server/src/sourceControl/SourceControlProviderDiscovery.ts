@@ -1,4 +1,3 @@
-import * as NodeUtil from "node:util";
 import type {
   SourceControlProviderAuth,
   SourceControlProviderDiscoveryItem,
@@ -34,7 +33,6 @@ export type SourceControlCliDiscoverySpec = SourceControlDiscoverySpecBase & {
   readonly executable: string;
   readonly versionArgs: ReadonlyArray<string>;
   readonly authArgs: ReadonlyArray<string>;
-  readonly remoteRefinementArgs?: ReadonlyArray<string>;
   readonly probeTimeoutMs?: number;
   readonly parseAuth: (input: SourceControlAuthProbeInput) => SourceControlProviderAuth;
   readonly refineUnknownRemote?: (
@@ -47,18 +45,8 @@ export type SourceControlApiDiscoverySpec = SourceControlDiscoverySpecBase & {
   readonly probeAuth: Effect.Effect<SourceControlProviderAuth, never>;
 };
 
-export type SourceControlManagedCliDiscoverySpec = SourceControlDiscoverySpecBase & {
-  readonly type: "managed-cli";
-  readonly probe: (cwd: string) => Effect.Effect<SourceControlProviderDiscoveryItem>;
-  readonly refineUnknownRemote: (input: {
-    readonly cwd: string;
-    readonly context: SourceControlProvider.SourceControlProviderContext;
-  }) => Effect.Effect<SourceControlProviderInfo | null>;
-};
-
 export type SourceControlProviderDiscoverySpec =
   | SourceControlCliDiscoverySpec
-  | SourceControlManagedCliDiscoverySpec
   | SourceControlApiDiscoverySpec;
 
 type SourceControlCliRemoteRefinementSpec = SourceControlCliDiscoverySpec & {
@@ -84,7 +72,7 @@ interface DiscoveryProbeResult {
 }
 
 export function firstNonEmptyLine(text: string): Option.Option<string> {
-  const line = NodeUtil.stripVTControlCharacters(text)
+  const line = text
     .split(/\r?\n/)
     .map((entry) => entry.trim())
     .find((entry) => entry.length > 0);
@@ -127,7 +115,7 @@ export function providerAuth(input: {
   };
 }
 
-function unknownAuth(detail?: string): SourceControlProviderAuth {
+export function unknownAuth(detail?: string): SourceControlProviderAuth {
   return providerAuth({ status: "unknown", detail });
 }
 
@@ -226,7 +214,6 @@ export function probeSourceControlProvider(input: {
   readonly process: VcsProcess.VcsProcess["Service"];
   readonly cwd: string;
 }): Effect.Effect<SourceControlProviderDiscoveryItem> {
-  if (input.spec.type === "managed-cli") return input.spec.probe(input.cwd);
   if (input.spec.type === "api") {
     return input.spec.probeAuth.pipe(
       Effect.map(
@@ -301,16 +288,12 @@ export const refineUnknownRemoteProvider = Effect.fn("refineUnknownRemoteProvide
     }
     const context = input.context;
 
-    const providers = yield* Effect.forEach(input.specs, (spec) => {
-      if (spec.type === "managed-cli") {
-        return spec.refineUnknownRemote({ cwd: input.cwd, context });
-      }
-      if (!isCliRemoteRefinementSpec(spec)) return Effect.succeed(null);
-      return input.process
+    const providers = yield* Effect.forEach(input.specs.filter(isCliRemoteRefinementSpec), (spec) =>
+      input.process
         .run({
           operation: "source-control.discovery.refine-unknown-remote",
           command: spec.executable,
-          args: spec.remoteRefinementArgs ?? spec.authArgs,
+          args: spec.authArgs,
           cwd: input.cwd,
           allowNonZeroExit: true,
           timeoutMs: probeTimeoutMs(spec),
@@ -326,8 +309,8 @@ export const refineUnknownRemoteProvider = Effect.fn("refineUnknownRemoteProvide
             }),
           ),
           Effect.orElseSucceed(() => null),
-        );
-    });
+        ),
+    );
     const provider = providers.find((candidate) => candidate !== null);
 
     return provider ? { ...context, provider } : context;

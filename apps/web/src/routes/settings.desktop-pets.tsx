@@ -1,14 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { DesktopPetsSettings } from "../components/settings/DesktopPetsSettings";
-import { SettingsPageContainer } from "../components/settings/settingsLayout";
+import { DesktopPetsSettingsPanel } from "../components/settings/SettingsPanels";
 
 function SettingsDesktopPetsRoute() {
-  return (
-    <SettingsPageContainer>
-      <DesktopPetsSettings />
-    </SettingsPageContainer>
-  );
+  return <DesktopPetsSettingsPanel />;
 }
 
 export const Route = createFileRoute("/settings/desktop-pets")({

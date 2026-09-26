@@ -23,7 +23,7 @@ export class SmsVoicePhoneTestFunction extends Lambda.Function<Lambda.Function>(
 export default SmsVoicePhoneTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

@@ -98,7 +98,7 @@ export const makeCommand = <const Name extends string, Input, E, R, ContextInput
   readonly description?: string | undefined
   readonly shortDescription?: string | undefined
   readonly alias?: string | undefined
-  readonly unlisted?: boolean | undefined
+  readonly hidden?: boolean | undefined
   readonly examples?: ReadonlyArray<Command.Example> | undefined
   readonly subcommands?: ReadonlyArray<SubcommandGroup> | undefined
   readonly parse?: ((input: ParsedTokens) => Effect.Effect<Input, CliError.CliError, Environment>) | undefined
@@ -139,8 +139,7 @@ export const makeCommand = <const Name extends string, Input, E, R, ContextInput
           name: single.name,
           type: single.typeName ?? Primitive.getTypeName(single.primitiveType),
           description: single.description,
-          required: !metadata.isOptional &&
-            (!metadata.isVariadic || Option.exists(metadata.variadicMin, (min) => min > 0)),
+          required: !metadata.isOptional,
           variadic: metadata.isVariadic
         })
       }
@@ -148,8 +147,8 @@ export const makeCommand = <const Name extends string, Input, E, R, ContextInput
 
     let usage = commandPath.length > 0 ? commandPath.join(" ") : options.name
     // Only render `<subcommand>` in usage when at least one visible subcommand
-    // exists; an all-unlisted subcommand tree should look like a leaf command.
-    if (subcommands.some((group) => group.commands.some((c) => !c.unlisted))) {
+    // exists; an all-hidden subcommand tree should look like a leaf command.
+    if (subcommands.some((group) => group.commands.some((c) => !c.hidden))) {
       usage += " <subcommand>"
     }
     usage += " [flags]"
@@ -160,22 +159,21 @@ export const makeCommand = <const Name extends string, Input, E, R, ContextInput
 
     for (const option of config.flags) {
       const singles = Param.extractSingleParams(option)
-      const metadata = Param.getParamMetadata(option)
       for (const single of singles) {
         // Hidden flags still parse on the command line but are omitted from
         // generated --help output.
         if (single.hidden) continue
-        flags.push(toFlagDoc(single, metadata))
+        flags.push(toFlagDoc(single))
       }
     }
 
     const subcommandDocs: Array<SubcommandGroupDoc> = []
 
     for (const group of subcommands) {
-      // Unlisted subcommands still parse on the command line but are omitted
+      // Hidden subcommands still parse on the command line but are omitted
       // from --help. Drop the whole group when nothing visible remains so we
       // don't render an empty heading.
-      const visible = group.commands.filter((c) => !c.unlisted)
+      const visible = group.commands.filter((c) => !c.hidden)
       if (visible.length === 0) continue
       subcommandDocs.push({
         group: group.group,
@@ -208,7 +206,7 @@ export const makeCommand = <const Name extends string, Input, E, R, ContextInput
     annotations,
     globalFlags,
     subcommands,
-    unlisted: options.unlisted ?? false,
+    hidden: options.hidden ?? false,
     config,
     contextConfig,
     service,
@@ -234,20 +232,15 @@ export const makeCommand = <const Name extends string, Input, E, R, ContextInput
 
 /**
  * Converts a single flag param into a FlagDoc for help display.
- *
- * @internal
  */
-export const toFlagDoc = (
-  single: Param.Single<typeof Param.flagKind, unknown>,
-  metadata: ReturnType<typeof Param.getParamMetadata>
-): FlagDoc => {
+export const toFlagDoc = (single: Param.Single<typeof Param.flagKind, unknown>): FlagDoc => {
   const formattedAliases = single.aliases.map((alias) => alias.length === 1 ? `-${alias}` : `--${alias}`)
   return {
     name: single.name,
     aliases: formattedAliases,
     type: single.typeName ?? Primitive.getTypeName(single.primitiveType),
     description: appendChoiceKeys(single.description, Primitive.getChoiceKeys(single.primitiveType)),
-    required: single.primitiveType._tag !== "Boolean" && !metadata.isOptional
+    required: single.primitiveType._tag !== "Boolean"
   }
 }
 

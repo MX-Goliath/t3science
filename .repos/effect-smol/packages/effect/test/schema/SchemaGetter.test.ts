@@ -1,14 +1,12 @@
 import { assert, describe, it } from "@effect/vitest"
-import { DateTime, Effect, Option, Result, SchemaGetter, SchemaIssue } from "effect"
+import { DateTime, Effect, Option, Result, SchemaGetter } from "effect"
 import { assertSome, deepStrictEqual } from "../utils/assert.ts"
-
-const formatIssue = SchemaIssue.makeFormatterDefault()
 
 function makeAsserts<T, E>(getter: SchemaGetter.Getter<T, E>) {
   return async (input: E, expected: T) => {
     const r = await Effect.runPromise(
       getter.run(Option.some(input), {}).pipe(
-        Effect.mapError(formatIssue),
+        Effect.mapError((issue) => issue.toString()),
         Effect.result
       )
     )
@@ -17,15 +15,6 @@ function makeAsserts<T, E>(getter: SchemaGetter.Getter<T, E>) {
 }
 
 describe("SchemaGetter", () => {
-  it.effect("forbiddenEncoding", () =>
-    Effect.gen(function*() {
-      const getter: SchemaGetter.Getter<string, number> = SchemaGetter.forbiddenEncoding
-      const issue = yield* getter.run(Option.some(1), {}).pipe(Effect.flip)
-
-      assert.strictEqual(issue._tag, "Forbidden")
-      assert.strictEqual(formatIssue(issue), "Encoding is not supported")
-    }))
-
   it.effect("stringifyJson fails when JSON.stringify returns undefined", () =>
     SchemaGetter.stringifyJson().run(Option.some(undefined), {}).pipe(
       Effect.flip,
@@ -47,17 +36,6 @@ describe("SchemaGetter", () => {
   })
 
   describe("makeTreeRecord", () => {
-    it("preserves array-valued leaves at duplicate paths", () => {
-      deepStrictEqual(
-        SchemaGetter.makeTreeRecord([
-          ["permissions", ["read"]],
-          ["permissions", ["write"]],
-          ["permissions", ["share"]]
-        ]),
-        { permissions: [["read"], ["write"], ["share"]] }
-      )
-    })
-
     it("replaces conflicting leaf values with containers", () => {
       deepStrictEqual(
         SchemaGetter.makeTreeRecord([
@@ -116,19 +94,6 @@ describe("SchemaGetter", () => {
           ["a[0][b]", 1]
         ]),
         { a: [{ b: 1 }] }
-      )
-    })
-
-    it("preserves invalid array index segments as object keys", () => {
-      assert.deepStrictEqual(
-        SchemaGetter.makeTreeRecord([
-          ["leading[01]", "a"],
-          ["overflow[4294967295]", "b"]
-        ]),
-        {
-          leading: { "01": "a" },
-          overflow: { "4294967295": "b" }
-        }
       )
     })
   })

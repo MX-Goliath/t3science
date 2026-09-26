@@ -61,15 +61,14 @@ export interface KeyValueStore extends Resource<
  *
  * KeyValueStores can be associated with CloudFront Functions and are useful for
  * routing metadata or other small edge-time lookup tables.
- * ### Creating KeyValueStores
- * **Example:** Basic Store
+ * @resource
+ * @section Creating KeyValueStores
+ * @example Basic Store
  * ```typescript
  * const store = yield* KeyValueStore("RouterStore", {
  *   comment: "Route metadata",
  * });
  * ```
- *
- * @resource
  */
 export const KeyValueStore = Resource<KeyValueStore>(
   "AWS.CloudFront.KeyValueStore",

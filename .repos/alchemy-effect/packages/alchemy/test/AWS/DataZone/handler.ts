@@ -31,7 +31,7 @@ export class DataZoneTestFunction extends Lambda.Function<Lambda.Function>()(
 export default DataZoneTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

@@ -36,7 +36,7 @@ export class RedshiftBindingsTestFunction extends Lambda.Function<Lambda.Functio
 export default RedshiftBindingsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const describeClusters = yield* Redshift.DescribeClusters();

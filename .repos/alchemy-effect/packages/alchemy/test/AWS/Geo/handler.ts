@@ -18,7 +18,7 @@ export class GeoTestFunction extends Lambda.Function<Lambda.Function>()(
 export default GeoTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     // Geo calls fan out to upstream providers and can exceed Lambda's 3s default.
     timeout: Duration.seconds(30),
   },

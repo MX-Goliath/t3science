@@ -88,7 +88,7 @@ const serverUpdateStateAtom = Atom.family((environmentId: EnvironmentId) =>
   ),
 );
 
-export class ServerUpdateResumeTimeoutError extends Schema.TaggedError<ServerUpdateResumeTimeoutError>()(
+export class ServerUpdateResumeTimeoutError extends Schema.TaggedErrorClass<ServerUpdateResumeTimeoutError>()(
   "ServerUpdateResumeTimeoutError",
   {
     environmentId: Schema.String,
@@ -100,7 +100,7 @@ export class ServerUpdateResumeTimeoutError extends Schema.TaggedError<ServerUpd
   }
 }
 
-export class ServerUpdateProgressIncompleteError extends Schema.TaggedError<ServerUpdateProgressIncompleteError>()(
+export class ServerUpdateProgressIncompleteError extends Schema.TaggedErrorClass<ServerUpdateProgressIncompleteError>()(
   "ServerUpdateProgressIncompleteError",
   {
     targetVersion: Schema.String,
@@ -111,7 +111,7 @@ export class ServerUpdateProgressIncompleteError extends Schema.TaggedError<Serv
   }
 }
 
-export class ServerUpdateTerminalError extends Schema.TaggedError<ServerUpdateTerminalError>()(
+export class ServerUpdateTerminalError extends Schema.TaggedErrorClass<ServerUpdateTerminalError>()(
   "ServerUpdateTerminalError",
   {
     targetVersion: Schema.String,

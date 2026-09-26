@@ -26,7 +26,7 @@ export class MediaPackageV2TestFunction extends Lambda.Function<Lambda.Function>
 export default MediaPackageV2TestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(60),
   },
   Effect.gen(function* () {

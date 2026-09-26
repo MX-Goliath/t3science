@@ -26,7 +26,7 @@ export class LakeFormationTestFunction extends Lambda.Function<Lambda.Function>(
 export default LakeFormationTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     // Lake Formation calls routinely take a few seconds; the default 3s
     // Lambda timeout is too tight.
     timeout: Duration.seconds(30),

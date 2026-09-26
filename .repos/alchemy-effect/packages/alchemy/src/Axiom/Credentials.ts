@@ -1,9 +1,11 @@
 import { Credentials } from "@distilled.cloud/axiom/Credentials";
 import { ConfigError } from "@distilled.cloud/core/errors";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Match from "effect/Match";
-import { resolveProviderConfig } from "../Auth/Resolve.ts";
+import { getAuthProvider } from "../Auth/AuthProvider.ts";
+import { ALCHEMY_PROFILE, AlchemyProfile } from "../Auth/Profile.ts";
 import {
   AXIOM_AUTH_PROVIDER_NAME,
   type AxiomAuthConfig,
@@ -19,18 +21,24 @@ export {
 /**
  * Build a `Credentials` layer that resolves Axiom credentials via the Alchemy
  * AuthProvider using the configured profile (defaults to "default", overridable
- * with the current Alchemy profile).
+ * with the `ALCHEMY_PROFILE` env/config value).
  */
 export const fromAuthProvider = () =>
   Layer.effect(
     Credentials,
     Effect.gen(function* () {
-      const { profileName, resolve } = yield* resolveProviderConfig<
+      const profile = yield* AlchemyProfile;
+      const auth = yield* getAuthProvider<
         AxiomAuthConfig,
         AxiomResolvedCredentials
       >(AXIOM_AUTH_PROVIDER_NAME);
+      const profileName = yield* ALCHEMY_PROFILE;
+      const ci = yield* Config.boolean("CI").pipe(Config.withDefault(false));
 
-      return yield* resolve.pipe(
+      return yield* profile.loadOrConfigure(auth, profileName, { ci }).pipe(
+        Effect.flatMap((config) =>
+          auth.read(profileName, config as AxiomAuthConfig),
+        ),
         Effect.map((creds) =>
           Match.value(creds).pipe(
             Match.when({ type: "apiToken" }, (c) => ({
@@ -49,7 +57,7 @@ export const fromAuthProvider = () =>
         Effect.mapError(
           (e) =>
             new ConfigError({
-              message: `Failed to resolve Axiom credentials from ${profileName === undefined ? "the CI environment" : `profile '${profileName}'`}: ${(e as { message?: string }).message ?? String(e)}`,
+              message: `Failed to resolve Axiom credentials for profile '${profileName}': ${(e as { message?: string }).message ?? String(e)}`,
             }),
         ),
         Effect.orDie,

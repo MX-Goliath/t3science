@@ -31,7 +31,7 @@ import * as Prompt from "./Prompt.ts"
  *
  * **Example** (Accessing the Tokenizer service)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { Tokenizer } from "effect/unstable/ai"
  *
@@ -40,12 +40,6 @@ import * as Prompt from "./Prompt.ts"
  *   const tokens = yield* tokenizer.tokenize("Hello, world!")
  *   return tokens.length
  * })
- *
- * const tokenizer = Tokenizer.make({
- *   tokenize: (prompt) => Effect.succeed(prompt.content.map((_, index) => index))
- * })
- * const result = useTokenizer.pipe(Effect.provideService(Tokenizer.Tokenizer, tokenizer))
- * await Effect.runPromise(result) // => 1
  * ```
  *
  * @category services
@@ -66,7 +60,7 @@ export class Tokenizer extends Context.Service<Tokenizer, Service>()(
  *
  * **Example** (Implementing a custom tokenizer)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { Prompt } from "effect/unstable/ai"
  * import type { Tokenizer } from "effect/unstable/ai"
@@ -77,9 +71,6 @@ export class Tokenizer extends Context.Service<Tokenizer, Service>()(
  *   truncate: (input, maxTokens) =>
  *     Effect.succeed(Prompt.make(input.toString().slice(0, maxTokens * 5)))
  * }
- *
- * const tokenCount = (await Effect.runPromise(customTokenizer.tokenize("one two three"))).length // => 3
- * const messageCount = (await Effect.runPromise(customTokenizer.truncate("hello world", 1))).content.length // => 1
  * ```
  *
  * @category models
@@ -121,7 +112,7 @@ export interface Service {
  *
  * **Example** (Creating a word tokenizer)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { Tokenizer } from "effect/unstable/ai"
  *
@@ -140,8 +131,6 @@ export interface Service {
  *         .map((_, index) => index)
  *     )
  * })
- *
- * await Effect.runPromise(wordTokenizer.tokenize("hello effect world")) // => [0, 1, 2]
  * ```
  *
  * @category constructors
@@ -165,6 +154,7 @@ const truncate = (
   maxTokens: number
 ): Effect.Effect<Prompt.Prompt, AiError.AiError> =>
   Effect.suspend(() => {
+    let count = 0
     let inputMessages = self.content
     let outputMessages: Array<Prompt.Message> = []
     const loop: Effect.Effect<Prompt.Prompt, AiError.AiError> = Effect.suspend(() => {
@@ -173,12 +163,12 @@ const truncate = (
         return Effect.succeed(Prompt.fromMessages(outputMessages))
       }
       inputMessages = inputMessages.slice(0, inputMessages.length - 1)
-      const candidate = [message, ...outputMessages]
-      return Effect.flatMap(tokenize(Prompt.fromMessages(candidate)), (tokens) => {
-        if (tokens.length > maxTokens) {
+      return Effect.flatMap(tokenize(Prompt.fromMessages([message])), (tokens) => {
+        count += tokens.length
+        if (count > maxTokens) {
           return Effect.succeed(Prompt.fromMessages(outputMessages))
         }
-        outputMessages = candidate
+        outputMessages = [message, ...outputMessages]
         return loop
       })
     })

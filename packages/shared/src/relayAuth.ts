@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 
 const ClerkPublishableKeyPrefix = Schema.Literals(["pk_test", "pk_live", "unknown"]);
 
-export class ClerkPublishableKeyDecodeError extends Schema.TaggedError<ClerkPublishableKeyDecodeError>()(
+export class ClerkPublishableKeyDecodeError extends Schema.TaggedErrorClass<ClerkPublishableKeyDecodeError>()(
   "ClerkPublishableKeyDecodeError",
   {
     keyPrefix: ClerkPublishableKeyPrefix,
@@ -14,7 +14,7 @@ export class ClerkPublishableKeyDecodeError extends Schema.TaggedError<ClerkPubl
   }
 }
 
-export class ClerkPublishableKeyFrontendApiError extends Schema.TaggedError<ClerkPublishableKeyFrontendApiError>()(
+export class ClerkPublishableKeyFrontendApiError extends Schema.TaggedErrorClass<ClerkPublishableKeyFrontendApiError>()(
   "ClerkPublishableKeyFrontendApiError",
   {
     keyPrefix: ClerkPublishableKeyPrefix,

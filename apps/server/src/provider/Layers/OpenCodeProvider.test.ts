@@ -1,15 +1,18 @@
+// @effect-diagnostics nodeBuiltinImport:off
+// @effect-diagnostics preferSchemaOverJson:off
 import * as NodeAssert from "node:assert/strict";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { beforeEach } from "vite-plus/test";
+import { beforeEach, vi } from "vite-plus/test";
 
 import { OpenCodeSettings } from "@t3tools/contracts";
 import { ServerConfig } from "../../config.ts";
@@ -20,129 +23,16 @@ import {
   type OpenCodeRuntimeShape,
 } from "../opencodeRuntime.ts";
 import * as OpenCodeServerOwner from "../OpenCodeServerOwner.ts";
+import { checkOpenCodeProviderStatus } from "./OpenCodeProvider.ts";
 import {
-  checkOpenCodeProviderStatus,
-  openCodeCommandsToServerProviderSlashCommands,
-} from "./OpenCodeProvider.ts";
+  normalizeOpenCodeGoUsage,
+  parseOpenCodeGoApiKey,
+  resolveOpenCodeGoAuthFile,
+} from "./OpenCodeGoUsage.ts";
 import type { OpenCodeInventory } from "../opencodeRuntime.ts";
-import { readOpenCodeGoUsageLimits } from "./openCodeUsageLimits.ts";
 const decodeOpenCodeSettings = Schema.decodeSync(OpenCodeSettings);
 
 const DEFAULT_VERSION_STDOUT = "opencode 1.14.19\n";
-
-it.effect("reads Go limits with the instance's XDG credentials and preserves reset times", () =>
-  Effect.gen(function* () {
-    const resetsAt = "2026-09-17T12:00:00.000Z";
-    const limits = yield* readOpenCodeGoUsageLimits({
-      enabled: true,
-      serverUrl: "",
-      environment: { XDG_DATA_HOME: "/instance/data", OPENCODE_API_KEY: "env-key" },
-    }).pipe(
-      Effect.provideService(
-        FileSystem.FileSystem,
-        FileSystem.makeNoop({
-          readFileString: (path) => {
-            NodeAssert.equal(path, "/instance/data/opencode/auth.json");
-            return Effect.succeed(
-              JSON.stringify({ "opencode-go": { type: "api", key: "instance-key" } }),
-            );
-          },
-        }),
-      ),
-      Effect.provideService(
-        HttpClient.HttpClient,
-        HttpClient.make((request) => {
-          NodeAssert.equal(request.url, "https://opencode.ai/zen/go/v1/usage");
-          NodeAssert.equal(request.headers.authorization, "Bearer instance-key");
-          return Effect.succeed(
-            HttpClientResponse.fromWeb(
-              request,
-              Response.json({
-                usage: {
-                  rolling: { percent: 0, resetsAt },
-                  weekly: { percent: 10, resetsAt },
-                  monthly: { percent: 125, resetsAt },
-                },
-              }),
-            ),
-          );
-        }),
-      ),
-      Effect.provide(NodeServices.layer),
-    );
-    NodeAssert.equal(limits.unavailable, undefined);
-    NodeAssert.deepEqual(
-      limits.windows.map(({ kind, usedPercent, resetsAt: reset }) => ({
-        kind,
-        usedPercent,
-        reset,
-      })),
-      [
-        { kind: "session", usedPercent: 0, reset: resetsAt },
-        { kind: "weekly", usedPercent: 10, reset: resetsAt },
-        { kind: "monthly", usedPercent: 100, reset: resetsAt },
-      ],
-    );
-  }),
-);
-
-it.effect("does not read local credentials for external or disabled OpenCode instances", () =>
-  Effect.gen(function* () {
-    for (const settings of [
-      { enabled: true, serverUrl: "https://remote.example" },
-      { enabled: false, serverUrl: "" },
-    ]) {
-      const limits = yield* readOpenCodeGoUsageLimits({ ...settings, environment: {} }).pipe(
-        Effect.provideService(
-          FileSystem.FileSystem,
-          FileSystem.makeNoop({
-            readFileString: () => Effect.die("unexpected credential read"),
-          }),
-        ),
-        Effect.provideService(
-          HttpClient.HttpClient,
-          HttpClient.make(() => Effect.die("unexpected usage request")),
-        ),
-        Effect.provide(NodeServices.layer),
-      );
-      NodeAssert.equal(limits.unavailable?.reason, "unsupported");
-    }
-  }),
-);
-
-it.effect("keeps Go entitlement absence distinct from failed or malformed usage responses", () =>
-  Effect.gen(function* () {
-    for (const [status, reason] of [
-      [403, "unsupported"],
-      [401, "probeFailed"],
-      [200, "probeFailed"],
-    ] as const) {
-      const limits = yield* readOpenCodeGoUsageLimits({
-        enabled: true,
-        serverUrl: "",
-        environment: {
-          OPENCODE_AUTH_CONTENT: '{"opencode-go":{"type":"api","key":"inline-key"}}',
-        },
-      }).pipe(
-        Effect.provideService(
-          FileSystem.FileSystem,
-          FileSystem.makeNoop({
-            readFileString: () => Effect.die("inline credentials must bypass disk"),
-          }),
-        ),
-        Effect.provideService(
-          HttpClient.HttpClient,
-          HttpClient.make((request) =>
-            Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({}, { status }))),
-          ),
-        ),
-        Effect.provide(NodeServices.layer),
-      );
-      NodeAssert.equal(limits.unavailable?.reason, reason);
-      NodeAssert.deepEqual(limits.windows, []);
-    }
-  }),
-);
 
 /**
  * The legacy `OpenCodeProviderLive` Layer + `OpenCodeProvider` service tag
@@ -279,24 +169,47 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
   loadSkillsFromCli: () => Effect.succeed([]),
 };
 
+const goUsageMock = {
+  state: {
+    requests: [] as Array<{ url: string; authorization: string | undefined }>,
+    payload: {
+      usage: {
+        rolling: { status: "ok", percent: 13, resetsAt: "2026-08-17T12:00:00.000Z" },
+        weekly: { status: "ok", percent: 42, resetsAt: "2026-08-22T12:00:00.000Z" },
+        monthly: { status: "ok", percent: 61, resetsAt: "2026-09-16T12:00:00.000Z" },
+      },
+    },
+    status: 200,
+    fail: false,
+  },
+  reset() {
+    this.state.requests = [];
+    this.state.status = 200;
+    this.state.fail = false;
+  },
+};
+
 beforeEach(() => {
   runtimeMock.reset();
-});
-
-it("keeps native and MCP commands while preserving compaction and separate skills", () => {
-  NodeAssert.deepEqual(
-    openCodeCommandsToServerProviderSlashCommands([
-      { name: "review", description: "Review changes", source: "command", hints: ["$ARGUMENTS"] },
-      { name: "review", source: "command", hints: [] },
-      { name: "compact", source: "command", hints: [] },
-      { name: "skill", source: "skill", hints: [] },
-      { name: "mcp:search", source: "mcp", hints: ["query"] },
-    ]).slice(1),
-    [
-      { name: "review", description: "Review changes", input: { hint: "$ARGUMENTS" } },
-      { name: "mcp:search", input: { hint: "query" } },
-    ],
-  );
+  goUsageMock.reset();
+  vi.stubGlobal("fetch", ((url: unknown, init?: RequestInit) => {
+    const headers = new Headers(
+      (init?.headers ?? undefined) as Record<string, string> | Headers | undefined,
+    );
+    goUsageMock.state.requests.push({
+      url: String(url),
+      authorization: headers.get("authorization") ?? undefined,
+    });
+    if (goUsageMock.state.fail) {
+      return Promise.reject(new Error("network down"));
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(goUsageMock.state.payload), {
+        status: goUsageMock.state.status,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  }) as typeof fetch);
 });
 
 const testLayer = Layer.succeed(OpenCodeRuntime, OpenCodeRuntimeTestDouble).pipe(
@@ -418,6 +331,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
         (descriptor) => descriptor.id === "variant" && descriptor.type === "select",
       );
       NodeAssert.ok(variantDescriptor && variantDescriptor.type === "select");
+      NodeAssert.equal(variantDescriptor.label, "Reasoning");
       NodeAssert.equal(
         variantDescriptor.options.find((option) => option.isDefault === true)?.id,
         "medium",
@@ -632,6 +546,265 @@ it.layer(testLayer)("checkOpenCodeProviderStatus with configured server URL", (i
         snapshot.message,
         "Couldn't reach the configured OpenCode server at http://127.0.0.1:9999. Check that the server is running and the URL is correct.",
       );
+    }),
+  );
+});
+
+it.layer(testLayer)("openCodeGoUsage pure helpers", (it) => {
+  it.effect("normalizes Go usage windows", () =>
+    Effect.sync(() => {
+      const usageLimits = normalizeOpenCodeGoUsage(goUsageMock.state.payload);
+      NodeAssert.ok(usageLimits);
+      const rolling = usageLimits.windows.find((window) => window.id === "rolling");
+      const weekly = usageLimits.windows.find((window) => window.id === "weekly");
+      const monthly = usageLimits.windows.find((window) => window.id === "monthly");
+      NodeAssert.equal(rolling?.usedPercent, 13);
+      NodeAssert.equal(rolling?.windowDurationMins, 5 * 60);
+      NodeAssert.equal(rolling?.resetsAt, "2026-08-17T12:00:00.000Z");
+      NodeAssert.equal(weekly?.usedPercent, 42);
+      NodeAssert.equal(weekly?.windowDurationMins, 7 * 24 * 60);
+      NodeAssert.equal(monthly?.usedPercent, 61);
+      NodeAssert.equal(monthly?.windowDurationMins, 30 * 24 * 60);
+
+      NodeAssert.equal(
+        normalizeOpenCodeGoUsage({ usage: { weekly: { percent: -5 } } })?.windows[0]?.usedPercent,
+        0,
+      );
+      NodeAssert.equal(
+        normalizeOpenCodeGoUsage({ usage: { weekly: { percent: 140 } } })?.windows[0]?.usedPercent,
+        100,
+      );
+      NodeAssert.equal(
+        normalizeOpenCodeGoUsage({ usage: { weekly: { resetsAt: "x" } } }),
+        undefined,
+      );
+      NodeAssert.equal(normalizeOpenCodeGoUsage({ usage: {} }), undefined);
+      NodeAssert.equal(normalizeOpenCodeGoUsage(null), undefined);
+      NodeAssert.equal(normalizeOpenCodeGoUsage("nope"), undefined);
+    }),
+  );
+
+  it.effect("parses the opencode auth file key", () =>
+    Effect.sync(() => {
+      NodeAssert.equal(
+        parseOpenCodeGoApiKey(JSON.stringify({ "opencode-go": { type: "api", key: " key " } })),
+        "key",
+      );
+      NodeAssert.equal(
+        parseOpenCodeGoApiKey(JSON.stringify({ "opencode-go": { key: "" } })),
+        undefined,
+      );
+      NodeAssert.equal(parseOpenCodeGoApiKey(JSON.stringify({ openai: { key: "x" } })), undefined);
+      NodeAssert.equal(parseOpenCodeGoApiKey("{"), undefined);
+    }),
+  );
+
+  it.effect("resolves the auth file path per platform", () =>
+    Effect.sync(() => {
+      NodeAssert.equal(
+        resolveOpenCodeGoAuthFile({ environment: {}, platform: "darwin", homeDir: "/Users/x" }),
+        "/Users/x/Library/Application Support/opencode/auth.json",
+      );
+      NodeAssert.equal(
+        resolveOpenCodeGoAuthFile({
+          environment: { XDG_DATA_HOME: "/data" },
+          platform: "linux",
+          homeDir: "/Users/x",
+        }),
+        "/data/opencode/auth.json",
+      );
+      NodeAssert.equal(
+        resolveOpenCodeGoAuthFile({ environment: {}, platform: "linux", homeDir: "/home/x" }),
+        "/home/x/.local/share/opencode/auth.json",
+      );
+    }),
+  );
+});
+
+it.layer(testLayer)("checkOpenCodeProviderStatus with opencode-go usage", (it) => {
+  // Redirects $HOME (and clears Go key variables) so the auth-file probe
+  // cannot reach the real opencode installation on the dev machine.
+  const setupIsolatedHome = () => {
+    const homeDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-opencode-go-"));
+    const previousHome = process.env.HOME;
+    const previousKey = process.env.OPENCODE_API_KEY;
+    const previousXdg = process.env.XDG_DATA_HOME;
+    process.env.HOME = homeDir;
+    delete process.env.OPENCODE_API_KEY;
+    delete process.env.XDG_DATA_HOME;
+    return {
+      homeDir,
+      cleanup: () => {
+        if (previousHome === undefined) delete process.env.HOME;
+        else process.env.HOME = previousHome;
+        if (previousKey === undefined) delete process.env.OPENCODE_API_KEY;
+        else process.env.OPENCODE_API_KEY = previousKey;
+        if (previousXdg === undefined) delete process.env.XDG_DATA_HOME;
+        else process.env.XDG_DATA_HOME = previousXdg;
+        NodeFS.rmSync(homeDir, { recursive: true, force: true });
+      },
+    };
+  };
+
+  it.effect("attaches go rate limits when opencode-go is connected", () =>
+    Effect.gen(function* () {
+      const { cleanup } = setupIsolatedHome();
+      try {
+        runtimeMock.state.inventory = {
+          providerList: { connected: ["opencode-go"], all: [], default: {} },
+          agents: [],
+        };
+        process.env.OPENCODE_API_KEY = "sk-test-go";
+
+        const snapshot = yield* checkProvider(makeOpenCodeSettings());
+
+        NodeAssert.equal(snapshot.status, "ready");
+        NodeAssert.deepEqual(goUsageMock.state.requests, [
+          {
+            url: "https://opencode.ai/zen/go/v1/usage",
+            authorization: "Bearer sk-test-go",
+          },
+        ]);
+        const rolling = snapshot.usageLimits?.windows.find((window) => window.id === "rolling");
+        const weekly = snapshot.usageLimits?.windows.find((window) => window.id === "weekly");
+        const monthly = snapshot.usageLimits?.windows.find((window) => window.id === "monthly");
+        NodeAssert.equal(rolling?.usedPercent, 13);
+        NodeAssert.equal(rolling?.resetsAt, "2026-08-17T12:00:00.000Z");
+        NodeAssert.equal(weekly?.usedPercent, 42);
+        NodeAssert.equal(weekly?.windowDurationMins, 7 * 24 * 60);
+        NodeAssert.equal(monthly?.usedPercent, 61);
+        NodeAssert.equal(monthly?.windowDurationMins, 30 * 24 * 60);
+      } finally {
+        cleanup();
+      }
+    }),
+  );
+
+  it.effect("uses the OpenCode instance environment for the go key", () =>
+    Effect.gen(function* () {
+      const { homeDir, cleanup } = setupIsolatedHome();
+      try {
+        runtimeMock.state.inventory = {
+          providerList: { connected: ["opencode-go"], all: [], default: {} },
+          agents: [],
+        };
+
+        const snapshot = yield* checkProvider(makeOpenCodeSettings(), process.cwd(), {
+          HOME: homeDir,
+          OPENCODE_API_KEY: "sk-instance-go",
+        });
+
+        NodeAssert.equal(snapshot.status, "ready");
+        NodeAssert.deepEqual(goUsageMock.state.requests, [
+          {
+            url: "https://opencode.ai/zen/go/v1/usage",
+            authorization: "Bearer sk-instance-go",
+          },
+        ]);
+        NodeAssert.equal(
+          snapshot.usageLimits?.windows.find((window) => window.id === "monthly")?.usedPercent,
+          61,
+        );
+      } finally {
+        cleanup();
+      }
+    }),
+  );
+
+  it.effect("reads the go key from the opencode auth file", () =>
+    Effect.gen(function* () {
+      const { homeDir, cleanup } = setupIsolatedHome();
+      try {
+        runtimeMock.state.inventory = {
+          providerList: { connected: ["opencode-go"], all: [], default: {} },
+          agents: [],
+        };
+        const authDir = NodePath.join(homeDir, ".local", "share", "opencode");
+        NodeFS.mkdirSync(authDir, { recursive: true });
+        NodeFS.writeFileSync(
+          NodePath.join(authDir, "auth.json"),
+          JSON.stringify({ "opencode-go": { type: "api", key: "sk-file-go" } }),
+        );
+
+        const snapshot = yield* checkProvider(makeOpenCodeSettings());
+
+        NodeAssert.equal(snapshot.status, "ready");
+        NodeAssert.deepEqual(goUsageMock.state.requests, [
+          {
+            url: "https://opencode.ai/zen/go/v1/usage",
+            authorization: "Bearer sk-file-go",
+          },
+        ]);
+        NodeAssert.equal(
+          snapshot.usageLimits?.windows.find((window) => window.id === "monthly")?.usedPercent,
+          61,
+        );
+      } finally {
+        cleanup();
+      }
+    }),
+  );
+
+  it.effect("skips the usage probe when opencode-go is not connected", () =>
+    Effect.gen(function* () {
+      const { cleanup } = setupIsolatedHome();
+      try {
+        runtimeMock.state.inventory = {
+          providerList: { connected: ["openai"], all: [], default: {} },
+          agents: [],
+        };
+        process.env.OPENCODE_API_KEY = "sk-test-go";
+
+        const snapshot = yield* checkProvider(makeOpenCodeSettings());
+
+        NodeAssert.equal(snapshot.status, "ready");
+        NodeAssert.equal(goUsageMock.state.requests.length, 0);
+        NodeAssert.equal(snapshot.usageLimits, undefined);
+      } finally {
+        cleanup();
+      }
+    }),
+  );
+
+  it.effect("omits rate limits when no go key is available", () =>
+    Effect.gen(function* () {
+      const { cleanup } = setupIsolatedHome();
+      try {
+        runtimeMock.state.inventory = {
+          providerList: { connected: ["opencode-go"], all: [], default: {} },
+          agents: [],
+        };
+
+        const snapshot = yield* checkProvider(makeOpenCodeSettings());
+
+        NodeAssert.equal(snapshot.status, "ready");
+        NodeAssert.equal(goUsageMock.state.requests.length, 0);
+        NodeAssert.equal(snapshot.usageLimits, undefined);
+      } finally {
+        cleanup();
+      }
+    }),
+  );
+
+  it.effect("keeps the provider healthy when the usage probe fails", () =>
+    Effect.gen(function* () {
+      const { cleanup } = setupIsolatedHome();
+      try {
+        runtimeMock.state.inventory = {
+          providerList: { connected: ["opencode-go"], all: [], default: {} },
+          agents: [],
+        };
+        process.env.OPENCODE_API_KEY = "sk-test-go";
+        goUsageMock.state.fail = true;
+
+        const snapshot = yield* checkProvider(makeOpenCodeSettings());
+
+        NodeAssert.equal(snapshot.status, "ready");
+        NodeAssert.equal(goUsageMock.state.requests.length, 1);
+        NodeAssert.equal(snapshot.usageLimits, undefined);
+      } finally {
+        cleanup();
+      }
     }),
   );
 });

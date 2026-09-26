@@ -79,9 +79,7 @@ interface JobOpts {
 // the engine orders job-after-bucket on deploy (and the reverse on destroy).
 const program = (creds: R2Creds, opts: JobOpts) =>
   Effect.gen(function* () {
-    const bucket = yield* Cloudflare.R2.Bucket("LogpushBucket", {
-      forceDestroy: true,
-    });
+    const bucket = yield* Cloudflare.R2.Bucket("LogpushBucket", {});
     const job = yield* Cloudflare.Logpush.Job("Job", {
       dataset: opts.dataset,
       destinationConf: Output.interpolate`r2://${bucket.bucketName}/alchemy/{DATE}?account-id=${creds.accountId}&access-key-id=${creds.accessKeyId}&secret-access-key=${creds.secretAccessKey}`,

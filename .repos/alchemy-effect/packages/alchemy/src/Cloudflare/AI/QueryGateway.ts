@@ -25,9 +25,12 @@ import { type LanguageModelOptions } from "./LanguageModel.ts";
  * Context tag, its type, and the callable —
  * `yield* Cloudflare.AI.QueryGateway(gateway)`.
  *
+ * @binding
+ * @product AI Gateway
+ * @category AI
  *
- * ### Calling AI Gateway
- * **Example:** Run through a gateway
+ * @section Calling AI Gateway
+ * @example Run through a gateway
  * Bind the gateway during the Worker's init phase, then use `run` or
  * `getUrl` from request handlers.
  * ```typescript
@@ -45,8 +48,8 @@ import { type LanguageModelOptions } from "./LanguageModel.ts";
  * };
  * ```
  *
- * ### Driving Effect AI through the gateway
- * **Example:** `aiGateway.model(...)` -> Effect AI `LanguageModel`
+ * @section Driving Effect AI through the gateway
+ * @example `aiGateway.model(...)` -> Effect AI `LanguageModel`
  * `model(options)` produces a `Layer<LanguageModel, never,
  * RuntimeContext>` that translates `LanguageModel.generateText` /
  * `streamText` calls (including tool calls and structured outputs)
@@ -67,10 +70,6 @@ import { type LanguageModelOptions } from "./LanguageModel.ts";
  *
  * Provide {@link QueryGatewayBinding} in the worker's runtime layer
  * to resolve the underlying Cloudflare.AI. binding at request time.
- *
- * @binding
- * @product AI Gateway
- * @category AI
  */
 export interface QueryGateway extends Binding.Service<
   QueryGateway,

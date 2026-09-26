@@ -10,6 +10,10 @@ import {
   type LinuxPasswordStorePreference,
 } from "../linuxSecretStorage.ts";
 import {
+  DESKTOP_DEVELOPMENT_LINUX_WM_CLASS,
+  DESKTOP_PRODUCTION_LINUX_WM_CLASS,
+} from "@t3tools/shared/desktopProductIdentity";
+import {
   resolveDesktopBaseDir,
   resolveDesktopStateDir,
   type JoinPath,
@@ -25,14 +29,9 @@ interface EarlyDesktopSettingsInput {
 type EarlyLinuxElectronOptionsInput = EarlyDesktopSettingsInput;
 
 export interface EarlyLinuxElectronOptions {
-  readonly isDevelopment: boolean;
   readonly linuxWmClass: string;
-  readonly linuxDesktopEntryName: string;
   readonly passwordStore: LinuxPasswordStoreSwitch | null;
 }
-
-export const resolveLinuxDesktopEntryName = (isDevelopment: boolean): string =>
-  isDevelopment ? "com.t3tools.T3Code.Development.desktop" : "com.t3tools.T3Code.desktop";
 
 const trimNonEmpty = (value: string | undefined): string | null => {
   const trimmed = value?.trim();
@@ -85,11 +84,10 @@ export function resolveEarlyLinuxElectronOptions(
   input: EarlyLinuxElectronOptionsInput,
 ): EarlyLinuxElectronOptions {
   const preference = resolveEarlyLinuxPasswordStorePreference(input);
-  const isDevelopment = isDevelopmentEnvironment(input.env);
   return {
-    isDevelopment,
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
-    linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
+    linuxWmClass: isDevelopmentEnvironment(input.env)
+      ? DESKTOP_DEVELOPMENT_LINUX_WM_CLASS
+      : DESKTOP_PRODUCTION_LINUX_WM_CLASS,
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,
       env: input.env,

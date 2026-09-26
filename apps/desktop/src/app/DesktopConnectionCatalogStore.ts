@@ -67,7 +67,7 @@ const DesktopConnectionCatalogStoreProtectionOperation = Schema.Literals([
   "decrypt-catalog",
 ]);
 
-export class DesktopConnectionCatalogStoreWriteError extends Schema.TaggedError<DesktopConnectionCatalogStoreWriteError>()(
+export class DesktopConnectionCatalogStoreWriteError extends Schema.TaggedErrorClass<DesktopConnectionCatalogStoreWriteError>()(
   "DesktopConnectionCatalogStoreWriteError",
   {
     operation: DesktopConnectionCatalogStoreWriteOperation,
@@ -80,7 +80,7 @@ export class DesktopConnectionCatalogStoreWriteError extends Schema.TaggedError<
   }
 }
 
-export class DesktopConnectionCatalogStoreDecodeError extends Schema.TaggedError<DesktopConnectionCatalogStoreDecodeError>()(
+export class DesktopConnectionCatalogStoreDecodeError extends Schema.TaggedErrorClass<DesktopConnectionCatalogStoreDecodeError>()(
   "DesktopConnectionCatalogStoreDecodeError",
   {
     resource: Schema.Literal("encryptedCatalog"),
@@ -93,7 +93,7 @@ export class DesktopConnectionCatalogStoreDecodeError extends Schema.TaggedError
   }
 }
 
-export class DesktopConnectionCatalogStoreReadError extends Schema.TaggedError<DesktopConnectionCatalogStoreReadError>()(
+export class DesktopConnectionCatalogStoreReadError extends Schema.TaggedErrorClass<DesktopConnectionCatalogStoreReadError>()(
   "DesktopConnectionCatalogStoreReadError",
   {
     catalogPath: Schema.String,
@@ -105,7 +105,7 @@ export class DesktopConnectionCatalogStoreReadError extends Schema.TaggedError<D
   }
 }
 
-export class DesktopConnectionCatalogStoreDocumentDecodeError extends Schema.TaggedError<DesktopConnectionCatalogStoreDocumentDecodeError>()(
+export class DesktopConnectionCatalogStoreDocumentDecodeError extends Schema.TaggedErrorClass<DesktopConnectionCatalogStoreDocumentDecodeError>()(
   "DesktopConnectionCatalogStoreDocumentDecodeError",
   {
     catalogPath: Schema.String,
@@ -117,7 +117,7 @@ export class DesktopConnectionCatalogStoreDocumentDecodeError extends Schema.Tag
   }
 }
 
-export class DesktopConnectionCatalogStoreMigrationError extends Schema.TaggedError<DesktopConnectionCatalogStoreMigrationError>()(
+export class DesktopConnectionCatalogStoreMigrationError extends Schema.TaggedErrorClass<DesktopConnectionCatalogStoreMigrationError>()(
   "DesktopConnectionCatalogStoreMigrationError",
   {
     operation: DesktopConnectionCatalogStoreMigrationOperation,
@@ -133,7 +133,7 @@ export class DesktopConnectionCatalogStoreMigrationError extends Schema.TaggedEr
   }
 }
 
-export class DesktopConnectionCatalogStoreProtectionError extends Schema.TaggedError<DesktopConnectionCatalogStoreProtectionError>()(
+export class DesktopConnectionCatalogStoreProtectionError extends Schema.TaggedErrorClass<DesktopConnectionCatalogStoreProtectionError>()(
   "DesktopConnectionCatalogStoreProtectionError",
   {
     operation: DesktopConnectionCatalogStoreProtectionOperation,
@@ -372,11 +372,9 @@ const migrateSavedEnvironmentRecords = Effect.fn(
     profiles,
     credentials,
     remoteDpopTokens: [],
-    disabledEnvironmentIds: [],
   };
 });
 
-/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;

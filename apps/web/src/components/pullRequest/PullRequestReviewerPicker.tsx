@@ -38,12 +38,15 @@ export function PullRequestReviewerPicker({
   environmentId,
   reference,
   allowed,
+  onRequested,
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
   /** False where the host would refuse this account's request, which is worth saying rather than
    * hiding: the control disabled with a reason answers the question its absence would raise. */
   allowed: boolean;
+  /** The detail carries who is requested, so it is re-read once the host has taken the change. */
+  onRequested: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -93,6 +96,8 @@ export function PullRequestReviewerPicker({
         ? `Review request to ${candidate.login} taken back`
         : `Review requested from ${candidate.login}`,
     });
+    onRequested();
+    candidatesQuery.refresh();
   };
 
   return (
@@ -106,8 +111,8 @@ export function PullRequestReviewerPicker({
       query={query}
       onQueryChange={setQuery}
       searchLabel="Search people with access"
-      isPending={candidatesQuery.isPending && candidatesQuery.data === null}
-      error={candidatesQuery.data === null ? candidatesQuery.error : null}
+      isPending={candidatesQuery.isPending}
+      error={candidatesQuery.error}
       candidates={candidates}
       emptyLabel="Nobody else has access to this repository."
       noMatchLabel="Nobody with access matches that."

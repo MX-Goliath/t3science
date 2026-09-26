@@ -94,7 +94,6 @@ export function useRemoteConnectionStatus() {
         environmentLabel: environment.environmentLabel,
         displayUrl: environment.displayUrl,
         isRelayManaged: environment.isRelayManaged,
-        isEnabled: environment.isEnabled,
         connectionState: environment.connectionState,
         connectionError: environment.connectionError,
         connectionErrorTraceId: environment.connectionErrorTraceId,
@@ -128,16 +127,7 @@ export function useRemoteConnections() {
         const error = Cause.squash(result.cause);
         const message =
           error instanceof Error ? error.message : "Failed to pair with the environment.";
-        if (
-          error !== null &&
-          typeof error === "object" &&
-          "reason" in error &&
-          error.reason === "unsupported"
-        ) {
-          Alert.alert("Client not supported", message);
-        } else {
-          setPendingConnectionError(message);
-        }
+        setPendingConnectionError(message);
       } else {
         appAtomRegistry.set(connectionPairingUrlAtom, "");
       }
@@ -148,11 +138,6 @@ export function useRemoteConnections() {
 
   const onReconnectEnvironment = useCallback(
     (environmentId: EnvironmentId) => controller.retryEnvironment(environmentId),
-    [controller],
-  );
-  const onSetEnvironmentEnabled = useCallback(
-    (environmentId: EnvironmentId, enabled: boolean) =>
-      controller.setEnvironmentEnabled(environmentId, enabled),
     [controller],
   );
   const onUpdateEnvironment = useCallback(
@@ -172,8 +157,8 @@ export function useRemoteConnections() {
         return;
       }
       Alert.alert(
-        "Remove from this device?",
-        `Forget ${environment.environmentLabel} and its cached threads on this device. Switch it off instead to keep it saved.`,
+        "Remove environment?",
+        `Disconnect and forget ${environment.environmentLabel} on this device.`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -199,7 +184,6 @@ export function useRemoteConnections() {
     onChangeConnectionPairingUrl,
     onConnectPress,
     onReconnectEnvironment,
-    onSetEnvironmentEnabled,
     onUpdateEnvironment,
     onRemoveEnvironmentPress,
   };

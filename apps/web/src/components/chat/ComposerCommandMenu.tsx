@@ -6,7 +6,6 @@ import {
 import {
   type ProjectEntry,
   type ProviderDriverKind,
-  type PullRequestContextMetadata,
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
@@ -26,7 +25,6 @@ import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { ComposerBanner } from "./ComposerBanner";
-import { resolvePullRequestState } from "../pullRequest/pullRequestPresentation";
 
 export type ComposerCommandItem =
   | {
@@ -57,13 +55,6 @@ export type ComposerCommandItem =
       type: "skill";
       provider: ProviderDriverKind;
       skill: ServerProviderSkill;
-      label: string;
-      description: string;
-    }
-  | {
-      id: string;
-      type: "pull-request";
-      pullRequest: PullRequestContextMetadata;
       label: string;
       description: string;
     };
@@ -125,9 +116,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
               {props.isLoading
                 ? props.triggerKind === "skill"
                   ? "Searching workspace skills..."
-                  : props.triggerKind === "pull-request"
-                    ? "Finding pull request..."
-                    : "Searching workspace files..."
+                  : "Searching workspace files..."
                 : (props.emptyStateText ??
                   (props.triggerKind === "skill"
                     ? "No skills found. Try / to browse provider commands."
@@ -154,8 +143,6 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
     props.item.type === "skill" ? resolveProviderSkillSourceKind(props.item.skill) : null;
   const isSlashSkill =
     props.triggerKind === "slash-command" && props.item.type === "skill" ? props.item.skill : null;
-  const pullRequestPresentation =
-    props.item.type === "pull-request" ? resolvePullRequestState(props.item.pullRequest) : null;
 
   return (
     <CommandItem
@@ -180,13 +167,6 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           pathValue={props.item.path}
           kind={props.item.pathKind}
           theme={props.resolvedTheme}
-        />
-      ) : null}
-      {pullRequestPresentation ? (
-        <pullRequestPresentation.Icon
-          role="img"
-          aria-label={pullRequestPresentation.label}
-          className={cn("size-4 shrink-0", pullRequestPresentation.toneClassName)}
         />
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">

@@ -13,7 +13,6 @@ import * as Libsql from "@libsql/client"
 import * as Config from "effect/Config"
 import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
-import * as Exit from "effect/Exit"
 import * as Layer from "effect/Layer"
 import * as Option from "effect/Option"
 import * as Redacted from "effect/Redacted"
@@ -50,7 +49,7 @@ export type TypeId = "~@effect/sql-libsql/LibsqlClient"
 /**
  * libSQL-backed SQL client service, extending `SqlClient` with its runtime type marker and client configuration.
  *
- * @category services
+ * @category models
  * @since 4.0.0
  */
 export interface LibsqlClient extends Client.SqlClient {
@@ -70,7 +69,9 @@ export interface LibsqlClient extends Client.SqlClient {
  */
 export const LibsqlClient = Context.Service<LibsqlClient>("@effect/sql-libsql/LibsqlClient")
 
-let clientIdCounter = 0
+const LibsqlTransaction = Context.Service<readonly [LibsqlConnection, counter: number]>(
+  "@effect/sql-libsql/LibsqlClient/LibsqlTransaction"
+)
 
 /**
  * Configuration for a libSQL client, either by supplying connection options or an existing live libSQL client.
@@ -183,9 +184,6 @@ export const make = (
   options: LibsqlClientConfig
 ): Effect.Effect<LibsqlClient, never, Scope.Scope | Reactivity.Reactivity> =>
   Effect.gen(function*() {
-    const LibsqlTransaction = Context.Service<readonly [LibsqlConnection, counter: number]>(
-      `@effect/sql-libsql/LibsqlClient/LibsqlTransaction/${clientIdCounter++}`
-    )
     const compiler = Statement.makeCompilerSqlite(options.transformQueryNames)
     const transformRows = options.transformResultNames ?
       Statement.defaultTransforms(
@@ -313,9 +311,7 @@ export const make = (
         const scope = Scope.makeUnsafe()
         yield* restore(semaphore.take(1))
         yield* Scope.addFinalizer(scope, semaphore.release(1))
-        const conn = yield* connection.beginTransaction.pipe(
-          Effect.tapCause((cause) => Scope.close(scope, Exit.failCause(cause)))
-        )
+        const conn = yield* connection.beginTransaction
         return [scope, conn] as const
       })),
       begin: () => Effect.void, // already begun in acquireConnection

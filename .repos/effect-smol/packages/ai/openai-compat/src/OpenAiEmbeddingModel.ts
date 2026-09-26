@@ -46,7 +46,7 @@ type ModelConfig = Omit<ConfigOptions, "model"> & { readonly [x: string]: unknow
  *
  * @see {@link withConfigOverride} for scoping embedding request overrides
  *
- * @category services
+ * @category context
  * @since 4.0.0
  */
 export class Config extends Context.Service<
@@ -118,12 +118,13 @@ export const model = (
 export const make = Effect.fnUntraced(function*({ model, config: providerConfig }: {
   readonly model: string
   readonly config?: ModelConfig | undefined
-}): Effect.fn.Return<EmbeddingModel.EmbeddingModel, never, OpenAiClient> {
+}): Effect.fn.Return<EmbeddingModel.Service, never, OpenAiClient> {
   const client = yield* OpenAiClient
 
-  const makeConfig = Effect.contextWith((services: Context.Context<never>) =>
-    Effect.succeed({ model, ...providerConfig, ...Context.getOrUndefined(services, Config) })
-  )
+  const makeConfig = Effect.gen(function*() {
+    const services = yield* Effect.context<never>()
+    return { model, ...providerConfig, ...services.mapUnsafe.get(Config.key) }
+  })
 
   return yield* EmbeddingModel.make({
     embedMany: Effect.fnUntraced(function*({ inputs }) {

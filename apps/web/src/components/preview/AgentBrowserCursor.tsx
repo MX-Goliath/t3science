@@ -24,6 +24,7 @@ export function AgentBrowserCursor(props: {
 
   return (
     <AgentBrowserCursorEvent
+      key={event.sequence}
       event={event}
       content={content}
       zoomFactor={zoomFactor}
@@ -45,13 +46,12 @@ function AgentBrowserCursorEvent(props: {
   readonly controller: BrowserController;
 }) {
   const { event, content, zoomFactor, controller } = props;
-  const [inactiveSequence, setInactiveSequence] = useState<number | null>(null);
-  const active = inactiveSequence !== event.sequence;
+  const [active, setActive] = useState(true);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => setInactiveSequence(event.sequence), CURSOR_ACTIVE_MS);
+    const timeout = window.setTimeout(() => setActive(false), CURSOR_ACTIVE_MS);
     return () => window.clearTimeout(timeout);
-  }, [event.sequence]);
+  }, []);
 
   return (
     <div

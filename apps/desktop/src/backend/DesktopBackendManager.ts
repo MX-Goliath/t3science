@@ -129,7 +129,7 @@ const backendProcessContextSchema = {
   httpBaseUrl: Schema.URL,
 };
 
-export class BackendReadinessTimeoutError extends Schema.TaggedError<BackendReadinessTimeoutError>()(
+export class BackendReadinessTimeoutError extends Schema.TaggedErrorClass<BackendReadinessTimeoutError>()(
   "BackendReadinessTimeoutError",
   {
     ...backendProcessContextSchema,
@@ -143,7 +143,7 @@ export class BackendReadinessTimeoutError extends Schema.TaggedError<BackendRead
   }
 }
 
-export class BackendProcessBootstrapEncodeError extends Schema.TaggedError<BackendProcessBootstrapEncodeError>()(
+export class BackendProcessBootstrapEncodeError extends Schema.TaggedErrorClass<BackendProcessBootstrapEncodeError>()(
   "BackendProcessBootstrapEncodeError",
   {
     ...backendProcessContextSchema,
@@ -155,7 +155,7 @@ export class BackendProcessBootstrapEncodeError extends Schema.TaggedError<Backe
   }
 }
 
-export class BackendProcessSpawnError extends Schema.TaggedError<BackendProcessSpawnError>()(
+export class BackendProcessSpawnError extends Schema.TaggedErrorClass<BackendProcessSpawnError>()(
   "BackendProcessSpawnError",
   {
     ...backendProcessContextSchema,
@@ -167,7 +167,7 @@ export class BackendProcessSpawnError extends Schema.TaggedError<BackendProcessS
   }
 }
 
-export class BackendProcessOutputReadError extends Schema.TaggedError<BackendProcessOutputReadError>()(
+export class BackendProcessOutputReadError extends Schema.TaggedErrorClass<BackendProcessOutputReadError>()(
   "BackendProcessOutputReadError",
   {
     ...backendProcessContextSchema,
@@ -181,7 +181,7 @@ export class BackendProcessOutputReadError extends Schema.TaggedError<BackendPro
   }
 }
 
-export class BackendProcessOutputHandlingError extends Schema.TaggedError<BackendProcessOutputHandlingError>()(
+export class BackendProcessOutputHandlingError extends Schema.TaggedErrorClass<BackendProcessOutputHandlingError>()(
   "BackendProcessOutputHandlingError",
   {
     ...backendProcessContextSchema,
@@ -200,7 +200,7 @@ export type BackendProcessOutputError =
   | BackendProcessOutputReadError
   | BackendProcessOutputHandlingError;
 
-export class BackendProcessExitStatusError extends Schema.TaggedError<BackendProcessExitStatusError>()(
+export class BackendProcessExitStatusError extends Schema.TaggedErrorClass<BackendProcessExitStatusError>()(
   "BackendProcessExitStatusError",
   {
     ...backendProcessContextSchema,

@@ -1,8 +1,8 @@
 ---
 title: UI Consistency
-model: gpt-5-6-sol
+model: gpt-5-6-terra
 effort: medium
-input: incremental
+input: full_diff
 tools:
   - browse_code
   - modify_pr
@@ -11,11 +11,13 @@ include:
   - "apps/web/src/**/*.css"
 exclude:
   - "apps/web/src/**/*.test.tsx"
+labels:
+  - vouch:trusted
 requires:
   - Check
 maxBudgetPerRun: 2
 maxBudgetPerPR: 10
-conclusion: neutral
+conclusion: failure
 ---
 
 # UI consistency review

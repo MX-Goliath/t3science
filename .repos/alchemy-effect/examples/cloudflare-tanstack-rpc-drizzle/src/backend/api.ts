@@ -1,5 +1,5 @@
 import * as Cloudflare from "alchemy/Cloudflare";
-import * as Drizzle from "alchemy/Drizzle/Postgres";
+import * as Drizzle from "alchemy/Drizzle";
 import { eq } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -19,7 +19,7 @@ export default class Backend extends Cloudflare.Workers.RpcWorker<Backend>()(
   "Backend",
   {
     main: import.meta.filename,
-    workersDev: false, // no workers.dev URL; we use the service binding instead
+    url: false, // disable workers.dev URL; we use the service binding instead
     schema: TodoRpcs,
   },
   Effect.gen(function* () {

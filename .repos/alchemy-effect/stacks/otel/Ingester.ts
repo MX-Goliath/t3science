@@ -33,8 +33,12 @@ export default class Ingester extends Cloudflare.Worker<Ingester>()(
     observability: { enabled: true },
     domain:
       stage === "prod"
-        ? { name: "otel.alchemy.run", aliases: ["analytics.alchemy.run"] }
+        ? ["otel.alchemy.run", "analytics.alchemy.run"]
         : undefined,
+    compatibility: {
+      date: "2026-03-17",
+      flags: ["nodejs_compat"],
+    },
   })),
   Effect.gen(function* () {
     const tokenValue = yield* (yield* IngestToken).token;

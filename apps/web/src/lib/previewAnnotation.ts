@@ -1,6 +1,5 @@
 import type { PreviewAnnotationPayload } from "@t3tools/contracts";
 import { buildElementContextBlock, normalizeElementContextSelection } from "./elementContext";
-import { dataUrlToFile } from "./imageCompression";
 
 const TRAILING_PREVIEW_ANNOTATION_BLOCK_PATTERN =
   /\n*<preview_annotation>\n((?:(?!<preview_annotation>)[\s\S])*)\n<\/preview_annotation>\s*$/;
@@ -100,25 +99,50 @@ export function extractTrailingPreviewAnnotation(prompt: string): ExtractedPrevi
   };
 }
 
+async function previewAnnotationScreenshotFile(
+  annotation: PreviewAnnotationPayload,
+): Promise<File | null> {
+  if (!annotation.screenshot) return null;
+  const response = await fetch(annotation.screenshot.dataUrl);
+  const blob = await response.blob();
+  return new File([blob], `preview-annotation-${annotation.id}.png`, {
+    type: blob.type || "image/png",
+  });
+}
+
+/** Upper bound on turning a picked element's crop into a composer attachment. */
+const PREVIEW_ANNOTATION_CAPTURE_TIMEOUT_MS = 5_000;
+
 export type PreviewAnnotationCapture =
   /** The crop is ready to attach. */
   | { readonly status: "captured"; readonly file: File }
   /** The pick carried no crop, which is normal for comment-only annotations. */
   | { readonly status: "none" }
-  /** The crop could not be decoded. Send the annotation without it. */
+  /** The crop stalled or threw. Send the annotation without it. */
   | { readonly status: "failed" };
 
-/** Decode Electron's PNG crop locally; fetching a data URL violates desktop connect-src. */
-export function capturePreviewAnnotationScreenshot(
+/**
+ * Bounded wrapper around `previewAnnotationScreenshotFile`. The picker holds the
+ * composer while this runs, so it must always settle: a stalled crop resolves as
+ * `failed` instead of leaving the caller waiting.
+ */
+export async function capturePreviewAnnotationScreenshot(
   annotation: PreviewAnnotationPayload,
-): PreviewAnnotationCapture {
+  timeoutMs: number = PREVIEW_ANNOTATION_CAPTURE_TIMEOUT_MS,
+): Promise<PreviewAnnotationCapture> {
   if (!annotation.screenshot) return { status: "none" };
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const { dataUrl } = annotation.screenshot;
-    if (!dataUrl.startsWith("data:image/png;base64,")) return { status: "failed" };
-    const file = dataUrlToFile(dataUrl, `preview-annotation-${annotation.id}.png`, "image/png");
-    return file.size > 0 ? { status: "captured", file } : { status: "failed" };
+    const file = await Promise.race([
+      previewAnnotationScreenshotFile(annotation),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+    return file ? { status: "captured", file } : { status: "failed" };
   } catch {
     return { status: "failed" };
+  } finally {
+    clearTimeout(timer);
   }
 }

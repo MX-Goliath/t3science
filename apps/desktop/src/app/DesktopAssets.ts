@@ -13,7 +13,7 @@ export interface DesktopIconPaths {
   readonly png: Option.Option<string>;
 }
 
-export class DesktopAssetProbeError extends Schema.TaggedError<DesktopAssetProbeError>()(
+export class DesktopAssetProbeError extends Schema.TaggedErrorClass<DesktopAssetProbeError>()(
   "DesktopAssetProbeError",
   {
     fileName: Schema.String,
@@ -119,7 +119,6 @@ const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (
   return yield* resolveResourcePath(`icon.${ext}`);
 });
 
-/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const context = yield* Effect.context<
     FileSystem.FileSystem | DesktopEnvironment.DesktopEnvironment

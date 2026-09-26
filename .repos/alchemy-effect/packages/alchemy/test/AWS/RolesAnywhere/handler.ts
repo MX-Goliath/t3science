@@ -21,7 +21,7 @@ export class RolesAnywhereTestFunction extends Lambda.Function<Lambda.Function>(
 export default RolesAnywhereTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

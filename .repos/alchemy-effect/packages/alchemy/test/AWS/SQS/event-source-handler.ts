@@ -36,7 +36,7 @@ export const SourceAndResultQueuesLive = Layer.effect(
 export default QueueEventSourceFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const { source, result } = yield* SourceAndResultQueues;

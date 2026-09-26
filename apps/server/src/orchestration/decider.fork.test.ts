@@ -71,7 +71,7 @@ const sourceThread: OrchestrationThread = {
 };
 
 it.layer(NodeServices.layer)("conversation fork decider", (it) => {
-  it.effect("forks through the selected message in the same workspace", () =>
+  it.effect("forks through the selected message and clears device-local state", () =>
     Effect.gen(function* () {
       let readModel = yield* projectEvent(createEmptyReadModel(now), {
         sequence: 1,
@@ -128,18 +128,15 @@ it.layer(NodeServices.layer)("conversation fork decider", (it) => {
 
       expect(event.type).toBe("thread.portable-imported");
       expect(event.aggregateId).toBe(newThreadId);
-      expect(event.payload.thread.messages.map((message) => message.text)).toEqual([
-        "Question",
-        "Answer",
+      expect(event.payload.thread.messages.map((message) => message.id)).toEqual([
+        MessageId.make("question"),
+        MessageId.make("answer"),
       ]);
-      expect(event.payload.thread.messages.every((message) =>
-        sourceThread.messages.every((sourceMessage) => sourceMessage.id !== message.id),
-      )).toBe(true);
       expect(event.payload.thread).toMatchObject({
         id: newThreadId,
         title: "Fork: Original conversation",
-        branch: "feature/source",
-        worktreePath: "/tmp/source-worktree",
+        branch: null,
+        worktreePath: null,
         latestTurn: null,
         session: null,
       });

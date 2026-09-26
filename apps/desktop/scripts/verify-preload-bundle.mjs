@@ -9,7 +9,6 @@ import { parse } from "acorn";
 const expectedDesktopBridgeApis = [
   "getClientPlatform",
   "getLocalEnvironmentBootstraps",
-  "getPathForFile",
   "pickFolder",
 ];
 const clerkPasskeysGlobal = "__clerk_internal_electron_passkeys";
@@ -69,9 +68,6 @@ const createSandboxModules = (exposedGlobals) => {
       exposeInMainWorld: (name, api) => exposedGlobals.set(name, api),
     },
     ipcRenderer,
-    webUtils: {
-      getPathForFile: () => "",
-    },
   };
 
   return new Map([

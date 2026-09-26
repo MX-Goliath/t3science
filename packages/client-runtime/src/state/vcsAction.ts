@@ -6,7 +6,6 @@ import {
   type GitRunStackedActionInput,
   type GitRunStackedActionResult,
   GitStackedAction,
-  type ThreadId,
   WS_METHODS,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -77,12 +76,10 @@ export interface RunVcsStackedActionInput {
   readonly commitMessage?: string;
   readonly featureBranch?: boolean;
   readonly filePaths?: ReadonlyArray<string>;
-  /** The thread the action runs beside; the server links a pull request it creates to it. */
-  readonly threadId?: ThreadId;
   readonly onProgress?: (event: GitActionProgressEvent) => void;
 }
 
-export class VcsActionUnavailableError extends Schema.TaggedError<VcsActionUnavailableError>()(
+export class VcsActionUnavailableError extends Schema.TaggedErrorClass<VcsActionUnavailableError>()(
   "VcsActionUnavailableError",
   {
     operation: VcsActionOperation,
@@ -95,7 +92,7 @@ export class VcsActionUnavailableError extends Schema.TaggedError<VcsActionUnava
   }
 }
 
-export class VcsActionRemoteFailureError extends Schema.TaggedError<VcsActionRemoteFailureError>()(
+export class VcsActionRemoteFailureError extends Schema.TaggedErrorClass<VcsActionRemoteFailureError>()(
   "VcsActionRemoteFailureError",
   {
     actionId: Schema.String,
@@ -113,7 +110,7 @@ export class VcsActionRemoteFailureError extends Schema.TaggedError<VcsActionRem
   }
 }
 
-export class VcsActionMissingTerminalEventError extends Schema.TaggedError<VcsActionMissingTerminalEventError>()(
+export class VcsActionMissingTerminalEventError extends Schema.TaggedErrorClass<VcsActionMissingTerminalEventError>()(
   "VcsActionMissingTerminalEventError",
   {
     actionId: Schema.String,
@@ -128,7 +125,7 @@ export class VcsActionMissingTerminalEventError extends Schema.TaggedError<VcsAc
   }
 }
 
-export class VcsActionTargetKeyParseError extends Schema.TaggedError<VcsActionTargetKeyParseError>()(
+export class VcsActionTargetKeyParseError extends Schema.TaggedErrorClass<VcsActionTargetKeyParseError>()(
   "VcsActionTargetKeyParseError",
   {
     keyLength: Schema.Number,
@@ -466,7 +463,6 @@ export function createVcsActionManager<R, E>(
           ...(input.commitMessage ? { commitMessage: input.commitMessage } : {}),
           ...(input.featureBranch ? { featureBranch: true } : {}),
           ...(input.filePaths?.length ? { filePaths: [...input.filePaths] } : {}),
-          ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
         };
         return consumeVcsActionProgress(
           runStreamInEnvironment(

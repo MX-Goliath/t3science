@@ -71,7 +71,7 @@ export function normalizePiThinkingLevel(value: unknown): PiThinkingLevel | unde
  * PiSessionRuntimeError — any failure in the Pi RPC session lifecycle
  * (spawn, protocol request, timeout, unexpected exit).
  */
-export class PiSessionRuntimeError extends Schema.TaggedError<PiSessionRuntimeError>()(
+export class PiSessionRuntimeError extends Schema.TaggedErrorClass<PiSessionRuntimeError>()(
   "PiSessionRuntimeError",
   {
     operation: Schema.String,

@@ -144,8 +144,6 @@ const await_: <Success extends Schema.Constraint, Error extends Schema.Constrain
 >(self: DurableDeferred<Success, Error>) {
   const engine = yield* EngineTag
   const instance = yield* InstanceTag
-  // Register before the read so any later completion can preempt the run.
-  instance.awaitedDeferreds.add(self.name)
   const exit = yield* Workflow.wrapActivityResult(
     engine.deferredResult(self),
     Option.isNone
@@ -187,8 +185,6 @@ export const into: {
     | WorkflowInstance
     | Success["DecodingServices"]
     | Error["DecodingServices"]
-    | Success["EncodingServices"]
-    | Error["EncodingServices"]
   >
   <Success extends Schema.Constraint, Error extends Schema.Constraint, R>(
     effect: Effect.Effect<Success["Type"], Error["Type"], R>,
@@ -201,8 +197,6 @@ export const into: {
     | WorkflowInstance
     | Success["DecodingServices"]
     | Error["DecodingServices"]
-    | Success["EncodingServices"]
-    | Error["EncodingServices"]
   >
 } = dual(
   2,
@@ -217,8 +211,6 @@ export const into: {
     | WorkflowInstance
     | Success["DecodingServices"]
     | Error["DecodingServices"]
-    | Success["EncodingServices"]
-    | Error["EncodingServices"]
   > =>
     Effect.contextWith(
       (context: Context.Context<WorkflowEngine | WorkflowInstance>) => {
@@ -233,12 +225,9 @@ export const into: {
                 exit.cause.reasons,
                 Filter.fromPredicate(Cause.isInterruptReason)
               )
-              if (interrupts.length === exit.cause.reasons.length) {
-                // An interrupt-only exit is never a result: the effect was
-                // suspended, preempted or interrupted, so record nothing.
-                if (instance.suspended) {
-                  parentInstance.suspended = true
-                }
+              const hasInterruptsOnly = interrupts.length === exit.cause.reasons.length
+              if (hasInterruptsOnly && instance.suspended) {
+                parentInstance.suspended = true
                 return
               } else if (interrupts.length > 0) {
                 exit = Exit.failCause(Cause.fromReasons(reasons))
@@ -320,7 +309,7 @@ export type TokenTypeId = typeof TokenTypeId
  * Branded string token identifying a durable deferred for a workflow
  * execution.
  *
- * @category models
+ * @category token
  * @since 4.0.0
  */
 export type Token = Brand.Branded<string, TokenTypeId>
@@ -328,7 +317,7 @@ export type Token = Brand.Branded<string, TokenTypeId>
 /**
  * Schema for branded durable deferred tokens.
  *
- * @category schemas
+ * @category token
  * @since 4.0.0
  */
 export const Token: Schema.brand<Schema.String, TokenTypeId> = Schema.String.pipe(Schema.brand(TokenTypeId))
@@ -337,7 +326,7 @@ export const Token: Schema.brand<Schema.String, TokenTypeId> = Schema.String.pip
  * Schema for a decoded durable deferred token containing the workflow
  * name, execution ID, and deferred name.
  *
- * @category schemas
+ * @category token
  * @since 4.0.0
  */
 export class TokenParsed extends Schema.Class<TokenParsed>(
@@ -412,7 +401,7 @@ export class TokenParsed extends Schema.Class<TokenParsed>(
  * Creates a token for a durable deferred using the current workflow instance's
  * workflow name and execution ID.
  *
- * @category constructors
+ * @category token
  * @since 4.0.0
  */
 export const token: <Success extends Schema.Constraint, Error extends Schema.Constraint>(
@@ -430,7 +419,7 @@ export const token: <Success extends Schema.Constraint, Error extends Schema.Con
  * Creates a durable deferred token from an explicit workflow, execution ID,
  * and deferred name.
  *
- * @category constructors
+ * @category token
  * @since 4.0.0
  */
 export const tokenFromExecutionId: {
@@ -464,7 +453,7 @@ export const tokenFromExecutionId: {
  * Creates a durable deferred token by deriving the workflow execution ID from
  * the supplied workflow payload.
  *
- * @category constructors
+ * @category token
  * @since 4.0.0
  */
 export const tokenFromPayload: {

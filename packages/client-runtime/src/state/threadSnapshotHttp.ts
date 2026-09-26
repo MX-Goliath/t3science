@@ -42,20 +42,17 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
   readonly remoteAuthorization?: Option.Option<RemoteEnvironmentAuthorization["Service"]>;
   readonly timeoutMs?: number;
   readonly window?: ThreadSnapshotWindow;
-  readonly reasoningMessages?: boolean;
 }) {
   return yield* executeAuthenticatedEnvironmentHttpRequest({
     ...input,
-    group: "orchestration",
     method: "GET",
     url: (httpBaseUrl) =>
       environmentEndpointUrl(httpBaseUrl, `/api/orchestration/threads/${input.threadId}`),
     timeoutMs: input.timeoutMs ?? DEFAULT_THREAD_SNAPSHOT_TIMEOUT_MS,
     request: ({ client, headers }) =>
-      client.threadSnapshot({
+      client.orchestration.threadSnapshot({
         params: { threadId: input.threadId },
         payload: {
-          ...(input.reasoningMessages === true ? { reasoningMessages: "true" as const } : {}),
           ...(input.window !== undefined ? { turnLimit: input.window.turnLimit } : {}),
           ...(input.window?.beforeCursor !== undefined
             ? { beforeCursor: input.window.beforeCursor }
@@ -81,7 +78,6 @@ export class ThreadSnapshotLoader extends Context.Service<
       prepared: PreparedConnection,
       threadId: ThreadId,
       window?: ThreadSnapshotWindow,
-      reasoningMessages?: boolean,
     ) => Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>>;
   }
 >()("@t3tools/client-runtime/state/threadSnapshotHttp/ThreadSnapshotLoader") {}
@@ -100,18 +96,12 @@ export const threadSnapshotLoaderLayer: Layer.Layer<
     const signer = yield* Effect.serviceOption(ManagedRelayDpopSigner);
     const remoteAuthorization = yield* Effect.serviceOption(RemoteEnvironmentAuthorization);
     return ThreadSnapshotLoader.of({
-      load: (
-        prepared: PreparedConnection,
-        threadId: ThreadId,
-        window?: ThreadSnapshotWindow,
-        reasoningMessages?: boolean,
-      ) =>
+      load: (prepared: PreparedConnection, threadId: ThreadId, window?: ThreadSnapshotWindow) =>
         fetchEnvironmentThreadSnapshot({
           prepared,
           threadId,
           signer,
           remoteAuthorization,
-          ...(reasoningMessages === true ? { reasoningMessages: true } : {}),
           ...(window !== undefined ? { window } : {}),
         }).pipe(
           Effect.map(Option.some<OrchestrationThreadDetailSnapshot>),

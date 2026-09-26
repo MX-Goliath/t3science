@@ -24,7 +24,7 @@ export class AossIndexFunction extends Lambda.Function<Lambda.Function>()(
 export default AossIndexFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // The collection (and its prerequisite encryption/network policies) is

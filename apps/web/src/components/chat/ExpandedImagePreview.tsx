@@ -1,10 +1,9 @@
-import type { SnapShotSource } from "@t3tools/contracts";
-
 import type { ComposerFileAttachment } from "../../composerDraftStore";
-import { type ChatFileAttachment, type ChatImageAttachment, isVideoAttachment } from "../../types";
+import { type ChatImageAttachment, isVideoAttachment } from "../../types";
 import type {
   AssetCreateUrlResult,
   AssetResource,
+  ChatFileAttachment,
   EnvironmentId,
   ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -24,7 +23,6 @@ export interface ExpandedImageItem {
   src: string | null;
   name: string;
   type?: "video";
-  source?: SnapShotSource;
   autoPlay?: boolean;
   /** Authored remote destination to open when embedding fails, never a generated asset URL. */
   originalUrl?: string;
@@ -35,11 +33,6 @@ export interface ExpandedImageItem {
 export interface ExpandedImagePreview {
   images: ExpandedImageItem[];
   index: number;
-}
-
-/** Wraps navigation in either direction, including offsets beyond a complete cycle. */
-export function wrapExpandedImageIndex(index: number, imageCount: number): number {
-  return imageCount > 0 ? ((index % imageCount) + imageCount) % imageCount : 0;
 }
 
 /** Resolves a chat media reference on its owning environment, without downloading its bytes. */
@@ -123,36 +116,6 @@ export function buildAttachmentVideoAsset(
   };
 }
 
-/** Opens a persisted video through the same signed-asset dialog used by message media. */
-export function buildAttachmentVideoPreview(
-  environmentId: EnvironmentId,
-  attachment: ChatFileAttachment,
-): ExpandedImagePreview | null {
-  if (!isVideoAttachment(attachment)) return null;
-  const src = attachment.previewUrl ?? null;
-  const asset =
-    attachment.downloadable === false
-      ? undefined
-      : buildAttachmentVideoAsset(environmentId, attachment);
-  if (src === null && asset === undefined) return null;
-  return {
-    images: [
-      {
-        src,
-        name: attachment.name,
-        type: "video",
-        actionsSource: {
-          kind: "video",
-          name: attachment.name,
-          src,
-          ...(asset ? { asset } : {}),
-        },
-      },
-    ],
-    index: 0,
-  };
-}
-
 export function expandedImageKey(preview: ExpandedImagePreview): string {
   const item = preview.images[preview.index];
   const asset = item?.actionsSource?.asset;
@@ -178,7 +141,7 @@ export function buildExpandedImagePreview(
   }
   const previewableImages = images.flatMap((image) =>
     image.type === "image" && image.previewUrl
-      ? [{ id: image.id, src: image.previewUrl, name: image.name, source: image.source }]
+      ? [{ id: image.id, src: image.previewUrl, name: image.name }]
       : [],
   );
   if (previewableImages.length === 0) {
@@ -192,7 +155,6 @@ export function buildExpandedImagePreview(
     images: previewableImages.map((image) => ({
       src: image.src,
       name: image.name,
-      ...(image.source?.kind === "snap-shot" ? { source: image.source } : {}),
     })),
     index: selectedIndex,
   };

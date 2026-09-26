@@ -18,7 +18,7 @@ export class OmicsBindingsFunction extends Lambda.Function<Lambda.Function>()(
 export default OmicsBindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const sequenceStore = yield* Omics.SequenceStore("BindingsSequenceStore");

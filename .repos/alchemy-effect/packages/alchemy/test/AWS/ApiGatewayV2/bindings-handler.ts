@@ -25,7 +25,7 @@ export class ApiGatewayV2BindingsFunction extends Lambda.Function<Lambda.Functio
 export default ApiGatewayV2BindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // Minimal HTTP API + route + stage the bindings target.

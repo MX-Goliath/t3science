@@ -1,6 +1,6 @@
 import * as AWS from "@/AWS";
 import { AWSEnvironment } from "@/AWS/Environment.ts";
-import type { ScopedPlanStatusSession } from "@/Report.ts";
+import type { ScopedPlanStatusSession } from "@/Cli/Cli.ts";
 import {
   normalizePolicyDocument,
   type PolicyDocument,

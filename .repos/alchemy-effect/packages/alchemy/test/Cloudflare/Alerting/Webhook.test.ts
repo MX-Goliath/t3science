@@ -25,7 +25,7 @@ const main = pathe.resolve(import.meta.dirname, "fixtures/webhook-receiver.ts");
 const Receiver = () =>
   Cloudflare.Worker("WebhookReceiver", {
     main,
-    workersDev: true,
+    subdomain: { enabled: true },
   });
 
 test.provider("create, update, delete webhook destination", (stack) =>

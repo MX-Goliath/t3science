@@ -1,46 +1,6 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
-import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
+import { planPinnedMove } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentId } from "@t3tools/contracts";
-
-export type ThreadMoveDestination =
-  | "up"
-  | "down"
-  | {
-      readonly targetId: string | null;
-      readonly section?: "pinned" | "active" | "settled";
-      readonly placement: "before" | "after";
-    };
-
-/** Resolve against stable row identities, including rows hidden by a filter. */
-export function threadOrderAfterMove(
-  orderedIds: readonly string[],
-  movedId: string,
-  destination: ThreadMoveDestination,
-): string[] | null {
-  if (typeof destination === "object" && destination.section === "settled") return null;
-  const from = orderedIds.indexOf(movedId);
-  if (from < 0 && (typeof destination === "string" || destination.section === undefined))
-    return null;
-  const result = orderedIds.filter((id) => id !== movedId);
-  let to: number;
-  if (typeof destination === "string") {
-    to = from + (destination === "up" ? -1 : 1);
-    if (to < 0 || to >= orderedIds.length) return null;
-  } else {
-    if (destination.targetId === null) {
-      if (destination.section === undefined) return null;
-      to = destination.placement === "before" ? 0 : result.length;
-    } else {
-      const target = result.indexOf(destination.targetId);
-      if (target < 0) return null;
-      to = target + (destination.placement === "after" ? 1 : 0);
-    }
-  }
-  if (to === from) return null;
-  result.splice(to, 0, movedId);
-  return result;
-}
 
 type OrderRow = Pick<
   EnvironmentThreadShell,
@@ -89,15 +49,13 @@ export function createThreadMovePlanner(input: {
     ]),
   );
   const writableIds = new Set(
-    (input.allThreads ?? input.ordered)
+    input.ordered
       .filter((row) => input.reorderableEnvironmentIds.has(row.environmentId))
       .map(rowId),
   );
-  return (movedId: string, direction: ThreadMoveDestination) => {
+  return (movedId: string, direction: "up" | "down") => {
     if (!writableIds.has(movedId)) return null;
-    const nextIds = threadOrderAfterMove(orderedIds, movedId, direction);
-    if (nextIds === null) return null;
-    const assignments = planPinnedReorder({ orderedIds: nextIds, keysById, movedId });
+    const assignments = planPinnedMove({ orderedIds, keysById, movedId, direction });
     return assignments === null ||
       assignments.length === 0 ||
       assignments.some((assignment) => !writableIds.has(assignment.id))
@@ -110,11 +68,13 @@ export function createPendingThreadOrder(input: {
   readonly section: PendingThreadOrder["section"];
   readonly ordered: readonly OrderRow[];
   readonly movedId: string;
-  readonly direction: ThreadMoveDestination;
+  readonly direction: "up" | "down";
   readonly assignments: readonly { readonly id: string; readonly orderKey: string }[];
 }): PendingThreadOrder {
-  const orderedIds = threadOrderAfterMove(input.ordered.map(rowId), input.movedId, input.direction);
-  if (orderedIds === null) throw new Error("Cannot begin an invalid thread move");
+  const orderedIds = input.ordered.map(rowId);
+  const from = orderedIds.indexOf(input.movedId);
+  orderedIds.splice(from, 1);
+  orderedIds.splice(from + (input.direction === "up" ? -1 : 1), 0, input.movedId);
   return {
     section: input.section,
     orderedIds,
@@ -157,33 +117,4 @@ export function applyPendingThreadOrder<T extends OrderRow>(
   return [...rows].sort(
     (left, right) => (rank.get(rowId(left)) ?? Infinity) - (rank.get(rowId(right)) ?? Infinity),
   );
-}
-
-/** Match desktop re-entry: a pin wakes the thread on the server; Active clears
- * each underlying parked state before assigning its destination order key. */
-export function threadDropLifecycle(
-  thread: EnvironmentThreadShell,
-  section: "pinned" | "active",
-  now: string,
-) {
-  if (section === "pinned") return { pin: true, unpin: false, unsettle: false, unsnooze: false };
-  return {
-    pin: false,
-    unpin: thread.pinnedAt != null,
-    unsettle: thread.settledOverride === "settled",
-    unsnooze: effectiveSnoozed(thread, { now }),
-  };
-}
-
-export type ThreadDragSection = "pinned" | "active" | "snoozed" | "settled";
-
-/** The action shown during hover describes the lifecycle change made on drop. */
-export function threadDragAction(source: ThreadDragSection, destination: ThreadDragSection) {
-  if (destination === "snoozed") return null;
-  if (destination === "settled") return source === "settled" ? null : "Settle";
-  if (source === destination) return "Reorder";
-  if (destination === "pinned") return "Pin";
-  if (source === "pinned") return "Unpin";
-  if (source === "settled") return "Unsettle";
-  return "Unsnooze";
 }

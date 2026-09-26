@@ -50,7 +50,8 @@ export const PlanetscaleDatabase = Effect.gen(function* () {
           name: "t3coderelay",
           region: { slug: "us-west" },
           clusterSize: "PS_20",
-          migrations: { dir: schema.out, table: "relay_migrations" },
+          migrationsDir: schema.out,
+          migrationsTable: "relay_migrations",
           replicas: 2,
         }).pipe(RemovalPolicy.retain())
       : yield* Planetscale.PostgresDatabase.ref("RelayPostgresDatabase", {
@@ -60,7 +61,8 @@ export const PlanetscaleDatabase = Effect.gen(function* () {
     mode === "stage-branch"
       ? yield* Planetscale.PostgresBranch("RelayPostgresBranch", {
           database,
-          migrations: { dir: schema.out, table: "relay_migrations" },
+          migrationsDir: schema.out,
+          migrationsTable: "relay_migrations",
         })
       : undefined;
 

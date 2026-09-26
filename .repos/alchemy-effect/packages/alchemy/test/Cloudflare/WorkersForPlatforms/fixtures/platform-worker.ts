@@ -15,7 +15,7 @@ import { DispatchNs } from "./shared.ts";
  */
 export default class WfpPlatformWorker extends Cloudflare.Worker<WfpPlatformWorker>()(
   "WfpBindingPlatformWorker",
-  { main: import.meta.filename, workersDev: true },
+  { main: import.meta.filename, url: true },
   Effect.gen(function* () {
     const dispatch = yield* Cloudflare.WorkersForPlatforms.Get(DispatchNs);
 

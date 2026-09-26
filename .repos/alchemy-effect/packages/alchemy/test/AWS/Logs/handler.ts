@@ -23,7 +23,7 @@ class QueryNotComplete extends Data.TaggedError("QueryNotComplete")<{
 export default LogsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

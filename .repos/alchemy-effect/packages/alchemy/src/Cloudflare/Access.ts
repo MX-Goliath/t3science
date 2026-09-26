@@ -8,7 +8,7 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { cachedFunction } from "../Util/cached-function.ts";
 
-export class AccessError extends Schema.TaggedError<AccessError>()(
+export class AccessError extends Schema.TaggedErrorClass<AccessError>()(
   "AccessError",
   {
     message: Schema.String,
@@ -74,7 +74,7 @@ export const AccessLive = Layer.effect(
       );
 
     const getEnv = (name: string) =>
-      Config.String(name)
+      Config.string(name)
 
         .pipe(Effect.catchTag("ConfigError", () => Effect.succeed(undefined)));
 

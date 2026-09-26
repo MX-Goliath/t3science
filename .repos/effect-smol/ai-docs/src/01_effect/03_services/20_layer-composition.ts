@@ -14,10 +14,10 @@ export const SqlClientLayer: Layer.Layer<
   PgClient.PgClient | SqlClient.SqlClient,
   Config.ConfigError | SqlError.SqlError
 > = PgClient.layerConfig({
-  url: Config.Redacted("DATABASE_URL")
+  url: Config.redacted("DATABASE_URL")
 })
 
-export class UserRespositoryError extends Schema.TaggedError<UserRespositoryError>()("UserRespositoryError", {
+export class UserRespositoryError extends Schema.TaggedErrorClass<UserRespositoryError>()("UserRespositoryError", {
   reason: SqlError.SqlError
 }) {}
 

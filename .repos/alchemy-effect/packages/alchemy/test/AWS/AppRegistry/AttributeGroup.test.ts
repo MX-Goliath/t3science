@@ -33,9 +33,7 @@ const assertAttributeGroupGone = (specifier: string) =>
     }),
   );
 
-// AppRegistry is in maintenance mode (see Application.test.ts) — lifecycle
-// tests only run on accounts that retain access via AWS_TEST_APPREGISTRY=1.
-test.provider.skipIf(!process.env.AWS_TEST_APPREGISTRY)(
+test.provider(
   "creates, updates, and deletes an attribute group",
   (stack) =>
     Effect.gen(function* () {

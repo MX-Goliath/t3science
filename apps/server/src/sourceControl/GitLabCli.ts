@@ -35,7 +35,7 @@ const gitLabCliDecodeErrorContext = {
   cause: Schema.Defect(),
 };
 
-export class GitLabCliUnavailableError extends Schema.TaggedError<GitLabCliUnavailableError>()(
+export class GitLabCliUnavailableError extends Schema.TaggedErrorClass<GitLabCliUnavailableError>()(
   "GitLabCliUnavailableError",
   gitLabCliExecutionErrorContext,
 ) {
@@ -48,7 +48,7 @@ export class GitLabCliUnavailableError extends Schema.TaggedError<GitLabCliUnava
   }
 }
 
-export class GitLabCliAuthenticationError extends Schema.TaggedError<GitLabCliAuthenticationError>()(
+export class GitLabCliAuthenticationError extends Schema.TaggedErrorClass<GitLabCliAuthenticationError>()(
   "GitLabCliAuthenticationError",
   gitLabCliExecutionErrorContext,
 ) {
@@ -61,7 +61,7 @@ export class GitLabCliAuthenticationError extends Schema.TaggedError<GitLabCliAu
   }
 }
 
-export class GitLabCliRateLimitError extends Schema.TaggedError<GitLabCliRateLimitError>()(
+export class GitLabCliRateLimitError extends Schema.TaggedErrorClass<GitLabCliRateLimitError>()(
   "GitLabCliRateLimitError",
   gitLabCliExecutionErrorContext,
 ) {
@@ -74,7 +74,7 @@ export class GitLabCliRateLimitError extends Schema.TaggedError<GitLabCliRateLim
   }
 }
 
-export class GitLabMergeRequestNotFoundError extends Schema.TaggedError<GitLabMergeRequestNotFoundError>()(
+export class GitLabMergeRequestNotFoundError extends Schema.TaggedErrorClass<GitLabMergeRequestNotFoundError>()(
   "GitLabMergeRequestNotFoundError",
   {
     ...gitLabCliExecutionErrorContext,
@@ -113,7 +113,7 @@ export class GitLabMergeRequestNotFoundError extends Schema.TaggedError<GitLabMe
   }
 }
 
-export class GitLabCliCommandError extends Schema.TaggedError<GitLabCliCommandError>()(
+export class GitLabCliCommandError extends Schema.TaggedErrorClass<GitLabCliCommandError>()(
   "GitLabCliCommandError",
   gitLabCliExecutionErrorContext,
 ) {
@@ -158,7 +158,7 @@ export class GitLabCliCommandError extends Schema.TaggedError<GitLabCliCommandEr
   }
 }
 
-export class GitLabMergeRequestListDecodeError extends Schema.TaggedError<GitLabMergeRequestListDecodeError>()(
+export class GitLabMergeRequestListDecodeError extends Schema.TaggedErrorClass<GitLabMergeRequestListDecodeError>()(
   "GitLabMergeRequestListDecodeError",
   {
     ...gitLabCliDecodeErrorContext,
@@ -174,7 +174,7 @@ export class GitLabMergeRequestListDecodeError extends Schema.TaggedError<GitLab
   }
 }
 
-export class GitLabMergeRequestDecodeError extends Schema.TaggedError<GitLabMergeRequestDecodeError>()(
+export class GitLabMergeRequestDecodeError extends Schema.TaggedErrorClass<GitLabMergeRequestDecodeError>()(
   "GitLabMergeRequestDecodeError",
   {
     ...gitLabCliDecodeErrorContext,
@@ -191,7 +191,7 @@ export class GitLabMergeRequestDecodeError extends Schema.TaggedError<GitLabMerg
   }
 }
 
-export class GitLabRepositoryDecodeError extends Schema.TaggedError<GitLabRepositoryDecodeError>()(
+export class GitLabRepositoryDecodeError extends Schema.TaggedErrorClass<GitLabRepositoryDecodeError>()(
   "GitLabRepositoryDecodeError",
   {
     ...gitLabCliDecodeErrorContext,
@@ -208,7 +208,7 @@ export class GitLabRepositoryDecodeError extends Schema.TaggedError<GitLabReposi
   }
 }
 
-export class GitLabNamespaceDecodeError extends Schema.TaggedError<GitLabNamespaceDecodeError>()(
+export class GitLabNamespaceDecodeError extends Schema.TaggedErrorClass<GitLabNamespaceDecodeError>()(
   "GitLabNamespaceDecodeError",
   {
     ...gitLabCliDecodeErrorContext,
@@ -237,6 +237,7 @@ export const GitLabCliError = Schema.Union([
   GitLabNamespaceDecodeError,
 ]);
 export type GitLabCliError = typeof GitLabCliError.Type;
+export const isGitLabCliError = Schema.is(GitLabCliError);
 
 export interface GitLabMergeRequestSummary {
   readonly number: number;
@@ -408,7 +409,6 @@ function parseRepositoryPath(repository: string): {
   return { namespacePath, projectPath };
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const process = yield* VcsProcess.VcsProcess;
 

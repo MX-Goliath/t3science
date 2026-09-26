@@ -9,16 +9,16 @@ import * as ThreadBackgroundLiveness from "./ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "./ThreadPlanProgress.ts";
 import { PortableConversationContextLive } from "./Layers/PortableConversationContext.ts";
 
-const OrchestrationEventInfrastructureLayerLive = Layer.mergeAll(
+export const OrchestrationEventInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationEventStoreLive,
   OrchestrationCommandReceiptRepositoryLive,
 );
 
-const OrchestrationProjectionPipelineLayerLive = OrchestrationProjectionPipelineLive.pipe(
+export const OrchestrationProjectionPipelineLayerLive = OrchestrationProjectionPipelineLive.pipe(
   Layer.provide(OrchestrationEventStoreLive),
 );
 
-const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
+export const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationProjectionSnapshotQueryLive,
   OrchestrationEventInfrastructureLayerLive,
   OrchestrationProjectionPipelineLayerLive,

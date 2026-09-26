@@ -28,13 +28,14 @@ import {
   getProjectOrderKey,
   selectProjectGroupingSettings,
 } from "../logicalProject";
+import { resolveDefaultThreadEnvMode } from "@t3tools/shared/threadEnvMode";
 import { readProjects, readThreadShell, useProjects, useThread } from "../state/entities";
 import {
   hasExplicitComposerModelSelection,
   resolveNewDraftStartFromOrigin,
   resolveNewThreadModelSelectionOverride,
 } from "../lib/chatThreadActions";
-import { readT3ProjectFile } from "../lib/t3ProjectFileDefaults";
+import { readT3ProjectFileDefaultThreadEnvMode } from "../lib/t3ProjectFileDefaults";
 import { environmentServerConfigsAtom, primaryServerSettingsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
@@ -148,21 +149,22 @@ export function useNewThreadHandler() {
             currentRouteTarget?.kind === "draft" ? currentRouteTarget.draftId : null,
           destinationDraftId,
         });
-      // The t3.json read is skipped when a project setting decides. Its query
-      // atom caches per project after the first call.
+      // The shared resolver owns the priority order. The t3.json read is
+      // skipped entirely when a higher-priority source decides, and its
+      // query atom caches per project after the first call.
       const resolveDefaultEnvMode = async (): Promise<DraftThreadEnvMode> => {
         if (isGeneralChatsProjectId(projectRef.projectId)) return "local";
         const consultProjectFile = project !== undefined && project.defaultThreadEnvMode == null;
-        const projectFileDefault = consultProjectFile
-          ? (await readT3ProjectFile(project.environmentId, project.workspaceRoot))
-              ?.defaultThreadEnvMode
-          : null;
-        return (
-          project?.defaultThreadEnvMode ??
-          projectFileDefault ??
-          targetServerSettings.defaultThreadEnvMode ??
-          "local"
-        );
+        return resolveDefaultThreadEnvMode({
+          projectSetting: project?.defaultThreadEnvMode,
+          projectFile: consultProjectFile
+            ? await readT3ProjectFileDefaultThreadEnvMode(
+                project.environmentId,
+                project.workspaceRoot,
+              )
+            : null,
+          globalDefault: targetServerSettings.defaultThreadEnvMode,
+        });
       };
       const logicalProjectKey = project
         ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
@@ -480,7 +482,6 @@ export function useHandleNewThread() {
       ? scopeProjectRef(orderedProjects[0].environmentId, orderedProjects[0].id)
       : null,
     handleNewThread,
-    routeDraftId: routeTarget?.kind === "draft" ? routeTarget.draftId : null,
     routeThreadRef,
   };
 }

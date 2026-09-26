@@ -146,8 +146,11 @@ export type Subscription = Resource<
  * creation (changing it replaces the subscription). `name`, `events`,
  * `enabled`, and the destination `queueId` are all mutable in place.
  * Cloudflare allows at most one subscription per source per account.
- * ### Creating a Subscription
- * **Example:** R2 bucket events into a Queue
+ * @resource
+ * @product Queues
+ * @category Storage & Databases
+ * @section Creating a Subscription
+ * @example R2 bucket events into a Queue
  * ```typescript
  * const queue = yield* Cloudflare.Queues.Queue("EventsQueue");
  *
@@ -158,7 +161,7 @@ export type Subscription = Resource<
  * });
  * ```
  *
- * **Example:** KV namespace events with an explicit name
+ * @example KV namespace events with an explicit name
  * ```typescript
  * const subscription = yield* Cloudflare.Queues.Subscription("KvEvents", {
  *   name: "kv-events",
@@ -168,7 +171,7 @@ export type Subscription = Resource<
  * });
  * ```
  *
- * **Example:** Workers Builds events for one Worker
+ * @example Workers Builds events for one Worker
  * ```typescript
  * const subscription = yield* Cloudflare.Queues.Subscription("BuildEvents", {
  *   source: { type: "workersBuilds.worker", workerName: "my-worker" },
@@ -177,8 +180,8 @@ export type Subscription = Resource<
  * });
  * ```
  *
- * ### Pausing delivery
- * **Example:** Disable a subscription without deleting it
+ * @section Pausing delivery
+ * @example Disable a subscription without deleting it
  * ```typescript
  * const subscription = yield* Cloudflare.Queues.Subscription("R2Events", {
  *   source: { type: "r2" },
@@ -189,10 +192,6 @@ export type Subscription = Resource<
  * ```
  *
  * @see https://developers.cloudflare.com/queues/event-subscriptions/
- *
- * @resource
- * @product Queues
- * @category Storage & Databases
  */
 export const Subscription = Resource<Subscription>(TypeId, {
   aliases: ["Cloudflare.Queue.Subscription"],

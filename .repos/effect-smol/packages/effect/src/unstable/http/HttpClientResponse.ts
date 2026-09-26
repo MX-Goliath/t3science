@@ -21,7 +21,7 @@ import type { Unify } from "../../Unify.ts"
 import * as Cookies from "./Cookies.ts"
 import * as Headers from "./Headers.ts"
 import * as Error from "./HttpClientError.ts"
-import * as HttpClientRequest from "./HttpClientRequest.ts"
+import type * as HttpClientRequest from "./HttpClientRequest.ts"
 import * as HttpIncomingMessage from "./HttpIncomingMessage.ts"
 import * as UrlParams from "./UrlParams.ts"
 
@@ -66,11 +66,6 @@ export const TypeId = "~effect/http/HttpClientResponse"
 export interface HttpClientResponse extends HttpIncomingMessage.HttpIncomingMessage<Error.HttpClientError>, Pipeable {
   readonly [TypeId]: typeof TypeId
   readonly request: HttpClientRequest.HttpClientRequest
-  /**
-   * The resolved URL, including query parameters and excluding the hash.
-   * Uses the final URL when redirects are followed. Empty if unknown.
-   */
-  readonly url: string
   readonly status: number
   readonly cookies: Cookies.Cookies
   readonly formData: Effect.Effect<FormData, Error.HttpClientError>
@@ -101,18 +96,17 @@ export const schemaJson = <
   RD
 >(
   schema: Schema.ConstraintCodec<A, I, RD, unknown>,
-  options?: (ParseOptions & HttpIncomingMessage.JsonOptions) | undefined
+  options?: ParseOptions | undefined
 ) => {
-  const decode = Schema.decodeEffect(Schema.toCodecJson(schema), options)
-  const decodeBody = HttpIncomingMessage.schemaBodyJson(Schema.Unknown, options)
+  const decode = Schema.decodeEffect(Schema.toCodecJson(schema).annotate({ options }))
   return (
     self: HttpClientResponse
   ): Effect.Effect<A, Schema.SchemaError | Error.HttpClientError, RD> =>
-    Effect.flatMap(decodeBody(self), (body) =>
+    Effect.flatMap(self.json, (body) =>
       decode({
         status: self.status,
         headers: self.headers,
-        body: body as Schema.Json
+        body
       }))
 }
 
@@ -134,7 +128,7 @@ export const schemaNoBody = <
   schema: Schema.Codec<A, I, RD, RE>,
   options?: ParseOptions | undefined
 ) => {
-  const decode = Schema.decodeEffect(schema, options)
+  const decode = Schema.decodeEffect(schema.annotate({ options }))
   return (self: HttpClientResponse): Effect.Effect<A, Schema.SchemaError, RD> =>
     decode({
       status: self.status,
@@ -207,7 +201,7 @@ export const matchStatus: {
 /**
  * Succeeds with the response when its status satisfies the predicate, otherwise fails with `HttpClientError`.
  *
- * @category filtering
+ * @category filters
  * @since 4.0.0
  */
 export const filterStatus: {
@@ -234,7 +228,7 @@ export const filterStatus: {
 /**
  * Succeeds with the response only when its status is in the 2xx range, otherwise fails with `HttpClientError`.
  *
- * @category filtering
+ * @category filters
  * @since 4.0.0
  */
 export const filterStatusOk = (self: HttpClientResponse): Effect.Effect<HttpClientResponse, Error.HttpClientError> =>
@@ -280,14 +274,6 @@ class WebHttpClientResponse extends Inspectable.Class implements HttpClientRespo
 
   get status(): number {
     return this.source.status
-  }
-
-  get url(): string {
-    if (this.source.url) return this.source.url.split("#")[0]
-    const url = HttpClientRequest.toUrl(this.request)
-    if (Option.isNone(url)) return ""
-    url.value.hash = ""
-    return url.value.href
   }
 
   get headers(): Headers.Headers {
@@ -347,7 +333,22 @@ class WebHttpClientResponse extends Inspectable.Class implements HttpClientRespo
 
   private textBody?: Effect.Effect<string, Error.HttpClientError>
   get text(): Effect.Effect<string, Error.HttpClientError> {
-    return this.textBody ??= Effect.map(this.arrayBuffer, (_) => new TextDecoder().decode(_))
+    if (this.textBody) {
+      return this.textBody
+    }
+    this.textBody = Effect.tryPromise({
+      try: () => this.source.text(),
+      catch: (cause) =>
+        new Error.HttpClientError({
+          reason: new Error.DecodeError({
+            request: this.request,
+            response: this,
+            cause
+          })
+        })
+    }).pipe(Effect.cached, Effect.runSync)
+    this.arrayBufferBody = Effect.map(this.textBody, (_) => new TextEncoder().encode(_).buffer)
+    return this.textBody
   }
 
   get urlParamsBody(): Effect.Effect<UrlParams.UrlParams, Error.HttpClientError> {
@@ -396,6 +397,7 @@ class WebHttpClientResponse extends Inspectable.Class implements HttpClientRespo
           })
         })
     }).pipe(Effect.cached, Effect.runSync)
+    this.textBody = Effect.map(this.arrayBufferBody, (_) => new TextDecoder().decode(_))
     return this.arrayBufferBody
   }
 

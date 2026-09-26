@@ -16,7 +16,7 @@ export class ApiGatewayBindingsFunction extends Lambda.Function<Lambda.Function>
 export default ApiGatewayBindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // Usage plan the key-management routes enroll keys into.

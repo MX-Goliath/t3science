@@ -51,7 +51,7 @@ export const WsApiAndStageLive = Layer.effect(
 export default WebSocketTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

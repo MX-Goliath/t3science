@@ -16,7 +16,7 @@ import * as Schema from "effect/Schema";
 
 import { expandHomePathWith } from "../pathExpansion.ts";
 
-export class WorkspaceRootNotExistsError extends Schema.TaggedError<WorkspaceRootNotExistsError>()(
+export class WorkspaceRootNotExistsError extends Schema.TaggedErrorClass<WorkspaceRootNotExistsError>()(
   "WorkspaceRootNotExistsError",
   {
     workspaceRoot: Schema.String,
@@ -28,7 +28,7 @@ export class WorkspaceRootNotExistsError extends Schema.TaggedError<WorkspaceRoo
   }
 }
 
-export class WorkspaceRootCreateFailedError extends Schema.TaggedError<WorkspaceRootCreateFailedError>()(
+export class WorkspaceRootCreateFailedError extends Schema.TaggedErrorClass<WorkspaceRootCreateFailedError>()(
   "WorkspaceRootCreateFailedError",
   {
     workspaceRoot: Schema.String,
@@ -41,7 +41,7 @@ export class WorkspaceRootCreateFailedError extends Schema.TaggedError<Workspace
   }
 }
 
-export class WorkspaceRootStatFailedError extends Schema.TaggedError<WorkspaceRootStatFailedError>()(
+export class WorkspaceRootStatFailedError extends Schema.TaggedErrorClass<WorkspaceRootStatFailedError>()(
   "WorkspaceRootStatFailedError",
   {
     workspaceRoot: Schema.String,
@@ -55,7 +55,7 @@ export class WorkspaceRootStatFailedError extends Schema.TaggedError<WorkspaceRo
   }
 }
 
-export class WorkspaceRootNotDirectoryError extends Schema.TaggedError<WorkspaceRootNotDirectoryError>()(
+export class WorkspaceRootNotDirectoryError extends Schema.TaggedErrorClass<WorkspaceRootNotDirectoryError>()(
   "WorkspaceRootNotDirectoryError",
   {
     workspaceRoot: Schema.String,
@@ -67,7 +67,7 @@ export class WorkspaceRootNotDirectoryError extends Schema.TaggedError<Workspace
   }
 }
 
-export class WorkspacePathOutsideRootError extends Schema.TaggedError<WorkspacePathOutsideRootError>()(
+export class WorkspacePathOutsideRootError extends Schema.TaggedErrorClass<WorkspacePathOutsideRootError>()(
   "WorkspacePathOutsideRootError",
   {
     workspaceRoot: Schema.String,

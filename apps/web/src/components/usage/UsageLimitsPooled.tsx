@@ -10,7 +10,7 @@ import {
   type LimitPoolWindow,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
-import { AlertTriangleIcon, TicketIcon } from "lucide-react";
+import { TicketIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
@@ -20,7 +20,6 @@ import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { getDriverOption } from "../settings/providerDriverMeta";
 import { RedactedSensitiveText } from "../settings/RedactedSensitiveText";
 import { Button } from "../ui/button";
-import { Alert, AlertTitle } from "../ui/alert";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import {
   PaceIcon,
@@ -450,29 +449,28 @@ function PoolBar({
     <div className="@container/pool min-w-0">
       <div
         className="grid gap-x-1 gap-y-1"
-        style={{ gridTemplateColumns: `repeat(${pool.columns.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${pool.members.length}, minmax(0, 1fr))` }}
       >
-        {pool.columns.map((member, position) =>
-          member.window ? (
-            <PoolSegment
-              key={member.account.key}
-              account={member.account}
-              window={member.window}
-              reset={restores.get(member.account.key)}
-              color={color}
-              now={now}
-              index={position + 1}
-            />
-          ) : null,
-        )}
+        {pool.members.map(({ account, window }, position) => (
+          <PoolSegment
+            key={account.key}
+            account={account}
+            window={window}
+            reset={restores.get(account.key)}
+            color={color}
+            now={now}
+            index={position + 1}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
 /**
- * Big pooled number and the segment bar. Accounts keep the same column across
- * windows; each segment's popover shows its own reset time and share restored.
+ * Big pooled number and the segment bar. The bar is sorted by reset, so who
+ * refills next is its left edge; the exact time and share restored live in
+ * each segment's popover rather than a list restating the bar.
  */
 function PoolWindowCard({
   pool,
@@ -546,7 +544,7 @@ export function UsageLimitsPooled({
   const notices = collectLimitNotices(presentations);
   return (
     <div className="flex flex-col gap-8">
-      {pools.length === 0 && notices.length === 0 ? (
+      {pools.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No provider on the selected environments reports subscription limits.
         </p>
@@ -563,13 +561,10 @@ export function UsageLimitsPooled({
 function LimitNotices({ notices }: { readonly notices: readonly string[] }) {
   if (notices.length === 0) return null;
   return (
-    <Alert variant="warning" controlAlignment="first-line">
-      <AlertTriangleIcon />
+    <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
       {notices.map((notice) => (
-        <AlertTitle key={notice} className="break-words">
-          {notice}
-        </AlertTitle>
+        <li key={notice}>{notice}</li>
       ))}
-    </Alert>
+    </ul>
   );
 }

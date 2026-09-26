@@ -60,7 +60,7 @@ export type TypeId = "~@effect/sql-pglite/PgliteClient"
 /**
  * PGlite-backed PostgreSQL client service, extending `SqlClient` with access to the PGlite instance, JSON fragments, LISTEN/NOTIFY, data directory dumps, and array type refresh.
  *
- * @category services
+ * @category models
  * @since 4.0.0
  */
 export interface PgliteClient extends Client.SqlClient {
@@ -68,18 +68,7 @@ export interface PgliteClient extends Client.SqlClient {
   readonly config: PgliteClientConfig
   readonly pglite: PGliteInterface
   readonly json: (_: unknown) => Fragment
-  /**
-   * Subscribes to a PGlite notification channel.
-   *
-   * **Details**
-   *
-   * The effect completes after the listener is installed. Notifications are
-   * buffered in the returned dequeue, and the subscription remains active
-   * until the required scope closes.
-   */
-  readonly listen: (
-    channel: string
-  ) => Effect.Effect<Queue.Dequeue<string>, SqlError, Scope.Scope>
+  readonly listen: (channel: string) => Stream.Stream<string, SqlError>
   readonly notify: (channel: string, payload: string) => Effect.Effect<void, SqlError>
   readonly dumpDataDir: (compression?: "none" | "gzip" | "auto") => Effect.Effect<File | Blob, SqlError>
   readonly refreshArrayTypes: Effect.Effect<void, SqlError>
@@ -240,22 +229,20 @@ export const fromClient = (
         config,
         pglite,
         json: (_: unknown) => Statement.fragment([PgJson(_)]),
-        listen: Effect.fnUntraced(function*(channel: string) {
-          const queue = yield* Queue.unbounded<string>()
-          yield* Effect.acquireRelease(
-            Effect.tryPromise({
-              try: () =>
-                pglite.listen(channel, (payload) => {
-                  Queue.offerUnsafe(queue, payload)
-                }),
-              catch: (cause) => new SqlError({ reason: classifyError(cause, "Failed to listen", "listen") })
-            }),
-            (unlisten) => Effect.promise(() => unlisten()),
-            { interruptible: true }
-          )
-          yield* Effect.addFinalizer(() => Queue.shutdown(queue))
-          return queue
-        }),
+        listen: (channel: string) =>
+          Stream.callback<string, SqlError>((queue) =>
+            Effect.acquireRelease(
+              Effect.tryPromise({
+                try: () =>
+                  pglite.listen(channel, (payload) => {
+                    Queue.offerUnsafe(queue, payload)
+                  }),
+                catch: (cause) => new SqlError({ reason: classifyError(cause, "Failed to listen", "listen") })
+              }),
+              (unlisten) => Effect.promise(() => unlisten()),
+              { interruptible: true }
+            )
+          ),
         notify: (channel: string, payload: string) =>
           Effect.tryPromise({
             try: () => pglite.exec(`NOTIFY ${escape(channel)}, ${escapeLiteral(payload)}`),
@@ -429,12 +416,13 @@ export const makeCompiler = (
     onCustom(type, placeholder, withoutTransform) {
       switch (type.kind) {
         case "PgJson": {
-          const value = withoutTransform || transformValue === undefined
-            ? type.paramA
-            : transformValue(type.paramA)
           return [
             placeholder(undefined),
-            [typeof value === "string" ? JSON.stringify(value) : value]
+            [
+              withoutTransform || transformValue === undefined
+                ? type.paramA
+                : transformValue(type.paramA)
+            ]
           ]
         }
       }
@@ -448,13 +436,13 @@ const escapeLiteral = (value: string) => `'${value.replace(/'/g, "''")}'`
 /**
  * PGlite-specific custom statement fragments supported by the compiler, currently JSON parameter fragments.
  *
- * @category models
+ * @category custom types
  * @since 4.0.0
  */
 export type PgCustom = PgJson
 
 /**
- * @category models
+ * @category custom types
  * @since 4.0.0
  */
 interface PgJson extends Custom<"PgJson", unknown> {}

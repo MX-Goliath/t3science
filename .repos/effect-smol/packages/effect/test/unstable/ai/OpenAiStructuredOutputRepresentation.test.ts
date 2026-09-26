@@ -50,7 +50,7 @@ describe("OpenAiStructuredOutput representation v2", () => {
     })
     await new TestSchema.Asserts(result.codec).decoding().fail(
       { value: "a" },
-      `Expected <filter>
+      `Expected <filter>, got "a"
   at ["value"]`
     )
   })

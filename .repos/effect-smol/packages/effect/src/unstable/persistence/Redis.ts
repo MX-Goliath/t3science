@@ -1,16 +1,15 @@
 /**
  * Redis support shared by persistence modules.
  *
- * This module defines a `Redis` service that can send Redis commands, subscribe
- * to pub/sub channels, and run Lua scripts. It does not create a Redis client
- * itself; callers provide the client-specific operations. The module also
+ * This module defines a `Redis` service that can send Redis commands and run
+ * Lua scripts. It does not create a Redis client itself; callers provide a
+ * `send` function from their client or connection pool. The module also
  * provides helpers for describing Lua scripts, loading them once, and running
  * them later by their cached Redis id.
  *
  * @since 4.0.0
  */
 import * as Cache from "../../Cache.ts"
-import type * as Cause from "../../Cause.ts"
 import * as Context from "../../Context.ts"
 import * as Duration from "../../Duration.ts"
 import * as Effect from "../../Effect.ts"
@@ -18,41 +17,16 @@ import * as Equal from "../../Equal.ts"
 import * as Exit from "../../Exit.ts"
 import { constant, identity } from "../../Function.ts"
 import * as Hash from "../../Hash.ts"
-import * as Queue from "../../Queue.ts"
 import * as Schema from "../../Schema.ts"
-import * as Scope from "../../Scope.ts"
 
 /**
- * A message received from a Redis pub/sub channel.
- *
- * @category models
- * @since 4.0.0
- */
-export interface RedisMessage {
-  readonly channel: string
-  readonly message: string
-}
-
-/**
- * Service for sending Redis commands, subscribing to channels, and evaluating
- * cached Lua scripts.
+ * Service for sending Redis commands and evaluating cached Lua scripts.
  *
  * @category services
  * @since 4.0.0
  */
 export class Redis extends Context.Service<Redis, {
   readonly send: <A = unknown>(command: string, ...args: ReadonlyArray<string>) => Effect.Effect<A, RedisError>
-
-  /**
-   * Subscribes to a Redis pub/sub channel for the lifetime of the current
-   * scope. Node and Deno subscribers reconnect and re-subscribe after an
-   * interruption, so messages published during recovery appear as delivery
-   * gaps. Bun subscribers do not reconnect: a dropped connection fails the
-   * dequeue, and the caller must subscribe again.
-   */
-  readonly subscribe: (
-    channel: string
-  ) => Effect.Effect<Queue.Dequeue<RedisMessage, RedisError>, never, Scope.Scope>
 
   readonly eval: <
     Config extends {
@@ -63,7 +37,7 @@ export class Redis extends Context.Service<Redis, {
 }>()("effect/persistence/Redis") {}
 
 /**
- * Creates a `Redis` service from raw command and subscription operations.
+ * Creates a `Redis` service from a raw command sender.
  *
  * **Details**
  *
@@ -76,10 +50,6 @@ export class Redis extends Context.Service<Redis, {
 export const make = Effect.fnUntraced(function*(
   options: {
     readonly send: <A = unknown>(command: string, ...args: ReadonlyArray<string>) => Effect.Effect<A, RedisError>
-    readonly subscribe: (
-      channel: string,
-      onMessage: (message: RedisMessage) => void
-    ) => Effect.Effect<Effect.Effect<void, RedisError>, RedisError, Scope.Scope>
   }
 ) {
   const scriptCache = yield* Cache.makeWith(
@@ -115,22 +85,8 @@ export const make = Effect.fnUntraced(function*(
     )
   }
 
-  const subscribe = Effect.fnUntraced(function*(channel: string) {
-    const queue = yield* Queue.unbounded<RedisMessage, RedisError>()
-    yield* Scope.addFinalizer(yield* Effect.scope, Queue.shutdown(queue))
-    const onFailure = (cause: Cause.Cause<RedisError>) => Queue.failCause(queue, cause).pipe(Effect.asVoid)
-    yield* options.subscribe(channel, (message) => {
-      Queue.offerUnsafe(queue, message)
-    }).pipe(
-      Effect.flatMap((listen) => Effect.forkScoped(Effect.catchCause(listen, onFailure))),
-      Effect.catchCause(onFailure)
-    )
-    return queue
-  })
-
   return identity<Redis["Service"]>({
     send: options.send,
-    subscribe,
     eval: eval_
   })
 })
@@ -144,7 +100,7 @@ const ErrorTypeId: ErrorTypeId = "~effect/persistence/Redis/RedisError"
  * @category errors
  * @since 4.0.0
  */
-export class RedisError extends Schema.Error<RedisError>(ErrorTypeId)({
+export class RedisError extends Schema.ErrorClass<RedisError>(ErrorTypeId)({
   _tag: Schema.tag("RedisError"),
   cause: Schema.Defect()
 }) {
@@ -167,7 +123,7 @@ const ScriptTypeId: ScriptTypeId = "~effect/persistence/Redis/Script"
  * It defines the Lua source, parameter-to-argument mapping, Redis key count,
  * and result type used by `Redis.eval`.
  *
- * @category scripting
+ * @category Scripting
  * @since 4.0.0
  */
 export interface Script<
@@ -217,7 +173,7 @@ const ScriptProto = {
  * The result type defaults to `void` and can be refined with
  * `withReturnType`.
  *
- * @category scripting
+ * @category Scripting
  * @since 4.0.0
  */
 export const script = <Params extends ReadonlyArray<any>>(

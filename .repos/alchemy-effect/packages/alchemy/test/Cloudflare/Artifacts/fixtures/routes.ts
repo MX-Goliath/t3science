@@ -21,36 +21,24 @@ export const artifactsRoutes = (client: ReadWriteNamespaceClient, url: URL) =>
   Effect.gen(function* () {
     const name = url.searchParams.get("name") ?? "";
 
-    // Surface the typed ArtifactsError as a 500 with the message in the
-    // body (instead of orDie's empty 500) so a failing test's
-    // WorkerNotReady error says WHAT the binding rejected with.
-    const failWith = (error: { message: string }) =>
-      HttpServerResponse.json({ error: error.message }, { status: 500 });
-
     if (url.pathname === "/create") {
-      return yield* client.create(name, { setDefaultBranch: "main" }).pipe(
-        Effect.flatMap((repo) =>
-          HttpServerResponse.json({
-            name: repo.name,
-            remote: repo.remote,
-            defaultBranch: repo.defaultBranch,
-            hasToken: typeof repo.token === "string" && repo.token.length > 0,
-          }),
-        ),
-        Effect.catchTag("ArtifactsError", failWith),
-      );
+      const repo = yield* client
+        .create(name, { setDefaultBranch: "main" })
+        .pipe(Effect.orDie);
+      return yield* HttpServerResponse.json({
+        name: repo.name,
+        remote: repo.remote,
+        defaultBranch: repo.defaultBranch,
+        hasToken: typeof repo.token === "string" && repo.token.length > 0,
+      });
     }
 
     if (url.pathname === "/list") {
-      return yield* client.list().pipe(
-        Effect.flatMap((result) =>
-          HttpServerResponse.json({
-            names: result.repos.map((r) => r.name),
-            total: result.total,
-          }),
-        ),
-        Effect.catchTag("ArtifactsError", failWith),
-      );
+      const result = yield* client.list().pipe(Effect.orDie);
+      return yield* HttpServerResponse.json({
+        names: result.repos.map((r) => r.name),
+        total: result.total,
+      });
     }
 
     if (url.pathname === "/get") {
@@ -62,10 +50,8 @@ export const artifactsRoutes = (client: ReadWriteNamespaceClient, url: URL) =>
     }
 
     if (url.pathname === "/delete") {
-      return yield* client.delete(name).pipe(
-        Effect.flatMap((deleted) => HttpServerResponse.json({ deleted })),
-        Effect.catchTag("ArtifactsError", failWith),
-      );
+      const deleted = yield* client.delete(name).pipe(Effect.orDie);
+      return yield* HttpServerResponse.json({ deleted });
     }
 
     return undefined;

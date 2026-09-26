@@ -1,5 +1,4 @@
 import {
-  type ModelCapabilities,
   type ProviderDriverKind,
   type ProviderInstanceId,
   type ProviderOptionSelection,
@@ -64,44 +63,6 @@ export function getComposerPromptInjectionState(prompt: string): ComposerPromptI
   return isClaudeUltrathinkPrompt(prompt) ? "ultrathink" : "none";
 }
 
-/**
- * Cursor ACP can report `fastMode: true` as the provider default. T3 only
- * treats Fast as selected when the user chose it (draft/sticky/settings).
- * Otherwise inject an explicit `false` so new chats stay Normal and the
- * send path can overwrite a prior Fast session — descriptor defaults are
- * otherwise omitted by `buildExplicitProviderOptionSelectionsFromDescriptors`.
- */
-export function withImplicitFastModeDefault(
-  caps: ModelCapabilities,
-  modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined,
-): ReadonlyArray<ProviderOptionSelection> | undefined {
-  const hasExplicitFastMode = modelOptions?.some((selection) => selection.id === "fastMode");
-  if (hasExplicitFastMode) {
-    return modelOptions ?? undefined;
-  }
-  const hasFastModeDescriptor = caps.optionDescriptors?.some(
-    (descriptor) => descriptor.type === "boolean" && descriptor.id === "fastMode",
-  );
-  if (!hasFastModeDescriptor) {
-    return modelOptions ?? undefined;
-  }
-  return [...(modelOptions ?? []), { id: "fastMode", value: false }];
-}
-
-function resolveComposerOptionSelections(
-  models: ReadonlyArray<ServerProviderModel>,
-  model: string,
-  provider: ProviderDriverKind,
-  modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined,
-  planModeEnabled: boolean,
-): {
-  caps: ModelCapabilities;
-  selections: ReadonlyArray<ProviderOptionSelection> | undefined;
-} {
-  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
-  return { caps, selections: withImplicitFastModeDefault(caps, modelOptions) };
-}
-
 export function getComposerProviderState(input: ComposerProviderStateInput): ComposerProviderState {
   const {
     provider,
@@ -126,14 +87,8 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
       };
     }
   }
-  const { caps, selections } = resolveComposerOptionSelections(
-    models,
-    model,
-    provider,
-    modelOptions,
-    planModeEnabled,
-  );
-  const descriptors = getProviderOptionDescriptors({ caps, selections });
+  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const descriptors = getProviderOptionDescriptors({ caps, selections: modelOptions });
   const primarySelectDescriptor = descriptors.find(
     (descriptor): descriptor is Extract<(typeof descriptors)[number], { type: "select" }> =>
       descriptor.type === "select",
@@ -149,7 +104,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
     promptEffort,
     modelOptionsForDispatch: buildExplicitProviderOptionSelectionsFromDescriptors(
       descriptors,
-      selections,
+      modelOptions,
     ),
     ...(ultrathinkActive
       ? {
@@ -184,20 +139,13 @@ function renderTraitsControl(
     isComposerOwned,
   } = input;
   const hasTarget = threadRef !== undefined || draftId !== undefined;
-  const { selections: resolvedModelOptions } = resolveComposerOptionSelections(
-    models,
-    model,
-    provider,
-    modelOptions,
-    planModeEnabled,
-  );
   if (
     !hasTarget ||
     !shouldRenderTraitsControls({
       provider,
       models,
       model,
-      modelOptions: resolvedModelOptions,
+      modelOptions,
       prompt,
       planModeEnabled,
       ...(descriptorIds ? { descriptorIds } : {}),
@@ -213,7 +161,7 @@ function renderTraitsControl(
       {...(threadRef ? { threadRef } : {})}
       {...(draftId ? { draftId } : {})}
       model={model}
-      modelOptions={resolvedModelOptions}
+      modelOptions={modelOptions}
       prompt={prompt}
       onPromptChange={onPromptChange}
       planModeEnabled={planModeEnabled}

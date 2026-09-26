@@ -5,9 +5,9 @@ import {
   getProjectBranch,
   listProjectBranchDatabases,
   listProjectBranches,
-  type ListProjectBranchesResponse,
+  type ListProjectBranchesOutput,
   listProjects,
-  type ListProjectsResponse,
+  type ListProjectsOutput,
   updateProjectBranch,
 } from "@distilled.cloud/neon";
 import * as Effect from "effect/Effect";
@@ -16,19 +16,14 @@ import { isResolved } from "../Diff.ts";
 import { createPhysicalName } from "../PhysicalName.ts";
 import * as Provider from "../Provider.ts";
 import { Resource } from "../Resource.ts";
-import {
-  diffMigrations,
-  migrationsAttrs,
-  migrationsInputOf,
-  stampedOf,
-  type MigrationsInput,
-} from "../SQL/Migrations/index.ts";
-import { hashImports, hashMigrations, readSqlFile } from "../SQL/SqlFile.ts";
+import { listSqlFiles, readSqlFile } from "../SQL/SqlFile.ts";
 import { recordsEqual } from "../Util/equal.ts";
-import { runPgMigrations, runSql } from "./Migrations.ts";
+import { applyMigrations, runSql } from "./Migrations.ts";
 import { parsePostgresOrigin, type PostgresOrigin } from "./PostgresOrigin.ts";
 import { type Project, waitForOperations } from "./Project.ts";
 import type { Providers } from "./Providers.ts";
+
+const DEFAULT_MIGRATIONS_TABLE = "neon_migrations";
 
 export type BranchSource = Project | { projectId: string };
 
@@ -96,16 +91,17 @@ export type BranchProps = {
    */
   endpoints?: BranchEndpointConfig[];
   /**
-   * SQL migrations to apply against the branch. Accepts a directory path, a
-   * `Drizzle.Schema` resource, or `{ dir, table? }`.
-   *
-   * Bookkeeping always lives in Alchemy's `__alchemy_migrations` table. A
-   * database previously migrated by drizzle-kit or Prisma is adopted by a
-   * one-way conversion on first deploy: the old tool's applied history is
-   * copied into Alchemy's table and the old table is left frozen. No
-   * baselining required.
+   * Directory containing `.sql` migration files. Files are sorted by their
+   * numeric prefix (e.g. `0001_init.sql`) and applied in order against the
+   * branch.
    */
-  migrations?: MigrationsInput;
+  migrationsDir?: string;
+  /**
+   * Name of the table used to track applied migrations.
+   *
+   * @default "neon_migrations"
+   */
+  migrationsTable?: string;
   /**
    * Paths to additional `.sql` files to apply after migrations.
    */
@@ -158,15 +154,16 @@ export type Branch = Resource<
  *
  * Branches are first-class, copy-on-write copies of a parent branch — they
  * share storage with the parent until the new branch starts diverging.
- * ### Branching from a project's default branch
- * **Example:** Basic branch
+ * @resource
+ * @section Branching from a project's default branch
+ * @example Basic branch
  * ```typescript
  * const project = yield* Neon.Project("my-project");
  * const dev = yield* Neon.Branch("dev-branch", { project });
  * ```
  *
- * ### Branching from another branch
- * **Example:** Branch off another branch
+ * @section Branching from another branch
+ * @example Branch off another branch
  * ```typescript
  * const dev = yield* Neon.Branch("dev", { project });
  * const featureBranch = yield* Neon.Branch("feature", {
@@ -175,8 +172,8 @@ export type Branch = Resource<
  * });
  * ```
  *
- * ### Point-in-time branches
- * **Example:** Branch from a parent at a specific LSN
+ * @section Point-in-time branches
+ * @example Branch from a parent at a specific LSN
  * ```typescript
  * const branch = yield* Neon.Branch("at-lsn", {
  *   project,
@@ -184,18 +181,16 @@ export type Branch = Resource<
  * });
  * ```
  *
- * ### Migrations on a branch
- * **Example:** Apply migrations on the branch only
+ * @section Migrations on a branch
+ * @example Apply migrations on the branch only
  * ```typescript
  * const featureBranch = yield* Neon.Branch("feature", {
  *   project,
- *   migrations: "./migrations",
+ *   migrationsDir: "./migrations",
  * });
  * ```
  *
  * @see https://neon.tech/docs/manage/branches/
- *
- * @resource
  */
 export const Branch = Resource<Branch>("Neon.Branch");
 
@@ -257,8 +252,17 @@ export const BranchProvider = () =>
       ) {
         return { action: "update" } as const;
       }
-      if (yield* diffMigrations({ news, output })) {
-        return { action: "update" } as const;
+      if (news.migrationsDir) {
+        const newHashes = yield* hashMigrations(news.migrationsDir);
+        if (!recordsEqual(newHashes, output?.migrationsHashes ?? {})) {
+          return { action: "update" } as const;
+        }
+        if (
+          (news.migrationsTable ?? DEFAULT_MIGRATIONS_TABLE) !==
+          (output?.migrationsTable ?? DEFAULT_MIGRATIONS_TABLE)
+        ) {
+          return { action: "update" } as const;
+        }
       }
       if (news.importFiles?.length) {
         const newHashes = yield* hashImports(news.importFiles, yield* rootDir);
@@ -330,8 +334,8 @@ export const BranchProvider = () =>
         pooledConnectionUri: conn.pooled,
         origin: parsePostgresOrigin(conn.uri),
         pooledOrigin: parsePostgresOrigin(conn.pooled),
-        migrationsDir: (olds && migrationsInputOf(olds))?.dir,
-        migrationsTable: (olds && migrationsInputOf(olds))?.table,
+        migrationsDir: olds?.migrationsDir,
+        migrationsTable: olds?.migrationsTable,
         migrationsHashes: {},
         importHashes: {},
       };
@@ -436,14 +440,17 @@ export const BranchProvider = () =>
           });
 
       const connectionUri = Redacted.make(branchInfo.connectionUri);
-      const migrationsInput = migrationsInputOf(news);
-      const migrations = migrationsInput
-        ? yield* runPgMigrations({
+      const migrationsTable =
+        news.migrationsTable ??
+        output?.migrationsTable ??
+        DEFAULT_MIGRATIONS_TABLE;
+      const migrationsHashes = news.migrationsDir
+        ? yield* runMigrations(
             connectionUri,
-            input: migrationsInput,
-            stamped: stampedOf(output),
-          })
-        : undefined;
+            news.migrationsDir,
+            migrationsTable,
+          )
+        : (output?.migrationsHashes ?? {});
       const importHashes = news.importFiles?.length
         ? yield* runImports(
             connectionUri,
@@ -455,7 +462,9 @@ export const BranchProvider = () =>
 
       return {
         ...branchInfo,
-        ...migrationsAttrs({ input: migrationsInput, run: migrations, output }),
+        migrationsDir: news.migrationsDir,
+        migrationsTable: news.migrationsDir ? migrationsTable : undefined,
+        migrationsHashes,
         importHashes,
       };
     }),
@@ -494,7 +503,7 @@ export const BranchProvider = () =>
   });
 
 const listAllProjects = Effect.gen(function* () {
-  const projects: ListProjectsResponse["projects"][number][] = [];
+  const projects: ListProjectsOutput["projects"][number][] = [];
   let cursor: string | undefined;
   while (true) {
     const page = yield* listProjects(cursor !== undefined ? { cursor } : {});
@@ -517,7 +526,7 @@ const listAllProjects = Effect.gen(function* () {
 
 const listAllBranches = (projectId: string) =>
   Effect.gen(function* () {
-    const branches: ListProjectBranchesResponse["branches"][number][] = [];
+    const branches: ListProjectBranchesOutput["branches"][number][] = [];
     let cursor: string | undefined;
     do {
       const page = yield* listProjectBranches({
@@ -532,7 +541,7 @@ const listAllBranches = (projectId: string) =>
 
 const hydrateBranch = (
   projectId: string,
-  branch: ListProjectBranchesResponse["branches"][number],
+  branch: ListProjectBranchesOutput["branches"][number],
 ) =>
   Effect.gen(function* () {
     const dbs = yield* listProjectBranchDatabases({
@@ -586,7 +595,7 @@ const createBranchName = (id: string, name: string | undefined) =>
 
 const findBranchByName = (projectId: string, name: string) =>
   Effect.gen(function* () {
-    const matches: ListProjectBranchesResponse["branches"][number][] = [];
+    const matches: ListProjectBranchesOutput["branches"][number][] = [];
     let cursor: string | undefined;
     do {
       const page = yield* listProjectBranches({
@@ -677,6 +686,25 @@ const fetchConnection = (
     return { uri: direct.uri, pooled: pooled.uri };
   });
 
+const runMigrations = (
+  connectionUri: Redacted.Redacted<string>,
+  migrationsDir: string,
+  migrationsTable: string,
+) =>
+  Effect.gen(function* () {
+    const files = yield* listSqlFiles(migrationsDir);
+    if (files.length > 0) {
+      yield* applyMigrations({
+        connectionUri,
+        migrationsTable,
+        migrationsFiles: files,
+      });
+    }
+    const hashes: Record<string, string> = {};
+    for (const file of files) hashes[file.id] = file.hash;
+    return hashes;
+  });
+
 const runImports = (
   connectionUri: Redacted.Redacted<string>,
   importFiles: ReadonlyArray<string>,
@@ -697,6 +725,25 @@ const runImports = (
     const tracked = new Set(importFiles);
     for (const key of Object.keys(hashes)) {
       if (!tracked.has(key)) delete hashes[key];
+    }
+    return hashes;
+  });
+
+const hashMigrations = (migrationsDir: string) =>
+  listSqlFiles(migrationsDir).pipe(
+    Effect.map((files) => {
+      const hashes: Record<string, string> = {};
+      for (const file of files) hashes[file.id] = file.hash;
+      return hashes;
+    }),
+  );
+
+const hashImports = (importFiles: ReadonlyArray<string>, rootDir: string) =>
+  Effect.gen(function* () {
+    const hashes: Record<string, string> = {};
+    for (const filePath of importFiles) {
+      const file = yield* readSqlFile(rootDir, filePath);
+      hashes[filePath] = file.hash;
     }
     return hashes;
   });

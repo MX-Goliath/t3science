@@ -55,9 +55,7 @@ const NOOP_TEMPLATE = JSON.stringify({
   },
 });
 
-// AppRegistry is in maintenance mode (see Application.test.ts) — lifecycle
-// tests only run on accounts that retain access via AWS_TEST_APPREGISTRY=1.
-test.provider.skipIf(!process.env.AWS_TEST_APPREGISTRY)(
+test.provider(
   "associates an attribute group and a CloudFormation stack with an application",
   (stack) =>
     Effect.gen(function* () {

@@ -9,13 +9,12 @@ const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 
 export interface ProjectScriptInput {
   readonly name: ProjectScript["name"];
-  readonly kind?: "command" | "prompt";
+  readonly kind: "command" | "prompt";
   readonly command: string;
-  readonly prompt?: string;
-  readonly modelSelection?: ProjectScript["modelSelection"] | null;
+  readonly prompt: string;
+  readonly modelSelection: ProjectScript["modelSelection"] | null;
   readonly icon: ProjectScript["icon"];
   readonly runOnWorktreeCreate: ProjectScript["runOnWorktreeCreate"];
-  readonly waitForSetup: boolean;
   readonly previewUrl: Exclude<ProjectScript["previewUrl"], undefined> | null;
   readonly autoOpenPreview: boolean;
 }
@@ -29,7 +28,7 @@ export function buildProjectScript(id: string, input: ProjectScriptInput): Proje
       id,
       name: input.name,
       kind: "prompt",
-      prompt: input.prompt ?? "",
+      prompt: input.prompt,
       modelSelection: input.modelSelection,
       icon: input.icon,
       runOnWorktreeCreate: false,
@@ -41,7 +40,6 @@ export function buildProjectScript(id: string, input: ProjectScriptInput): Proje
     command: input.command,
     icon: input.icon,
     runOnWorktreeCreate: input.runOnWorktreeCreate,
-    ...(input.runOnWorktreeCreate && input.waitForSetup ? { async: false } : {}),
     ...(input.previewUrl === null
       ? {}
       : {

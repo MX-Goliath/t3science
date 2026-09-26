@@ -26,7 +26,7 @@ export class BCMDataExportsTestFunction extends Lambda.Function<Lambda.Function>
 export default BCMDataExportsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // Destination bucket must let the Data Exports service principals write

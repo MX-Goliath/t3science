@@ -513,35 +513,20 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         }),
       );
 
-      it.effect.each([
-        "codex",
-        "/Applications/Custom App.app/Contents/Resources/codex",
-        "C:\\Tools\\codex.exe",
-      ])("explains how to configure a Codex executable that cannot start: %s", (binaryPath) =>
+      it.effect("returns unavailable when codex is missing", () =>
         Effect.gen(function* () {
-          const settings = { ...defaultCodexSettings, binaryPath };
-          const status = yield* checkCodexProviderStatus(settings, (input) => {
-            assert.strictEqual(input.binaryPath, binaryPath);
-            return Effect.fail(
+          const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+            Effect.fail(
               new CodexErrors.CodexAppServerSpawnError({
-                command: `${binaryPath} app-server`,
-                cause: new Error("spawn ENOENT"),
+                command: "codex app-server",
+                cause: new Error("spawn codex ENOENT"),
               }),
-            );
-          });
+            ),
+          );
           assert.strictEqual(status.status, "error");
           assert.strictEqual(status.installed, false);
           assert.strictEqual(status.auth.status, "unknown");
-          assert.include(status.message, binaryPath);
-          assert.include(
-            status.message,
-            "Settings → Providers → Codex → Binary path on the server",
-          );
-          assert.strictEqual(
-            status.message?.includes("Installing ChatGPT or Codex desktop"),
-            binaryPath === "codex",
-          );
-          assert.strictEqual(settings.binaryPath, binaryPath);
+          assert.strictEqual(status.message, "Codex CLI (`codex`) was not found on PATH.");
         }),
       );
 
@@ -2347,8 +2332,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               "Real Codex probe against a missing binary should surface as 'error' in the aggregator",
             );
             assert.strictEqual(codexPersonal?.installed, false);
-            assert.include(codexPersonal?.message, missingBinary);
-            assert.include(codexPersonal?.message, "Settings → Providers → Codex → Binary path");
+            assert.strictEqual(
+              codexPersonal?.message,
+              "Codex CLI (`codex`) was not found on PATH.",
+            );
           }).pipe(Effect.provide(runtimeServices));
         }),
       );

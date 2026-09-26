@@ -30,7 +30,7 @@ export class OpenSearchBindingsTestFunction extends Lambda.Function<Lambda.Funct
 export default OpenSearchBindingsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // Event source: subscribe the host to OpenSearch Service notifications

@@ -72,7 +72,7 @@ export const BoundAccessPointLive = Layer.effect(
 export default S3ControlBindingsFunction.make(
   {
     main: import.meta.url,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(120),
   },
   Effect.gen(function* () {

@@ -24,7 +24,7 @@ export class PaymentCryptographyTestFunction extends Lambda.Function<Lambda.Func
 export default PaymentCryptographyTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

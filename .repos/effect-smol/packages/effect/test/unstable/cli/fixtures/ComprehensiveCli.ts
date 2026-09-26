@@ -6,20 +6,18 @@ import { logAction } from "../services/TestActions.ts"
 // Deeply nested admin commands
 const usersList = Command.make("list", {
   // Optional option with default
-  format: Flag.String("format").pipe(
+  format: Flag.string("format").pipe(
     Flag.withDescription("Output format (json, table, csv)"),
     Flag.withDefault("table")
   ),
   // Boolean flag
-  active: Flag.Boolean("active").pipe(
-    Flag.withDescription("Show only active users"),
-    Flag.withDefault(false)
+  active: Flag.boolean("active").pipe(
+    Flag.withDescription("Show only active users")
   ),
   // Option with both short and long aliases
-  verbose: Flag.Boolean("verbose").pipe(
+  verbose: Flag.boolean("verbose").pipe(
     Flag.withAlias("v"),
-    Flag.withDescription("Show detailed information"),
-    Flag.withDefault(false)
+    Flag.withDescription("Show detailed information")
   )
 }, (config) =>
   logAction("users list", {
@@ -32,23 +30,22 @@ const usersList = Command.make("list", {
 
 const usersCreate = Command.make("create", {
   // Required positional argument
-  username: Argument.String("username").pipe(
+  username: Argument.string("username").pipe(
     Argument.withDescription("Username for the new user")
   ),
   // Optional positional argument
-  email: Argument.String("email").pipe(
+  email: Argument.string("email").pipe(
     Argument.withDescription("Email address (optional)"),
     Argument.optional
   ),
   // Required option
-  role: Flag.String("role").pipe(
+  role: Flag.string("role").pipe(
     Flag.withDescription("User role (admin, user, guest)")
   ),
   // Boolean with explicit value support
-  notify: Flag.Boolean("notify").pipe(
+  notify: Flag.boolean("notify").pipe(
     Flag.withAlias("n"),
-    Flag.withDescription("Send notification email"),
-    Flag.withDefault(false)
+    Flag.withDescription("Send notification email")
   )
 }, (config) =>
   logAction("users create", {
@@ -67,12 +64,12 @@ const users = Command.make("users").pipe(
 
 const configSet = Command.make("set", {
   // Variadic positional arguments
-  pairs: Argument.String("key=value").pipe(
+  pairs: Argument.string("key=value").pipe(
     Argument.withDescription("Configuration key-value pairs"),
     Argument.variadic({ min: 1 })
   ),
   // File path option
-  file: Flag.File("config-file").pipe(
+  file: Flag.file("config-file").pipe(
     Flag.withAlias("f"),
     Flag.withDescription("Write to specific config file"),
     Flag.optional
@@ -87,11 +84,11 @@ const configSet = Command.make("set", {
 
 const configGet = Command.make("get", {
   // Single required positional
-  key: Argument.String("key").pipe(
+  key: Argument.string("key").pipe(
     Argument.withDescription("Configuration key to retrieve")
   ),
   // Options with different types
-  source: Flag.String("source").pipe(
+  source: Flag.string("source").pipe(
     Flag.withDescription("Configuration source (local, global, system)"),
     Flag.withDefault("local")
   )
@@ -106,7 +103,7 @@ const configGet = Command.make("get", {
 const config = Command.make("config").pipe(
   Command.withSharedFlags({
     // Parent command options shared with config subcommands
-    profile: Flag.String("profile").pipe(
+    profile: Flag.string("profile").pipe(
       Flag.withAlias("p"),
       Flag.withDescription("Configuration profile to use"),
       Flag.optional
@@ -119,9 +116,8 @@ const config = Command.make("config").pipe(
 const admin = Command.make("admin").pipe(
   Command.withSharedFlags({
     // Boolean that can be set to false explicitly
-    sudo: Flag.Boolean("sudo").pipe(
-      Flag.withDescription("Run with elevated privileges"),
-      Flag.withDefault(false)
+    sudo: Flag.boolean("sudo").pipe(
+      Flag.withDescription("Run with elevated privileges")
     )
   }),
   Command.withDescription("Administrative commands"),
@@ -131,25 +127,23 @@ const admin = Command.make("admin").pipe(
 // File operations commands
 const copy = Command.make("copy", {
   // Multiple required positional arguments (do not require actual filesystem presence in tests)
-  source: Argument.File("source", { mustExist: false }).pipe(
+  source: Argument.file("source", { mustExist: false }).pipe(
     Argument.withDescription("Source file or directory")
   ),
-  destination: Argument.File("destination", { mustExist: false }).pipe(
+  destination: Argument.file("destination", { mustExist: false }).pipe(
     Argument.withDescription("Destination path")
   ),
   // Boolean flags with short aliases
-  recursive: Flag.Boolean("recursive").pipe(
+  recursive: Flag.boolean("recursive").pipe(
     Flag.withAlias("r"),
-    Flag.withDescription("Copy directories recursively"),
-    Flag.withDefault(false)
+    Flag.withDescription("Copy directories recursively")
   ),
-  force: Flag.Boolean("force").pipe(
+  force: Flag.boolean("force").pipe(
     Flag.withAlias("f"),
-    Flag.withDescription("Overwrite existing files"),
-    Flag.withDefault(false)
+    Flag.withDescription("Overwrite existing files")
   ),
   // Integer option
-  buffer: Flag.Int("buffer-size").pipe(
+  buffer: Flag.integer("buffer-size").pipe(
     Flag.withDescription("Buffer size in KB"),
     Flag.withDefault(64)
   )
@@ -166,15 +160,14 @@ const copy = Command.make("copy", {
 
 const move = Command.make("move", {
   // Variadic sources with at least 2 items
-  paths: Argument.String("paths").pipe(
+  paths: Argument.string("paths").pipe(
     Argument.withDescription("Source path(s) and destination"),
     Argument.variadic({ min: 2 })
   ),
   // Options
-  interactive: Flag.Boolean("interactive").pipe(
+  interactive: Flag.boolean("interactive").pipe(
     Flag.withAlias("i"),
-    Flag.withDescription("Prompt before overwrite"),
-    Flag.withDefault(false)
+    Flag.withDescription("Prompt before overwrite")
   )
 }, (config) =>
   logAction("move", {
@@ -186,25 +179,22 @@ const move = Command.make("move", {
 
 const remove = Command.make("remove", {
   // Variadic with no upper limit
-  files: Argument.String("files").pipe(
+  files: Argument.string("files").pipe(
     Argument.withDescription("Files to remove"),
     Argument.variadic({ min: 1 })
   ),
   // Multiple boolean options
-  recursive: Flag.Boolean("recursive").pipe(
+  recursive: Flag.boolean("recursive").pipe(
     Flag.withAlias("r"),
-    Flag.withDescription("Remove directories and contents"),
-    Flag.withDefault(false)
+    Flag.withDescription("Remove directories and contents")
   ),
-  force: Flag.Boolean("force").pipe(
+  force: Flag.boolean("force").pipe(
     Flag.withAlias("f"),
-    Flag.withDescription("Force removal without prompts"),
-    Flag.withDefault(false)
+    Flag.withDescription("Force removal without prompts")
   ),
-  verbose: Flag.Boolean("verbose").pipe(
+  verbose: Flag.boolean("verbose").pipe(
     Flag.withAlias("v"),
-    Flag.withDescription("Explain what is being done"),
-    Flag.withDefault(false)
+    Flag.withDescription("Explain what is being done")
   )
 }, (config) =>
   logAction("remove", {
@@ -218,16 +208,15 @@ const remove = Command.make("remove", {
 
 // Build command for testing option aliases
 const build = Command.make("build", {
-  output: Flag.String("output").pipe(
+  output: Flag.string("output").pipe(
     Flag.withAlias("o"),
     Flag.withDescription("Output directory")
   ),
-  verbose: Flag.Boolean("verbose").pipe(
+  verbose: Flag.boolean("verbose").pipe(
     Flag.withAlias("v"),
-    Flag.withDescription("Enable verbose output"),
-    Flag.withDefault(false)
+    Flag.withDescription("Enable verbose output")
   ),
-  configFile: Flag.String("config-file").pipe(
+  configFile: Flag.string("config-file").pipe(
     Flag.withAlias("f"),
     Flag.withDescription("Configuration file path"),
     Flag.optional
@@ -243,10 +232,10 @@ const build = Command.make("build", {
 
 // Git-style commands for testing subcommands and context sharing
 const gitClone = Command.make("clone", {
-  repository: Argument.String("repository").pipe(
+  repository: Argument.string("repository").pipe(
     Argument.withDescription("Repository URL or path")
   ),
-  branch: Flag.String("branch").pipe(
+  branch: Flag.string("branch").pipe(
     Flag.withDefault("main"),
     Flag.withDescription("Branch to clone")
   )
@@ -259,12 +248,11 @@ const gitClone = Command.make("clone", {
   )
 
 const gitAdd = Command.make("add", {
-  files: Argument.String("files").pipe(
+  files: Argument.string("files").pipe(
     Argument.withDescription("Files to add")
   ),
-  update: Flag.Boolean("update").pipe(
-    Flag.withDescription("Update tracked files"),
-    Flag.withDefault(false)
+  update: Flag.boolean("update").pipe(
+    Flag.withDescription("Update tracked files")
   )
 }, (config) =>
   logAction("git add", {
@@ -275,9 +263,8 @@ const gitAdd = Command.make("add", {
   )
 
 const gitStatus = Command.make("status", {
-  short: Flag.Boolean("short").pipe(
-    Flag.withDescription("Show short format"),
-    Flag.withDefault(false)
+  short: Flag.boolean("short").pipe(
+    Flag.withDescription("Show short format")
   )
 }, (config) =>
   logAction("git status", {
@@ -288,9 +275,8 @@ const gitStatus = Command.make("status", {
 
 const git = Command.make("git").pipe(
   Command.withSharedFlags({
-    verbose: Flag.Boolean("verbose").pipe(
-      Flag.withDescription("Enable verbose output"),
-      Flag.withDefault(false)
+    verbose: Flag.boolean("verbose").pipe(
+      Flag.withDescription("Enable verbose output")
     )
   }),
   Command.withHandler((config) =>
@@ -304,7 +290,7 @@ const git = Command.make("git").pipe(
 
 // Commands for testing error handling
 const testRequired = Command.make("test-required", {
-  required: Flag.String("required").pipe(
+  required: Flag.string("required").pipe(
     Flag.withDescription("A required option for testing")
   )
 }, (config) =>
@@ -321,7 +307,7 @@ const testFailing: Command.Command<
   string,
   TestActions
 > = Command.make("test-failing", {
-  input: Flag.String("input").pipe(
+  input: Flag.string("input").pipe(
     Flag.withDescription("Input that will cause handler to fail")
   )
 }, (config) =>
@@ -334,23 +320,22 @@ const testFailing: Command.Command<
 
 // Deploy command for testing complex nested structures
 const deployCommand = Command.make("deploy", {
-  service: Argument.String("service").pipe(
+  service: Argument.string("service").pipe(
     Argument.withDescription("Service to deploy")
   ),
-  environment: Argument.String("environment").pipe(
+  environment: Argument.string("environment").pipe(
     Argument.withDescription("Target environment")
   ),
   database: {
-    host: Flag.String("db-host").pipe(
+    host: Flag.string("db-host").pipe(
       Flag.withDescription("Database host")
     ),
-    port: Flag.Int("db-port").pipe(
+    port: Flag.integer("db-port").pipe(
       Flag.withDescription("Database port")
     )
   },
-  dryRun: Flag.Boolean("dry-run").pipe(
-    Flag.withDescription("Perform a dry run"),
-    Flag.withDefault(false)
+  dryRun: Flag.boolean("dry-run").pipe(
+    Flag.withDescription("Perform a dry run")
   )
 }, (config) =>
   logAction("deploy", {
@@ -364,7 +349,7 @@ const deployCommand = Command.make("deploy", {
 
 const app = Command.make("app").pipe(
   Command.withSharedFlags({
-    env: Flag.String("env").pipe(
+    env: Flag.string("env").pipe(
       Flag.withDescription("Environment setting"),
       Flag.optional
     )
@@ -381,7 +366,7 @@ const app = Command.make("app").pipe(
 // Service command for nested context sharing tests
 const serviceCommand = Command.make("service").pipe(
   Command.withSharedFlags({
-    name: Flag.String("name").pipe(
+    name: Flag.string("name").pipe(
       Flag.withDescription("Service name")
     )
   }),
@@ -396,7 +381,7 @@ const serviceCommand = Command.make("service").pipe(
 
 const appWithService = Command.make("app-nested").pipe(
   Command.withSharedFlags({
-    env: Flag.String("env").pipe(
+    env: Flag.string("env").pipe(
       Flag.withDescription("Environment setting")
     )
   }),
@@ -414,20 +399,18 @@ const appWithService = Command.make("app-nested").pipe(
 export const ComprehensiveCli = Command.make("mycli").pipe(
   Command.withSharedFlags({
     // Global options available to all subcommands
-    debug: Flag.Boolean("debug").pipe(
+    debug: Flag.boolean("debug").pipe(
       Flag.withAlias("d"),
-      Flag.withDescription("Enable debug logging"),
-      Flag.withDefault(false)
+      Flag.withDescription("Enable debug logging")
     ),
-    config: Flag.File("config").pipe(
+    config: Flag.file("config").pipe(
       Flag.withAlias("c"),
       Flag.withDescription("Path to configuration file"),
       Flag.optional
     ),
-    quiet: Flag.Boolean("quiet").pipe(
+    quiet: Flag.boolean("quiet").pipe(
       Flag.withAlias("q"),
-      Flag.withDescription("Suppress non-error output"),
-      Flag.withDefault(false)
+      Flag.withDescription("Suppress non-error output")
     )
   }),
   Command.withDescription("A comprehensive CLI tool demonstrating all features"),

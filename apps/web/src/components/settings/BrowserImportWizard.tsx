@@ -1,8 +1,6 @@
-import { PermissionChecklist, PermissionContinueButton } from "../permissions/PermissionChecklist";
-import { usePermissionStatus } from "../permissions/usePermissionStatus";
 import type { BrowserImportSource } from "@t3tools/contracts";
 import { BROWSER_IMPORT_FAILURE_COPY } from "@t3tools/contracts";
-import { ArrowDownIcon, ArrowRightIcon, CheckIcon, HardDriveIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowRightIcon, CheckIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { cn, randomUUID } from "~/lib/utils";
@@ -59,8 +57,7 @@ interface BrowserImportWizardProps {
   /** Re-checks the source's availability after the user quits the browser. */
   readonly onRefreshSource: () => Promise<BrowserImportSource | undefined>;
   /** Opens the OS setting that grants access to a protected cookie store. */
-  readonly onOpenFullDiskAccessSettings: () => void | Promise<void>;
-  readonly onCheckFullDiskAccess?: (() => Promise<boolean>) | undefined;
+  readonly onOpenFullDiskAccessSettings: () => void;
   readonly onClose: () => void;
 }
 
@@ -79,7 +76,6 @@ export function BrowserImportWizard({
   onImport,
   onRefreshSource,
   onOpenFullDiskAccessSettings,
-  onCheckFullDiskAccess,
   onClose,
 }: BrowserImportWizardProps) {
   const [source, setSource] = useState(initialSource);
@@ -151,13 +147,6 @@ export function BrowserImportWizard({
             source={source}
             onCancel={onClose}
             onOpenSettings={onOpenFullDiskAccessSettings}
-            onCheck={
-              onCheckFullDiskAccess ??
-              (async () => {
-                const refreshed = await onRefreshSource();
-                return refreshed !== undefined && refreshed.unavailable === undefined;
-              })
-            }
             onGranted={step.resume === "import" ? runImport : recheckFullDiskAccess}
             stillRequired={step.checked === true}
           />
@@ -259,29 +248,13 @@ function FullDiskAccessStep({
   onOpenSettings,
   onGranted,
   stillRequired,
-  onCheck,
 }: {
   readonly source: BrowserImportSource;
   readonly onCancel: () => void;
-  readonly onOpenSettings: () => void | Promise<void>;
-  readonly onCheck: () => Promise<boolean>;
+  readonly onOpenSettings: () => void;
   readonly onGranted: () => void;
   readonly stillRequired: boolean;
 }) {
-  const [opening, setOpening] = useState(false);
-  const [openingError, setOpeningError] = useState<string | null>(null);
-  const permission = usePermissionStatus(async () => ({ fullDiskAccess: await onCheck() }), {
-    fullDiskAccess: false,
-  });
-  const allow = () => {
-    if (opening) return;
-    setOpening(true);
-    setOpeningError(null);
-    void Promise.resolve()
-      .then(onOpenSettings)
-      .catch(() => setOpeningError("Could not open System Settings. Try Allow again."))
-      .finally(() => setOpening(false));
-  };
   return (
     <>
       <DialogHeader>
@@ -292,49 +265,22 @@ function FullDiskAccessStep({
           done.
         </DialogDescription>
       </DialogHeader>
-      <DialogPanel>
-        <PermissionChecklist
-          busy={opening}
-          permissions={[
-            {
-              id: "fullDiskAccess",
-              icon: (
-                <HardDriveIcon
-                  className="size-8 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              ),
-              title: "Full Disk Access",
-              description: `Read ${source.name}'s cookies for this import.`,
-              granted: permission.status.fullDiskAccess,
-              onAllow: () => void allow(),
-            },
-          ]}
-        />
-        {openingError || permission.error ? (
-          <p role="status" className="mt-3 text-xs text-muted-foreground">
-            {openingError ?? permission.error}
+      {stillRequired ? (
+        <DialogPanel>
+          <p role="status" className="text-sm text-muted-foreground">
+            Full Disk Access is still required. If you just turned it on, quit and reopen T3 Code,
+            then try again.
           </p>
-        ) : null}
-        {!permission.isReady(["fullDiskAccess"]) ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            {stillRequired
-              ? "Access is still required. Quit and reopen T3 Code if you just allowed it, then retry the import."
-              : "If access doesn't update after you allow it, quit and reopen T3 Code, then retry the import."}
-          </p>
-        ) : null}
-      </DialogPanel>
+        </DialogPanel>
+      ) : null}
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <PermissionContinueButton
-          ready={permission.isReady(["fullDiskAccess"])}
-          busy={opening}
-          onClick={onGranted}
-        >
-          Continue
-        </PermissionContinueButton>
+        <Button variant="outline" onClick={onOpenSettings}>
+          Open System Settings
+        </Button>
+        <Button onClick={onGranted}>I&rsquo;ve turned it on</Button>
       </DialogFooter>
     </>
   );
@@ -491,7 +437,7 @@ function ImportingStep() {
         <DialogDescription>This may take a moment.</DialogDescription>
       </DialogHeader>
       <DialogPanel className="flex items-center gap-3 py-6">
-        <Spinner size="md" tone="muted" />
+        <Spinner className="size-4 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">Importing…</span>
       </DialogPanel>
     </>
@@ -516,7 +462,7 @@ function CheckingStep({
         </DialogDescription>
       </DialogHeader>
       <DialogPanel className="flex items-center gap-3 py-6">
-        <Spinner size="md" tone="muted" />
+        <Spinner className="size-4 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">
           {check === "fullDiskAccess" ? "Checking access…" : "Checking…"}
         </span>

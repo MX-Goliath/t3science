@@ -20,15 +20,14 @@ export interface GetMetricMetadataRequest {
  * `api/v1/metadata` endpoint, SigV4-signed with the host Function's
  * credentials.
  *
- * ### Reading Metric Metadata
- * **Example:** All Metric Metadata
+ * @binding
+ * @section Reading Metric Metadata
+ * @example All Metric Metadata
  * ```typescript
  * const getMetricMetadata = yield* AMP.GetMetricMetadata(workspace);
  * const metadata = yield* getMetricMetadata({});
  * // { http_requests_total: [{ type: "counter", help: "...", unit: "" }], ... }
  * ```
- *
- * @binding
  */
 export interface GetMetricMetadata extends Binding.Service<
   GetMetricMetadata,

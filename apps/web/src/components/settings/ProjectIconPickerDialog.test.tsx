@@ -41,13 +41,7 @@ import { ProjectIconPickerDialog } from "./ProjectIconPickerDialog";
 describe("ProjectIconPickerDialog", () => {
   it("shows icons first and selects them for an automatic project", () => {
     const markup = renderToStaticMarkup(
-      <ProjectIconPickerDialog
-        current={null}
-        projectName="Test"
-        open
-        onOpenChange={() => {}}
-        onSelect={() => {}}
-      />,
+      <ProjectIconPickerDialog current={null} open onOpenChange={() => {}} onSelect={() => {}} />,
     );
 
     expect(markup).toContain('data-current="lucide"');

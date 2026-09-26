@@ -16,7 +16,7 @@ export class DirectoryServiceTestFunction extends Lambda.Function<Lambda.Functio
 export default DirectoryServiceTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

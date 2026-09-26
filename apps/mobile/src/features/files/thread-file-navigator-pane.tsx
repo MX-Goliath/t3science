@@ -1,6 +1,5 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectListEntriesResult } from "@t3tools/contracts";
 import { SymbolView } from "../../components/AppSymbol";
-import { MaterialScreenContent } from "../../components/MaterialScreenContent";
 import { useCallback, useMemo, useState, type ComponentProps } from "react";
 import { Platform, Pressable, View, type NativeSyntheticEvent } from "react-native";
 import {
@@ -12,14 +11,13 @@ import {
 } from "react-native-screens";
 
 import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
-import { MaterialFilesHeader } from "./MaterialFilesHeader";
 import { nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
+import { projectEnvironment } from "../../state/projects";
+import { useEnvironmentQuery } from "../../state/query";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { FileTreeBrowser } from "./FileTreeBrowser";
-import { useFileTreeEntries } from "./useFileTreeEntries";
 import { preloadWorkspaceFileContents } from "./preload-workspace-file";
-import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 
 export function ThreadFileNavigatorPane(props: {
   readonly cwd: string;
@@ -30,17 +28,18 @@ export function ThreadFileNavigatorPane(props: {
   readonly onSelectFile: (path: string) => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const { toggleAuxiliaryPane } = useAdaptiveWorkspaceLayout();
   const { themeAppearance: highlightTheme } = useAppearancePreferences();
   const theme = useUniwindTheme();
   const foregroundColor = theme["--color-foreground"];
   const sheetColor = theme["--color-sheet"];
   const headerScrollEdgeEffects = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
-  const entriesQuery = useFileTreeEntries({
-    environmentId: props.environmentId,
-    cwd: props.cwd,
-    searchQuery,
-  });
+  const entriesQuery = useEnvironmentQuery(
+    projectEnvironment.listEntries({
+      environmentId: props.environmentId,
+      input: { cwd: props.cwd },
+    }),
+  );
+  const entriesData = entriesQuery.data as ProjectListEntriesResult | null;
   const handlePreviewFile = useCallback(
     (relativePath: string) => {
       preloadWorkspaceFileContents({
@@ -56,29 +55,25 @@ export function ThreadFileNavigatorPane(props: {
     () =>
       [
         {
-          accessibilityLabel: "Close files",
-          icon: { name: "xmark", type: "sfSymbol" as const },
-          identifier: "thread-file-navigator-close",
-          onPress: toggleAuxiliaryPane,
+          accessibilityLabel: "Refresh files",
+          icon: { name: "arrow.clockwise", type: "sfSymbol" as const },
+          identifier: "thread-file-navigator-refresh",
+          onPress: entriesQuery.refresh,
           sharesBackground: false,
           tintColor: foregroundColor,
           type: "button" as const,
           width: 44,
         },
       ] as ComponentProps<typeof ScreenStackHeaderConfig>["headerRightBarButtonItems"],
-    [foregroundColor, toggleAuxiliaryPane],
+    [entriesQuery.refresh, foregroundColor],
   );
 
   const fileTree = (
     <FileTreeBrowser
-      key={JSON.stringify([props.environmentId, props.cwd])}
-      entries={entriesQuery.entries}
-      loadedDirectories={entriesQuery.loadedDirectories}
-      onLoadDirectory={entriesQuery.loadDirectory}
+      entries={entriesData?.entries ?? []}
       error={entriesQuery.error}
       isPending={entriesQuery.isPending}
       searchQuery={searchQuery}
-      searchTruncated={entriesQuery.searchTruncated}
       selectedPath={props.selectedPath}
       onPreviewFile={handlePreviewFile}
       onRefresh={entriesQuery.refresh}
@@ -141,68 +136,50 @@ export function ThreadFileNavigatorPane(props: {
   }
 
   return (
-    <View
-      className={
-        Platform.OS === "android" ? "flex-1 bg-header" : "flex-1 border-l border-border bg-sheet"
-      }
-    >
-      <View
-        className={Platform.OS === "android" ? "bg-header" : "border-b border-border"}
-        style={{ paddingTop: Platform.OS === "android" ? 0 : props.headerInset }}
-      >
-        {Platform.OS === "android" ? (
-          <MaterialFilesHeader
-            projectName={props.projectName}
-            searchQuery={searchQuery}
-            onSearchQueryChange={setSearchQuery}
-            onRefresh={entriesQuery.refresh}
-          />
-        ) : (
-          <View className="h-12 flex-row items-center gap-2 px-3">
-            <View className="min-w-0 flex-1">
-              <Text className="text-sm font-t3-bold text-foreground">Files</Text>
-              <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-                {props.projectName}
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Refresh files"
-              hitSlop={8}
-              className="h-8 w-8 items-center justify-center rounded-full active:bg-subtle"
-              onPress={entriesQuery.refresh}
-            >
-              <SymbolView
-                name="arrow.clockwise"
-                size={14}
-                tintColorClassName="accent-icon-muted"
-                type="monochrome"
-              />
-            </Pressable>
+    <View className="flex-1 border-l border-border bg-sheet">
+      <View className="border-b border-border" style={{ paddingTop: props.headerInset }}>
+        <View className="h-12 flex-row items-center gap-2 px-3">
+          <View className="min-w-0 flex-1">
+            <Text className="text-sm font-t3-bold text-foreground">Files</Text>
+            <Text className="text-xs text-foreground-muted" numberOfLines={1}>
+              {props.projectName}
+            </Text>
           </View>
-        )}
-        {Platform.OS !== "android" ? (
-          <View className="flex-row items-center gap-2 border-t border-border px-3 py-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Refresh files"
+            hitSlop={8}
+            className="h-8 w-8 items-center justify-center rounded-full active:bg-subtle"
+            onPress={entriesQuery.refresh}
+          >
             <SymbolView
-              name="magnifyingglass"
-              size={15}
-              tintColorClassName="accent-icon-muted"
+              name="arrow.clockwise"
+              size={14}
+              tintColorClassName={"accent-icon-muted"}
               type="monochrome"
             />
-            <TextInput
-              accessibilityLabel="Search files"
-              autoCapitalize="none"
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-              className="min-h-10 flex-1 rounded-xl py-2 text-sm"
-              placeholder="Search files"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-        ) : null}
+          </Pressable>
+        </View>
+        <View className="flex-row items-center gap-2 border-t border-border px-3 py-2">
+          <SymbolView
+            name="magnifyingglass"
+            size={15}
+            tintColorClassName={"accent-icon-muted"}
+            type="monochrome"
+          />
+          <TextInput
+            accessibilityLabel="Search files"
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+            className="min-h-10 flex-1 rounded-xl py-2 text-sm"
+            placeholder="Search files"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
       </View>
-      <MaterialScreenContent insetHorizontal>{fileTree}</MaterialScreenContent>
+      {fileTree}
     </View>
   );
 }

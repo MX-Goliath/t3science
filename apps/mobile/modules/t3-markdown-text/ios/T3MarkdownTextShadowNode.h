@@ -28,8 +28,6 @@ struct T3MarkdownTextAttachmentRange {
   std::string imageUri;
   /// Recolor the loaded image with the run's foreground color, like `sf:` symbols.
   bool tintWithForeground;
-  Float chipWidth = 0;
-  Float chipHeight = 0;
 };
 
 inline Float T3MarkdownTextAttachmentSize(const T3MarkdownTextAttachmentRange &) {

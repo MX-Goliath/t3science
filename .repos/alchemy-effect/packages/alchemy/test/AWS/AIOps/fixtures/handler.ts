@@ -17,7 +17,7 @@ export class AIOpsTestFunction extends Lambda.Function<Lambda.Function>()(
 export default AIOpsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

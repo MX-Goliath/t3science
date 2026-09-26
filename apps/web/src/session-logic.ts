@@ -2,10 +2,7 @@ import {
   requestKindFromRequestType,
   type PendingApproval,
 } from "@t3tools/client-runtime/pending-requests";
-import { UserInputAttachmentAnswerPayload } from "@t3tools/contracts";
-import { foldUserInputActivities } from "@t3tools/client-runtime/work-log/user-input";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import * as Arr from "effect/Array";
 import { shallow } from "zustand/vanilla/shallow";
 import { isBackgroundTaskActivity } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -54,7 +51,6 @@ export {
 } from "@t3tools/client-runtime/work-log/presentation";
 
 export interface WorkLogEntry {
-  questionAnswer?: UserInputAttachmentAnswerPayload;
   id: string;
   createdAt: string;
   turnId?: TurnId | null;
@@ -83,9 +79,10 @@ export interface WorkLogEntry {
   /** Agent role (subagent_type) for labeled timeline rows. */
   agentRole?: string;
   /**
-   * Present on agent-spawn rows: one per workflow run or per-turn batch of
-   * direct spawns. The row ("Kicked off N subagents") derives its live
-   * status and member list from the agent panel model at render time.
+   * Present on agent-spawn CTA rows: one per workflow run or per-turn batch
+   * of direct spawns. The row renders as a call-to-action ("Kicked off N
+   * subagents") whose live status is derived from the agent panel model at
+   * render time; clicking opens the Agents panel.
    */
   agentSpawn?: {
     /** Workflow coordinator taskId, or null for a direct-spawn batch. */
@@ -325,9 +322,8 @@ export function deriveActivePlanState(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
   latestTurnId: TurnId | undefined,
 ): ActivePlanState | null {
-  const allPlanActivities = activities
-    .filter((activity) => activity.kind === "turn.plan.updated")
-    .sort(compareActivitiesByOrder);
+  const ordered = [...activities].toSorted(compareActivitiesByOrder);
+  const allPlanActivities = ordered.filter((activity) => activity.kind === "turn.plan.updated");
   // Prefer plan from the current turn; fall back to the most recent plan from any turn
   // so that TodoWrite tasks persist across follow-up messages.
   const latest = Option.firstSomeOf([
@@ -394,8 +390,7 @@ export function hasActionableProposedPlan(
  * - tool rows attributed to an owning agent (payload.agentId) are re-homed;
  * - task.progress ticks collapse into one row per taskId;
  * - task.updated is fold input only (status patches are not narrative).
- * Unattributed rows stay unless a linked agent row replaces their launch;
- * failed launches stay so the only terminal signal cannot disappear.
+ * Unattributed rows always stay: over-hiding loses the only terminal signal.
  */
 /** Agent (non-background) task.started rows seed spawn CTA batches. */
 function isAgentTaskStartedActivity(activity: OrchestrationThreadActivity): boolean {
@@ -424,7 +419,7 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
     activity.kind === "task.completed";
   // Task rows classify by the server stamp: a subagent's own background
   // shell (agentId + "background") is agent-internal, but a nested AGENT
-  // (agentId + "agent") stays visible so its rows can anchor a spawn row
+  // (agentId + "agent") stays visible so its rows can anchor a spawn CTA
   // (review finding: hiding on agentId alone removed nested agents and
   // their anchors). Bypassed agent lifecycle rows also pass — collapse
   // folds every such row into its batch's single CTA row, which is how
@@ -452,28 +447,9 @@ export function deriveWorkLogEntries(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
 ): WorkLogEntry[] {
   const ordered = [...activities].toSorted(compareActivitiesByOrder);
-  // A launch tool and its task lifecycle describe the same run. Only hide
-  // launch rows once their tool-use id has an agent row to replace them.
-  const agentLaunchToolIds = new Set<string>();
-  for (const activity of ordered) {
-    if (
-      (activity.kind === "task.started" ||
-        activity.kind === "task.progress" ||
-        activity.kind === "task.completed") &&
-      isAgentTaskStartedActivity(activity)
-    ) {
-      const toolUseId = asTrimmedString(asRecord(activity.payload)?.toolUseId);
-      if (toolUseId) agentLaunchToolIds.add(toolUseId);
-    }
-  }
   const entries: DerivedWorkLogEntry[] = [];
-  for (const activity of foldUserInputActivities(ordered)) {
-    if (
-      isWorktreeSetupActivity(activity.kind) &&
-      (activity.tone !== "error" || activity.kind === "worktree-setup")
-    ) {
-      continue;
-    }
+  for (const activity of ordered) {
+    if (activity.tone !== "error" && isWorktreeSetupActivity(activity.kind)) continue;
     if (activity.kind === "tool.started") continue;
     // Agent task.started rows are CTA seeds: they carry the true spawn turn,
     // which is the batch key (completions of background subagents arrive
@@ -488,28 +464,7 @@ export function deriveWorkLogEntries(
     if (isNoContentRuntimeWarning(activity)) continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;
-    const entry = toDerivedWorkLogEntry(activity);
-    // Native agent launches get their visible row from task.started. Defer
-    // their active tool row so another launch cannot duplicate the batch.
-    if (
-      activity.kind === "tool.updated" &&
-      entry.itemType === "collab_agent_tool_call" &&
-      entry.toolLifecycleStatus === "inProgress" &&
-      entry.tone !== "error"
-    ) {
-      const toolName = asRecord(asRecord(activity.payload)?.data)?.toolName;
-      if (toolName === "Agent" || toolName === "Task") continue;
-    }
-    if (
-      (activity.kind === "tool.updated" || activity.kind === "tool.completed") &&
-      entry.toolCallId &&
-      agentLaunchToolIds.has(entry.toolCallId) &&
-      entry.tone !== "error" &&
-      entry.toolLifecycleStatus !== "failed"
-    ) {
-      continue;
-    }
-    entries.push(entry);
+    entries.push(toDerivedWorkLogEntry(activity));
   }
   return collapseDerivedWorkLogEntries(entries);
 }
@@ -536,8 +491,6 @@ function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): bool
       : null;
   return typeof payload?.detail === "string" && payload.detail.startsWith("ExitPlanMode:");
 }
-
-const decodeQuestionAttachmentAnswer = Schema.decodeUnknownOption(UserInputAttachmentAnswerPayload);
 
 function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWorkLogEntry {
   const cachedEntry = derivedWorkLogEntryByActivity.get(activity);
@@ -590,10 +543,6 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
           : activity.tone,
     sourceActivityKind: activity.kind,
   };
-  if (activity.kind === "user-input.answer-submitted") {
-    const answer = decodeQuestionAttachmentAnswer(payload);
-    if (Option.isSome(answer)) entry.questionAnswer = answer.value;
-  }
   const itemType = extractWorkLogItemType(payload);
   const requestKind = extractWorkLogRequestKind(payload);
   const viewedImagePath = asTrimmedString(asRecord(payload?.data)?.imagePath);
@@ -721,7 +670,7 @@ function collapseDerivedWorkLogEntries(
   const collapsed: DerivedWorkLogEntry[] = [];
   // Subagent rows collapse by spawn group, not adjacency: a workflow run (or
   // a turn's batch of direct spawns) is ONE narrative event in the chat — a
-  // spawn row in the timeline — no matter how many agents it
+  // CTA row that opens the Agents panel — no matter how many agents it
   // contains or how their progress rows interleave (quiet-timeline
   // guarantee).
   const spawnRowIndex = new Map<string, number>();
@@ -1316,8 +1265,7 @@ function extractWorkLogRequestKind(
   if (
     payload?.requestKind === "command" ||
     payload?.requestKind === "file-read" ||
-    payload?.requestKind === "file-change" ||
-    payload?.requestKind === "permission"
+    payload?.requestKind === "file-change"
   ) {
     return payload.requestKind;
   }
@@ -1614,13 +1562,11 @@ export function createMessageAttachmentPreviewProjector() {
   };
 }
 
-const streamsText = (role: ChatMessage["role"]) => role === "assistant" || role === "reasoning";
-
-/** Text and update time do not change a streaming message's timeline structure. */
+/** Text and update time do not change a streaming assistant message's timeline structure. */
 export function isStreamingMessageTextUpdate(previous: ChatMessage, next: ChatMessage): boolean {
   if (
-    !streamsText(previous.role) ||
-    previous.role !== next.role ||
+    previous.role !== "assistant" ||
+    next.role !== "assistant" ||
     !previous.streaming ||
     !next.streaming
   ) {
@@ -1667,25 +1613,14 @@ export function deriveTimelineEntriesWithState(
     const entries = replaceStreamingTimelineMessages(messages, previous);
     if (entries !== null) return { messages, proposedPlans, workEntries, entries };
   }
-  const foldedAnswerMessageIds = new Set(
-    workEntries.flatMap((entry) =>
-      entry.questionAnswer ? [`async-answer:${entry.questionAnswer.requestId}`] : [],
-    ),
-  );
-  const showMessage = (message: ChatMessage) =>
-    message.role !== "user" || !foldedAnswerMessageIds.has(message.id);
   const canAppend =
     previous !== null &&
-    !previous.entries.some((entry) => entry.kind === "message" && !showMessage(entry.message)) &&
     hasExactArrayPrefix(previous.messages, messages) &&
     hasExactArrayPrefix(previous.proposedPlans, proposedPlans) &&
     hasExactArrayPrefix(previous.workEntries, workEntries);
 
   if (canAppend) {
-    const messageRows = messages
-      .slice(previous.messages.length)
-      .filter(showMessage)
-      .map(timelineEntryFromMessage);
+    const messageRows = messages.slice(previous.messages.length).map(timelineEntryFromMessage);
     const proposedPlanRows = proposedPlans
       .slice(previous.proposedPlans.length)
       .map(timelineEntryFromProposedPlan);
@@ -1701,7 +1636,7 @@ export function deriveTimelineEntriesWithState(
     };
   }
 
-  const messageRows = messages.filter(showMessage).map(timelineEntryFromMessage);
+  const messageRows = messages.map(timelineEntryFromMessage);
   const proposedPlanRows = proposedPlans.map(timelineEntryFromProposedPlan);
   const workRows = workEntries.map(timelineEntryFromWork);
   return {

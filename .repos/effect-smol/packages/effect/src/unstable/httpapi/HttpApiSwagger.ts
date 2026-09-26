@@ -9,7 +9,6 @@
  * @since 4.0.0
  */
 import * as Effect from "../../Effect.ts"
-import * as Function from "../../Function.ts"
 import type * as Layer from "../../Layer.ts"
 import * as HttpRouter from "../http/HttpRouter.ts"
 import * as HttpServerResponse from "../http/HttpServerResponse.ts"
@@ -22,9 +21,8 @@ import * as OpenApi from "./OpenApi.ts"
 const makeHandler = <Id extends string, Groups extends HttpApiGroup.Constraint>(options: {
   readonly api: HttpApi.HttpApi<Id, Groups>
 }) => {
-  const makeResponse = Function.memoize((api: HttpApi.HttpApi<Id, Groups>) => {
-    const spec = OpenApi.fromApi(api)
-    return HttpServerResponse.html(`<!DOCTYPE html>
+  const spec = OpenApi.fromApi(options.api)
+  const response = HttpServerResponse.html(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -48,8 +46,7 @@ const makeHandler = <Id extends string, Groups extends HttpApiGroup.Constraint>(
   </script>
 </body>
 </html>`)
-  })
-  return Effect.sync(() => makeResponse(options.api))
+  return Effect.succeed(response)
 }
 
 /**

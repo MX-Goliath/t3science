@@ -1,6 +1,5 @@
 export * from "./Bucket.ts";
 export * from "./BucketEventNotification.ts";
-export * from "./BucketTypes.ts";
 export * from "./BucketSippy.ts";
 export * from "./DataCatalog.ts";
 export * from "./ReadBucket.ts";

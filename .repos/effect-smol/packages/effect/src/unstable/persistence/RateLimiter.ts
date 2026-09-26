@@ -162,7 +162,7 @@ export const make: Effect.Effect<
               delay,
               limit: options.limit,
               remaining: options.limit - count,
-              resetAfter: Duration.millis(ttl)
+              resetAfter: Duration.times(window, Math.ceil(ttl / windowMillis))
             })
           }
         )
@@ -176,28 +176,40 @@ export const make: Effect.Effect<
           refillRate,
           allowOverflow: onExceeded === "delay"
         }),
-        ([remaining, elapsedMillis]) => {
-          const delay = Duration.millis(Math.max(0, Math.ceil(-remaining) * refillRateMillis - elapsedMillis))
-          const resetAfter = Duration.millis(
-            Math.max(0, Math.ceil(options.limit - remaining) * refillRateMillis - elapsedMillis)
-          )
-          if (onExceeded === "fail" && remaining < 0) {
-            return Effect.fail(
-              new RateLimiterError({
-                reason: new RateLimitExceeded({
-                  key: options.key,
-                  retryAfter: delay,
-                  limit: options.limit,
-                  remaining: 0
+        (remaining) => {
+          if (onExceeded === "fail") {
+            if (remaining < 0) {
+              return Effect.fail(
+                new RateLimiterError({
+                  reason: new RateLimitExceeded({
+                    key: options.key,
+                    retryAfter: Duration.times(refillRate, -remaining),
+                    limit: options.limit,
+                    remaining: 0
+                  })
                 })
-              })
-            )
+              )
+            }
+            return Effect.succeed<ConsumeResult>({
+              delay: Duration.zero,
+              limit: options.limit,
+              remaining,
+              resetAfter: Duration.times(refillRate, options.limit - remaining)
+            })
+          }
+          if (remaining >= 0) {
+            return Effect.succeed<ConsumeResult>({
+              delay: Duration.zero,
+              limit: options.limit,
+              remaining,
+              resetAfter: Duration.times(refillRate, options.limit - remaining)
+            })
           }
           return Effect.succeed<ConsumeResult>({
-            delay,
+            delay: Duration.times(refillRate, -remaining),
             limit: options.limit,
             remaining,
-            resetAfter
+            resetAfter: Duration.times(refillRate, options.limit - remaining)
           })
         }
       )
@@ -222,17 +234,16 @@ export const layer: Layer.Layer<
  *
  * **Example** (Applying rate limits to effects)
  *
- * ```ts import.meta.vitest
- * import { Effect, Layer } from "effect"
+ * ```ts
+ * import { Effect } from "effect"
  * import { RateLimiter } from "effect/unstable/persistence"
  *
- * const messages: Array<string> = []
- * const program = Effect.gen(function*() {
+ * Effect.gen(function*() {
  *   // Access the `withLimiter` function from the RateLimiter module
  *   const withLimiter = yield* RateLimiter.makeWithRateLimiter
  *
  *   // Apply a rate limiter to an effect
- *   yield* Effect.sync(() => messages.push("Making a request with rate limiting")).pipe(
+ *   yield* Effect.log("Making a request with rate limiting").pipe(
  *     withLimiter({
  *       key: "some-key",
  *       limit: 10,
@@ -241,12 +252,7 @@ export const layer: Layer.Layer<
  *       algorithm: "fixed-window"
  *     })
  *   )
- * }).pipe(
- *   Effect.provide(RateLimiter.layer.pipe(Layer.provide(RateLimiter.layerStoreMemory)))
- * )
- *
- * await Effect.runPromise(program)
- * messages // => ["Making a request with rate limiting"]
+ * })
  * ```
  *
  * @category accessors
@@ -273,84 +279,56 @@ export const makeWithRateLimiter: Effect.Effect<
 )
 
 /**
- * Sleeps when the rate limit is exceeded.
+ * Accesses a function that sleeps when the rate limit is exceeded.
  *
  * **Example** (Sleeping until rate limit permits)
  *
- * ```ts import.meta.vitest
- * import { Effect, Layer } from "effect"
+ * ```ts
+ * import { Effect } from "effect"
  * import { RateLimiter } from "effect/unstable/persistence"
  *
- * const program = Effect.gen(function*() {
- *   const limiter = yield* RateLimiter.RateLimiter
- *   const partiallyApplied = RateLimiter.sleep(limiter)
- *   const partial = yield* partiallyApplied({
- *     key: "partial",
- *     limit: 10,
- *     window: "5 seconds",
- *     algorithm: "fixed-window"
- *   })
- *   const direct = yield* RateLimiter.sleep(limiter, {
- *     key: "direct",
- *     limit: 10,
- *     window: "5 seconds",
- *     algorithm: "fixed-window"
- *   })
- *   return [partial.remaining, direct.remaining]
- * }).pipe(
- *   Effect.provide(RateLimiter.layer.pipe(Layer.provide(RateLimiter.layerStoreMemory)))
- * )
+ * Effect.gen(function*() {
+ *   // Access the `sleep` function from the RateLimiter module
+ *   const sleep = yield* RateLimiter.makeSleep
  *
- * await Effect.runPromise(program) // => [9, 9]
+ *   // Use the `sleep` function with specific rate limiting parameters.
+ *   // This will only sleep if the rate limit has been exceeded.
+ *   yield* sleep({
+ *     key: "some-key",
+ *     limit: 10,
+ *     window: "5 seconds",
+ *     algorithm: "fixed-window"
+ *   })
+ * })
  * ```
  *
  * @category accessors
  * @since 4.0.0
  */
-export function sleep(self: RateLimiter): (options: {
-  readonly algorithm?: "fixed-window" | "token-bucket" | undefined
-  readonly window: Duration.Input
-  readonly limit: number
-  readonly key: string
-  readonly tokens?: number | undefined
-}) => Effect.Effect<ConsumeResult, RateLimiterError>
-export function sleep(self: RateLimiter, options: {
-  readonly algorithm?: "fixed-window" | "token-bucket" | undefined
-  readonly window: Duration.Input
-  readonly limit: number
-  readonly key: string
-  readonly tokens?: number | undefined
-}): Effect.Effect<ConsumeResult, RateLimiterError>
-export function sleep(self: RateLimiter, options?: {
-  readonly algorithm?: "fixed-window" | "token-bucket" | undefined
-  readonly window: Duration.Input
-  readonly limit: number
-  readonly key: string
-  readonly tokens?: number | undefined
-}):
-  | Effect.Effect<ConsumeResult, RateLimiterError>
-  | ((options: {
+export const makeSleep: Effect.Effect<
+  ((options: {
     readonly algorithm?: "fixed-window" | "token-bucket" | undefined
     readonly window: Duration.Input
     readonly limit: number
     readonly key: string
     readonly tokens?: number | undefined
-  }) => Effect.Effect<ConsumeResult, RateLimiterError>)
-{
-  if (options === undefined) {
-    return (options) => sleep(self, options)
-  }
-  return Effect.flatMap(
-    self.consume({
-      ...options,
-      onExceeded: "delay"
-    }),
-    (result) => {
-      if (Duration.isZero(result.delay)) return Effect.succeed(result)
-      return Effect.as(Effect.sleep(result.delay), result)
-    }
+  }) => Effect.Effect<ConsumeResult, RateLimiterError>),
+  never,
+  RateLimiter
+> = RateLimiter.use((limiter) =>
+  Effect.succeed((options) =>
+    Effect.flatMap(
+      limiter.consume({
+        ...options,
+        onExceeded: "delay"
+      }),
+      (result) => {
+        if (Duration.isZero(result.delay)) return Effect.succeed(result)
+        return Effect.as(Effect.sleep(result.delay), result)
+      }
+    )
   )
-}
+)
 
 /**
  * Runtime type identifier for `RateLimiterError`.
@@ -358,7 +336,7 @@ export function sleep(self: RateLimiter, options?: {
  * @category type IDs
  * @since 4.0.0
  */
-export const ErrorTypeId: ErrorTypeId = "~effect/persistence/RateLimiter/RateLimiterError"
+export const ErrorTypeId: ErrorTypeId = "~@effect/experimental/RateLimiter/RateLimiterError"
 
 /**
  * Type-level identifier used to brand `RateLimiterError` values.
@@ -366,7 +344,7 @@ export const ErrorTypeId: ErrorTypeId = "~effect/persistence/RateLimiter/RateLim
  * @category type IDs
  * @since 4.0.0
  */
-export type ErrorTypeId = "~effect/persistence/RateLimiter/RateLimiterError"
+export type ErrorTypeId = "~@effect/experimental/RateLimiter/RateLimiterError"
 
 /**
  * Error reason for a rate-limit check that exceeded the configured limit.
@@ -378,7 +356,7 @@ export type ErrorTypeId = "~effect/persistence/RateLimiter/RateLimiterError"
  * @category errors
  * @since 4.0.0
  */
-export class RateLimitExceeded extends Schema.Error<RateLimitExceeded>(
+export class RateLimitExceeded extends Schema.ErrorClass<RateLimitExceeded>(
   "effect/persistence/RateLimiter/RateLimitExceeded"
 )({
   _tag: Schema.tag("RateLimitExceeded"),
@@ -403,7 +381,7 @@ export class RateLimitExceeded extends Schema.Error<RateLimitExceeded>(
  * @category errors
  * @since 4.0.0
  */
-export class RateLimitStoreError extends Schema.Error<RateLimitStoreError>(
+export class RateLimitStoreError extends Schema.ErrorClass<RateLimitStoreError>(
   "effect/persistence/RateLimiter/RateLimitStoreError"
 )({
   _tag: Schema.tag("RateLimitStoreError"),
@@ -437,7 +415,7 @@ export const RateLimiterErrorReason: Schema.Union<[
  * @category errors
  * @since 4.0.0
  */
-export class RateLimiterError extends Schema.Error<RateLimiterError>(ErrorTypeId)({
+export class RateLimiterError extends Schema.ErrorClass<RateLimiterError>(ErrorTypeId)({
   _tag: Schema.tag("RateLimiterError"),
   reason: RateLimiterErrorReason
 }) {
@@ -493,11 +471,6 @@ export interface ConsumeResult {
 
   /**
    * The time until the rate limit fully resets.
-   *
-   * **Details**
-   *
-   * For token buckets, accounts for elapsed refill time and reserved debt,
-   * assuming no further consumption.
    */
   readonly resetAfter: Duration.Duration
 }
@@ -513,7 +486,7 @@ export type AdaptivePhase = "inactive" | "cooldown" | "learning" | "learned"
 /**
  * Options for consuming tokens from the adaptive rate limiter store.
  *
- * @category options
+ * @category models
  * @since 4.0.0
  */
 export interface AdaptiveConsumeOptions {
@@ -564,7 +537,7 @@ export interface AdaptiveConsumeResult {
 /**
  * Options for reporting response feedback to the adaptive rate limiter store.
  *
- * @category options
+ * @category models
  * @since 4.0.0
  */
 export interface AdaptiveFeedbackOptions {
@@ -602,7 +575,7 @@ export interface AdaptiveFeedbackOptions {
  * Use to provide the shared counter storage and adaptive feedback state used by
  * persistent rate-limit checks.
  *
- * @category services
+ * @category store
  * @since 4.0.0
  */
 export class RateLimiterStore extends Context.Service<
@@ -626,18 +599,14 @@ export class RateLimiterStore extends Context.Service<
     }) => Effect.Effect<readonly [count: number, ttl: number], RateLimiterError>
 
     /**
-     * Refills the bucket for `key`, attempts to consume `tokens`, and returns
-     * `[remaining, elapsedMillis]` from that single atomic operation.
+     * Returns the current remaining tokens for the `key` after consuming the
+     * specified amount of tokens.
      *
-     * `remaining` is the token count after subtracting `tokens`. Fractional counts
-     * must retain their numeric precision. A negative count is only persisted
-     * when `allowOverflow` is true.
+     * If `allowOverflow` is true, the number of tokens can drop below zero.
      *
-     * `elapsedMillis` is the time since the current refill interval started, in
-     * milliseconds (fractions preserved), always at least `0` and less than
-     * `Duration.toMillis(refillRate)`. It is `0` when the bucket is at capacity
-     * after refilling and before consuming. Otherwise the boundary advances by
-     * whole refill intervals and the interval never restarts.
+     * In the case of no overflow, the returned token count will only be
+     * negative if the requested tokens exceed the available tokens, but the
+     * real token count will not be persisted below zero.
      */
     readonly tokenBucket: (options: {
       readonly key: string
@@ -645,7 +614,7 @@ export class RateLimiterStore extends Context.Service<
       readonly limit: number
       readonly refillRate: Duration.Duration
       readonly allowOverflow: boolean
-    }) => Effect.Effect<readonly [remaining: number, elapsedMillis: number], RateLimiterError>
+    }) => Effect.Effect<number, RateLimiterError>
 
     /**
      * Consumes tokens from the adaptive rate-limit state for the `key`.
@@ -686,7 +655,7 @@ interface AdaptiveState {
 /**
  * Provides a process-local in-memory `RateLimiterStore`.
  *
- * @category layers
+ * @category RateLimiterStore
  * @since 4.0.0
  */
 export const layerStoreMemory: Layer.Layer<
@@ -742,21 +711,20 @@ export const layerStoreMemory: Layer.Layer<
           if (!bucket) {
             bucket = { tokens: options.limit, lastRefill: now }
             tokenBuckets.set(options.key, bucket)
-          }
-          const tokensToAdd = Math.floor((now - bucket.lastRefill) / refillRateMillis)
-          if (tokensToAdd > 0) {
-            bucket.tokens = Math.min(options.limit, bucket.tokens + tokensToAdd)
-            bucket.lastRefill += tokensToAdd * refillRateMillis
-          }
-          if (bucket.tokens >= options.limit) {
-            bucket.lastRefill = now
+          } else {
+            const elapsed = now - bucket.lastRefill
+            const tokensToAdd = Math.floor(elapsed / refillRateMillis)
+            if (tokensToAdd > 0) {
+              bucket.tokens = Math.min(options.limit, bucket.tokens + tokensToAdd)
+              bucket.lastRefill += tokensToAdd * refillRateMillis
+            }
           }
 
           const newTokenCount = bucket.tokens - options.tokens
           if (options.allowOverflow || newTokenCount >= 0) {
             bucket.tokens = newTokenCount
           }
-          return [newTokenCount, Math.max(0, now - bucket.lastRefill)] as const
+          return newTokenCount
         })
       ),
     adaptiveConsume: (options) =>
@@ -906,7 +874,7 @@ export const layerStoreMemory: Layer.Layer<
  * Creates a Redis-backed `RateLimiterStore` using Lua scripts and the
  * configured key prefix.
  *
- * @category constructors
+ * @category RateLimiterStore
  * @since 4.0.0
  */
 export const makeStoreRedis = Effect.fnUntraced(function*(
@@ -943,17 +911,14 @@ export const makeStoreRedis = Effect.fnUntraced(function*(
       const refillMillis = Duration.toMillis(options.refillRate)
       return Effect.clockWith((clock) =>
         Effect.mapError(
-          Effect.map(
-            tokenBucket(
-              key,
-              lastRefillKey,
-              options.tokens,
-              refillMillis,
-              options.limit,
-              clock.currentTimeMillisUnsafe(),
-              options.allowOverflow ? 1 : 0
-            ),
-            ([remaining, elapsedMillis]) => [Number(remaining), Number(elapsedMillis)] as const
+          tokenBucket(
+            key,
+            lastRefillKey,
+            options.tokens,
+            refillMillis,
+            options.limit,
+            clock.currentTimeMillisUnsafe(),
+            options.allowOverflow ? 1 : 0
           ),
           (cause) =>
             new RateLimiterError({
@@ -1079,9 +1044,6 @@ if refill_amount > 0 then
   current = math.min(current + refill_amount, limit)
   last_refill = last_refill + (refill_amount * refill_ms)
 end
-if current >= limit then
-  last_refill = now
-end
 
 local next = current - tokens
 local stored = current
@@ -1089,16 +1051,14 @@ if next >= 0 or overflow then
   stored = next
 end
 
-elapsed = math.max(0, now - last_refill)
-local ttl = math.ceil(math.ceil(limit - stored) * refill_ms - elapsed)
+local ttl = math.floor((limit - stored) * refill_ms)
 if ttl < 1 then ttl = 1 end
 redis.call("SET", key, stored, "PX", ttl)
 redis.call("SET", last_refill_key, last_refill, "PX", ttl)
--- Use 17 significant digits to round-trip both numbers.
-return { string.format("%.17g", next), string.format("%.17g", elapsed) }
+return next
 `
   }
-).withReturnType<readonly [remaining: string, elapsedMillis: string]>()
+).withReturnType<number>()
 
 const adaptiveConsumeScript = Redis.script(
   (key: string, tokens: number, fallbackWindowMillis: number, ttlGraceMillis: number) => [

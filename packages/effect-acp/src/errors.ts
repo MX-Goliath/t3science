@@ -79,7 +79,7 @@ export interface AcpRequestDiagnostics {
   readonly maximumPathDepth?: number;
 }
 
-export class AcpSpawnError extends Schema.TaggedError<AcpSpawnError>()("AcpSpawnError", {
+export class AcpSpawnError extends Schema.TaggedErrorClass<AcpSpawnError>()("AcpSpawnError", {
   command: Schema.optional(Schema.String),
   cause: Schema.Defect(),
 }) {
@@ -90,20 +90,18 @@ export class AcpSpawnError extends Schema.TaggedError<AcpSpawnError>()("AcpSpawn
   }
 }
 
-export class AcpProcessExitedError extends Schema.TaggedError<AcpProcessExitedError>()(
+export class AcpProcessExitedError extends Schema.TaggedErrorClass<AcpProcessExitedError>()(
   "AcpProcessExitedError",
   {
     code: Schema.optional(Schema.Number),
     pid: Schema.optionalKey(Schema.Int),
-    stderr: Schema.optionalKey(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
   override get message() {
-    const base =
-      this.code === undefined ? "ACP process exited" : `ACP process exited with code ${this.code}`;
-    const excerpt = this.stderr?.trim();
-    return excerpt && excerpt.length > 0 ? `${base}\n${excerpt}` : base;
+    return this.code === undefined
+      ? "ACP process exited"
+      : `ACP process exited with code ${this.code}`;
   }
 }
 
@@ -114,7 +112,7 @@ export const AcpProtocolParseOperation = Schema.Literals([
 ]);
 export type AcpProtocolParseOperation = typeof AcpProtocolParseOperation.Type;
 
-export class AcpProtocolParseError extends Schema.TaggedError<AcpProtocolParseError>()(
+export class AcpProtocolParseError extends Schema.TaggedErrorClass<AcpProtocolParseError>()(
   "AcpProtocolParseError",
   {
     operation: AcpProtocolParseOperation,
@@ -158,7 +156,7 @@ export class AcpProtocolParseError extends Schema.TaggedError<AcpProtocolParseEr
   }
 }
 
-export class AcpTransportError extends Schema.TaggedError<AcpTransportError>()(
+export class AcpTransportError extends Schema.TaggedErrorClass<AcpTransportError>()(
   "AcpTransportError",
   {
     operation: Schema.optional(
@@ -178,7 +176,7 @@ export class AcpTransportError extends Schema.TaggedError<AcpTransportError>()(
   }
 }
 
-export class AcpInputStreamEndedError extends Schema.TaggedError<AcpInputStreamEndedError>()(
+export class AcpInputStreamEndedError extends Schema.TaggedErrorClass<AcpInputStreamEndedError>()(
   "AcpInputStreamEndedError",
   {},
 ) {
@@ -187,7 +185,7 @@ export class AcpInputStreamEndedError extends Schema.TaggedError<AcpInputStreamE
   }
 }
 
-export class AcpRequestError extends Schema.TaggedError<AcpRequestError>()("AcpRequestError", {
+export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()("AcpRequestError", {
   code: AcpSchema.ErrorCode,
   errorMessage: Schema.String,
   data: Schema.optional(Schema.Unknown),

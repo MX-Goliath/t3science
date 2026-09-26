@@ -25,7 +25,7 @@ export class ControlTowerTestFunction extends Lambda.Function<Lambda.Function>()
 export default ControlTowerTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // --- account-level bindings (Control Tower has no data plane; these

@@ -156,7 +156,6 @@ export interface Platform<
   MainShape,
   RuntimeContext extends BaseRuntimeContext,
   BaseShape = {},
-  InlineProps extends Resource["Props"] = Resource["Props"],
 > extends Effect.Effect<Resource & RuntimeContext, never, Resource> {
   Type: Resource["Type"];
   Provider: Provider<Resource>;
@@ -172,9 +171,9 @@ export interface Platform<
       Named<Id> & {
         make<PropsReq = never, InitReq = never>(
           props:
-            | InputProps<InlineProps>
+            | InputProps<Resource["Props"]>
             | Effect.Effect<
-                InputProps<InlineProps>,
+                InputProps<Resource["Props"]>,
                 ConfigError.ConfigError,
                 PropsReq
               >,
@@ -200,9 +199,9 @@ export interface Platform<
     >(
       id: Id,
       props:
-        | InputProps<InlineProps>
+        | InputProps<Resource["Props"]>
         | Effect.Effect<
-            InputProps<InlineProps>,
+            InputProps<Resource["Props"]>,
             ConfigError.ConfigError,
             PropsReq
           >,
@@ -229,9 +228,9 @@ export interface Platform<
           InitReq extends Services | PlatformServices | Resource = never,
         >(
           props:
-            | InputProps<InlineProps>
+            | InputProps<Resource["Props"]>
             | Effect.Effect<
-                InputProps<InlineProps>,
+                InputProps<Resource["Props"]>,
                 ConfigError.ConfigError,
                 PropsReq
               >,
@@ -265,8 +264,8 @@ export interface Platform<
   >(
     id: Id,
     props:
-      | InputProps<InlineProps>
-      | Effect.Effect<InputProps<InlineProps>, never, PropsReq>,
+      | InputProps<Resource["Props"]>
+      | Effect.Effect<InputProps<Resource["Props"]>, never, PropsReq>,
     impl: Effect.Effect<Shape, ConfigError.ConfigError, InitReq>,
   ): Effect.Effect<
     Resource & Rpc<Shape> & Named<Id>,
@@ -291,13 +290,6 @@ export const Platform = <
   type: R["Type"],
   hooks: {
     createRuntimeContext: (id: string) => BaseRuntimeContext;
-    /**
-     * Legacy type names this platform's resource was previously registered
-     * under (see `ResourceOptions.aliases`) — threaded to the underlying
-     * `Resource` so state persisted under a pre-rename type keeps
-     * resolving.
-     */
-    aliases?: string[];
     // `onCreate` runs inside the resource-construction context, which already
     // carries the Stack's providers — so the hook may yield child resources
     // (e.g. an async Worker registering a `WorkflowResource` for a bound
@@ -320,16 +312,7 @@ export const Platform = <
   type Props = any;
   type Impl = Effect.Effect<any>;
 
-  // Platform registrations must have resolved props by plan time: every
-  // legitimate construction (a `.make(props, impl)` Layer build, a tag
-  // declared with props, a plain call) produces them, so props still
-  // `undefined` at plan can only be a bare-tag forward reference whose
-  // `.make` Layer was never provided — `Plan.make` fails fast naming the
-  // class and its Layer (#1054).
-  const resource = Resource(type, {
-    aliases: hooks.aliases,
-    requiresImplementation: true,
-  });
+  const resource = Resource(type);
   const PlatformContext = RuntimeContext;
 
   // Apply the optional `transformProps` hook to a (possibly Effect-valued)
@@ -361,21 +344,6 @@ export const Platform = <
         constructor(id, props, impl, true);
     } else if (!impl) {
       const cls = makeClass(id);
-      // A resource declared without an inline impl is "external": there is
-      // no Effect-native entry to inject (an ordinary bundled worker, or an
-      // assets-only worker with no script at all).
-      const externalProps = () => {
-        const transformed = applyTransformProps(id, props);
-        return Effect.isEffect(transformed)
-          ? Effect.map(transformed, (p: any) => ({
-              ...p,
-              isExternal: true,
-            }))
-          : {
-              ...transformed,
-              isExternal: true,
-            };
-      };
       const evaluate = () =>
         (!isTag
           ? // this is a non-tagged resource yielded without providing an implementation
@@ -388,34 +356,27 @@ export const Platform = <
             //     return new Response("Hello, world!");
             //   }
             // }
-            resource(id, externalProps())
+            resource(
+              id,
+              (() => {
+                const transformed = applyTransformProps(id, props);
+                return Effect.isEffect(transformed)
+                  ? Effect.map(transformed, (p: any) => ({
+                      ...p,
+                      isExternal: true,
+                    }))
+                  : {
+                      ...transformed,
+                      isExternal: true,
+                    };
+              })(),
+            )
           : Effect.flatMap(
               // this is a tagged resource
               Effect.serviceOption(cls.Self),
               Option.match({
-                // we are likely running at runtime, so we create.
-                // A tagged class WITH props and no impl is the class form of
-                // the external resource above (e.g.
-                // `class Site extends Worker<Site>()("Site", { assets }) {}`)
-                // — same isExternal marking; without props, this is a bare
-                // tag whose props/impl arrive later via `.make`.
-                onNone: () =>
-                  // Without props this is a bare-tag FORWARD REFERENCE: its
-                  // `.make(props, impl)` Layer may build before or after
-                  // this yield (e.g. a worker tag bound in another worker's
-                  // `env` — the #874 circular-binding pattern — resolves
-                  // during that worker's async-binding pass, outside the
-                  // Layer's own context). Register with `undefined` props;
-                  // the Layer's build repairs them, and `Plan.make` fails
-                  // fast on any platform registration whose props are still
-                  // `undefined` after the whole program evaluated (see
-                  // `requiresImplementation` above).
-                  resource(
-                    id,
-                    props === undefined
-                      ? applyTransformProps(id, props)
-                      : externalProps(),
-                  ),
+                // we are likely running at runtime, so we create
+                onNone: () => resource(id, applyTransformProps(id, props)),
                 onSome: Effect.succeed,
               }),
             )

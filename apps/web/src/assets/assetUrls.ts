@@ -35,19 +35,16 @@ export function useAssetUrlState(
 export function useAssetUrlRefresh(
   environmentId: EnvironmentId | null,
   resource: AssetResource | null,
-): () => Promise<string | null> {
-  const connection = usePreparedConnection(environmentId);
-  const httpBaseUrl = connection._tag === "Some" ? connection.value.httpBaseUrl : null;
+): () => Promise<void> {
   const refresh = useAtomQueryRunner(assetEnvironment.createUrl, {
     reportFailure: false,
     refresh: true,
   });
   return useCallback(async () => {
-    if (environmentId === null || resource === null || httpBaseUrl === null) return null;
+    if (environmentId === null || resource === null) return;
     const result = await refresh({ environmentId, input: { resource } });
     if (result._tag === "Failure") throw squashAtomCommandFailure(result);
-    return resolveAssetUrl(httpBaseUrl, result.value.relativeUrl);
-  }, [environmentId, resource, refresh, httpBaseUrl]);
+  }, [environmentId, resource, refresh]);
 }
 
 export function useAssetUrls(

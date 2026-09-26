@@ -18,13 +18,7 @@ export function connectionTone(state: RemoteClientConnectionState): StatusTone {
     case "connecting":
       return {
         label: "Connecting",
-        pillClassName: "bg-update",
-        textClassName: "text-update-foreground",
-      };
-    case "unsupported":
-      return {
-        label: "Client not supported",
-        pillClassName: "bg-subtle",
+        pillClassName: "bg-primary/10",
         textClassName: "text-foreground-secondary",
       };
     case "error":

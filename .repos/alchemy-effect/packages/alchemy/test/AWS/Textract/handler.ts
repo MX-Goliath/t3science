@@ -25,7 +25,7 @@ export class TextractTestFunction extends Lambda.Function<Lambda.Function>()(
 export default TextractTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     // Each sync analysis inference takes a few seconds; routes run several.
     timeout: Duration.seconds(60),
     // The bundled Textract schema graph is large — give headroom over the

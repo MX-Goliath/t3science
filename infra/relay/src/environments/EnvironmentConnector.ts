@@ -68,7 +68,7 @@ function environmentConnectNotAuthorizedReasonMessage(
   }
 }
 
-export class EnvironmentConnectNotAuthorized extends Schema.TaggedError<EnvironmentConnectNotAuthorized>()(
+export class EnvironmentConnectNotAuthorized extends Schema.TaggedErrorClass<EnvironmentConnectNotAuthorized>()(
   "EnvironmentConnectNotAuthorized",
   {
     environmentId: Schema.String,
@@ -81,7 +81,7 @@ export class EnvironmentConnectNotAuthorized extends Schema.TaggedError<Environm
   }
 }
 
-export class EnvironmentMintRequestFailed extends Schema.TaggedError<EnvironmentMintRequestFailed>()(
+export class EnvironmentMintRequestFailed extends Schema.TaggedErrorClass<EnvironmentMintRequestFailed>()(
   "EnvironmentMintRequestFailed",
   {
     environmentId: Schema.String,
@@ -94,7 +94,7 @@ export class EnvironmentMintRequestFailed extends Schema.TaggedError<Environment
   }
 }
 
-export class EnvironmentMintRequestTimedOut extends Schema.TaggedError<EnvironmentMintRequestTimedOut>()(
+export class EnvironmentMintRequestTimedOut extends Schema.TaggedErrorClass<EnvironmentMintRequestTimedOut>()(
   "EnvironmentMintRequestTimedOut",
   {
     environmentId: Schema.String,
@@ -106,7 +106,7 @@ export class EnvironmentMintRequestTimedOut extends Schema.TaggedError<Environme
   }
 }
 
-export class EnvironmentMintResponseInvalid extends Schema.TaggedError<EnvironmentMintResponseInvalid>()(
+export class EnvironmentMintResponseInvalid extends Schema.TaggedErrorClass<EnvironmentMintResponseInvalid>()(
   "EnvironmentMintResponseInvalid",
   {
     environmentId: Schema.String,

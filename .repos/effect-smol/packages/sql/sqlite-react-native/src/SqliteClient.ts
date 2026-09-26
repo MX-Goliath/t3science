@@ -29,18 +29,6 @@ import * as Statement from "effect/unstable/sql/Statement"
 
 const ATTR_DB_SYSTEM_NAME = "db.system.name"
 
-// `open` is still exported at runtime in v18, but is missing from the package's
-// root type declarations.
-interface OpenOptions {
-  name: string
-  location?: string
-  encryptionKey?: string
-}
-
-const open = (Sqlite as typeof Sqlite & {
-  readonly open: (options: OpenOptions) => Sqlite.DB
-}).open
-
 const classifyError = (cause: unknown, message: string, operation: string) =>
   classifySqliteError(cause, { message, operation })
 
@@ -63,7 +51,7 @@ export type TypeId = "~@effect/sql-sqlite-react-native/SqliteClient"
 /**
  * React Native SQLite client service interface, extending `SqlClient` with its configuration and marking `updateValues` as unsupported for SQLite.
  *
- * @category services
+ * @category models
  * @since 4.0.0
  */
 export interface SqliteClient extends Client.SqlClient {
@@ -105,7 +93,7 @@ export interface SqliteClientConfig {
  * Use to switch React Native SQLite query execution to the asynchronous driver
  * API for a scoped effect.
  *
- * @category services
+ * @category fiber refs
  * @since 4.0.0
  */
 export const AsyncQuery = Context.Reference<boolean>(
@@ -116,7 +104,7 @@ export const AsyncQuery = Context.Reference<boolean>(
 /**
  * Runs an effect with `AsyncQuery` enabled, causing React Native SQLite queries in that effect to use the asynchronous driver API.
  *
- * @category providing services
+ * @category fiber refs
  * @since 4.0.0
  */
 export const withAsyncQuery = <R, E, A>(effect: Effect.Effect<A, E, R>) =>
@@ -134,7 +122,7 @@ export const make = (
   options: SqliteClientConfig
 ): Effect.Effect<SqliteClient, never, Scope.Scope | Reactivity.Reactivity> =>
   Effect.gen(function*() {
-    const clientOptions: Parameters<typeof open>[0] = {
+    const clientOptions: Parameters<typeof Sqlite.open>[0] = {
       name: options.filename
     }
     if (options.location) {
@@ -150,12 +138,13 @@ export const make = (
       undefined
 
     const makeConnection = Effect.gen(function*() {
-      const db = open(clientOptions) as DB
+      const db = Sqlite.open(clientOptions) as DB
       yield* Effect.addFinalizer(() => Effect.sync(() => db.close()))
 
       const run = (
         sql: string,
-        params: ReadonlyArray<unknown> = []
+        params: ReadonlyArray<unknown> = [],
+        values = false
       ) =>
         Effect.withFiber<Array<any>, SqlError>((fiber) => {
           if (fiber.getRef(AsyncQuery)) {
@@ -165,32 +154,14 @@ export const make = (
                 catch: (cause) =>
                   new SqlError({ reason: classifyError(cause, "Failed to execute statement (async)", "execute") })
               }),
-              (result) => result.rows
+              (result) => values ? result.rawRows ?? [] : result.rows
             )
           }
           return Effect.try({
-            try: () => db.executeSync(sql, params as Array<any>).rows,
-            catch: (cause) => new SqlError({ reason: classifyError(cause, "Failed to execute statement", "execute") })
-          })
-        })
-
-      const runValues = (
-        sql: string,
-        params: ReadonlyArray<unknown> = []
-      ) =>
-        Effect.withFiber<Array<any>, SqlError>((fiber) => {
-          if (fiber.getRef(AsyncQuery)) {
-            return Effect.map(
-              Effect.tryPromise({
-                try: () => db.executeRaw(sql, params as Array<any>),
-                catch: (cause) =>
-                  new SqlError({ reason: classifyError(cause, "Failed to execute statement (async)", "execute") })
-              }),
-              (result) => result.rawRows
-            )
-          }
-          return Effect.try({
-            try: () => db.executeRawSync(sql, params as Array<any>).rawRows,
+            try: () => {
+              const result = db.executeSync(sql, params as Array<any>)
+              return values ? result.rawRows ?? [] : result.rows
+            },
             catch: (cause) => new SqlError({ reason: classifyError(cause, "Failed to execute statement", "execute") })
           })
         })
@@ -205,10 +176,10 @@ export const make = (
           return run(sql, params)
         },
         executeValues(sql, params) {
-          return runValues(sql, params)
+          return run(sql, params, true)
         },
         executeValuesUnprepared(sql, params) {
-          return runValues(sql, params)
+          return run(sql, params, true)
         },
         executeUnprepared(sql, params, transformRows) {
           return this.execute(sql, params, transformRows)
@@ -339,12 +310,12 @@ interface DB {
    * Same as `execute` except the results are not returned in objects but rather in arrays with just the values and not the keys
    * It will be faster since a lot of repeated work is skipped and only the values you care about are returned
    */
-  executeRaw: (query: string, params?: Array<any>) => Promise<RawQueryResult>
+  executeRaw: (query: string, params?: Array<any>) => Promise<Array<any>>
   /**
    * Same as `executeRaw` but it will block the JS thread and therefore your UI and should be used with caution
    * It will return an array of arrays with just the values and not the keys
    */
-  executeRawSync: (query: string, params?: Array<any>) => RawQueryResult
+  executeRawSync: (query: string, params?: Array<any>) => Array<any>
   /**
    * Get's the absolute path to the db file. Useful for debugging on local builds and for attaching the DB from users devices
    */
@@ -369,10 +340,6 @@ interface DB {
    * The database is hosted in turso
    */
   sync: () => void
-}
-
-interface RawQueryResult {
-  rawRows: Array<Array<any>>
 }
 
 interface QueryResult {

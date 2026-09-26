@@ -9,7 +9,7 @@ const DESKTOP_WSL_STATE_STALE_TIME_MS = 30_000;
 
 type DesktopWslStateBridge = Pick<DesktopBridge, "getWslState">;
 
-class DesktopWslStateUnavailableError extends Schema.TaggedError<DesktopWslStateUnavailableError>()(
+class DesktopWslStateUnavailableError extends Schema.TaggedErrorClass<DesktopWslStateUnavailableError>()(
   "DesktopWslStateUnavailableError",
   {},
 ) {
@@ -18,7 +18,7 @@ class DesktopWslStateUnavailableError extends Schema.TaggedError<DesktopWslState
   }
 }
 
-class DesktopWslStateLoadError extends Schema.TaggedError<DesktopWslStateLoadError>()(
+class DesktopWslStateLoadError extends Schema.TaggedErrorClass<DesktopWslStateLoadError>()(
   "DesktopWslStateLoadError",
   { cause: Schema.Defect() },
 ) {

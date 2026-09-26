@@ -199,9 +199,6 @@ test.provider.skipIf(!process.env.AWS_TEST_CONFIG_RECORDER)(
         }),
       );
       expect(channelGone._tag).toBe("NoSuchDeliveryChannelException");
-    }).pipe(
-      Effect.ensuring(stack.destroy().pipe(Effect.orDie).pipe(Effect.orDie)),
-      testLease.use,
-    ),
+    }).pipe(Effect.ensuring(stack.destroy().pipe(Effect.orDie)), testLease.use),
   { timeout: 240_000 },
 );

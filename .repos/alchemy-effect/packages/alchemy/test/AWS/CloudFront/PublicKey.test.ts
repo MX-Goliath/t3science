@@ -136,7 +136,7 @@ describe("AWS.CloudFront.PublicKey", () => {
         // deploy leaves behind: `creating`, no attributes, and the
         // Output-valued `encodedKey` lost in the round-trip (#736).
         const state = yield* yield* State;
-        const stage = stack.stage;
+        const stage = "test"; // scratch stacks default to the "test" stage
         const fqns = yield* state.list({ stack: stack.name, stage });
         const rows = yield* Effect.forEach(fqns, (fqn) =>
           state

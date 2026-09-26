@@ -13,7 +13,8 @@ export default WorkerTag.make(
   {
     main: import.meta.url,
     compatibility: {
-      date: "2026-08-31",
+      flags: ["nodejs_compat"],
+      date: "2026-04-26",
     },
     observability: {
       enabled: true,

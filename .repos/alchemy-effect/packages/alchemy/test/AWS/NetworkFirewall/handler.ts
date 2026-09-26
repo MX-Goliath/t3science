@@ -16,7 +16,7 @@ export class NetworkFirewallBindingsFunction extends Lambda.Function<Lambda.Func
 export default NetworkFirewallBindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(120),
   },
   Effect.gen(function* () {

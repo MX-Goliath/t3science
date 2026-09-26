@@ -15,6 +15,7 @@ import {
   CircleXIcon,
   EyeOffIcon,
   FolderGit2Icon,
+  GitPullRequestDraftIcon,
   LayersIcon,
   ListFilterIcon,
   SearchIcon,
@@ -24,7 +25,7 @@ import {
 import { type ElementType, useState } from "react";
 
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
-import { ProjectFavicon, type ProjectFaviconProject } from "../ProjectFavicon";
+import { ProjectFavicon } from "../ProjectFavicon";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 import { Button } from "../ui/button";
 
@@ -50,14 +51,18 @@ import {
   type PullRequestLabelFacet,
 } from "./pullRequestList.logic";
 import { PullRequestActorAvatar } from "./pullRequestPresentation";
-import { PullRequestGlyph } from "./pullRequestIcons";
 
 export interface PullRequestFilterOption<Value extends string> {
   readonly value: Value;
   readonly label: string;
   /** Uses the option's native icon tone. */
   readonly Icon: ElementType<{ className?: string }>;
-  readonly project?: ProjectFaviconProject;
+  readonly favicon?: {
+    readonly environmentId: EnvironmentId;
+    readonly cwd: string;
+    readonly faviconPath?: string | null;
+    readonly projectIcon?: ProjectIconOverride | null;
+  };
   /** Why it cannot be chosen, carried onto the item as its title. */
   readonly unavailable?: string | undefined;
 }
@@ -67,8 +72,15 @@ export function PullRequestFilterOptionIcon<Value extends string>({
 }: {
   option: PullRequestFilterOption<Value>;
 }) {
-  return option.project ? (
-    <ProjectFavicon project={option.project} className="size-3.5" />
+  return option.favicon ? (
+    <ProjectFavicon
+      environmentId={option.favicon.environmentId}
+      cwd={option.favicon.cwd}
+      projectName={option.label}
+      faviconPath={option.favicon.faviconPath}
+      projectIcon={option.favicon.projectIcon}
+      className="size-3.5"
+    />
   ) : (
     <option.Icon aria-hidden className="size-3.5" />
   );
@@ -143,7 +155,7 @@ export const pullRequestProjectKey = (project: {
 
 const DRAFT_OPTIONS = [
   { value: UNFILTERED_VALUE, label: "All", Icon: LayersIcon },
-  { value: "only", label: "Drafts only", Icon: PullRequestGlyph.draft },
+  { value: "only", label: "Drafts only", Icon: GitPullRequestDraftIcon },
   { value: "hide", label: "Hide drafts", Icon: EyeOffIcon },
 ] as const satisfies ReadonlyArray<PullRequestFilterOption<string>>;
 
@@ -440,7 +452,14 @@ export function PullRequestFiltersMenu({
   serverOptions: ReadonlyArray<PullRequestFilterOption<string>>;
   onServer: (server: EnvironmentId | undefined) => void;
   /** The projects of every connected environment, each carrying the one its favicon is read from. */
-  projects: ReadonlyArray<ProjectFaviconProject & { readonly id: ProjectId }>;
+  projects: ReadonlyArray<{
+    readonly id: ProjectId;
+    readonly environmentId: EnvironmentId;
+    readonly title: string;
+    readonly workspaceRoot: string;
+    readonly faviconPath?: string | null | undefined;
+    readonly projectIcon?: ProjectIconOverride | null | undefined;
+  }>;
   projectId: ProjectId | undefined;
   /**
    * The server the selected project belongs to. A project id is only unique within its own
@@ -495,7 +514,12 @@ export function PullRequestFiltersMenu({
         value: pullRequestProjectKey(project),
         label: project.title,
         Icon: FolderGit2Icon,
-        project,
+        favicon: {
+          environmentId: project.environmentId,
+          cwd: project.workspaceRoot,
+          faviconPath: project.faviconPath ?? null,
+          projectIcon: project.projectIcon ?? null,
+        },
         ...(unavailable.has(pullRequestProjectKey(project))
           ? { unavailable: unavailable.get(pullRequestProjectKey(project)) }
           : {}),

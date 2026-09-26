@@ -1934,15 +1934,13 @@ it.layer(
 
   it.effect("injects runtime env overrides into spawned terminals", () =>
     Effect.gen(function* () {
-      const { manager, ptyAdapter } = yield* createManager(5, { env: { FORCE_COLOR: "3" } });
+      const { manager, ptyAdapter } = yield* createManager();
       yield* manager.open(
         openInput({
           env: {
             T3CODE_PROJECT_ROOT: "/repo",
             T3CODE_WORKTREE_PATH: "/repo/worktree-a",
             CUSTOM_FLAG: "1",
-            NO_COLOR: "1",
-            FORCE_COLOR: "0",
           },
         }),
       );
@@ -1953,8 +1951,6 @@ it.layer(
       assert.equal(spawnInput.env.T3CODE_PROJECT_ROOT, "/repo");
       assert.equal(spawnInput.env.T3CODE_WORKTREE_PATH, "/repo/worktree-a");
       assert.equal(spawnInput.env.CUSTOM_FLAG, "1");
-      assert.equal(spawnInput.env.NO_COLOR, "1");
-      assert.equal(spawnInput.env.FORCE_COLOR, "0");
     }),
   );
 

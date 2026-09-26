@@ -2,10 +2,6 @@ import {
   EnvironmentId,
   type PreviewAutomationHost,
   PreviewAutomationOperation,
-  PreviewAutomationRecordingTransferError,
-  PreviewAutomationRecordingDesktopUpdateRequiredError,
-  PreviewAutomationRecordingTooLargeError,
-  PreviewAutomationRecordingDeadlineExpiredError,
   type PreviewAutomationRequest,
   type PreviewAutomationResponse,
   PreviewTabId,
@@ -22,7 +18,7 @@ export interface PreviewAutomationOperationContext {
   readonly tabId: Exclude<PreviewAutomationRequest["tabId"], undefined> | null;
 }
 
-export class PreviewAutomationOverlayTimeoutError extends Schema.TaggedError<PreviewAutomationOverlayTimeoutError>()(
+export class PreviewAutomationOverlayTimeoutError extends Schema.TaggedErrorClass<PreviewAutomationOverlayTimeoutError>()(
   "PreviewAutomationOverlayTimeoutError",
   {
     requestId: TrimmedNonEmptyString,
@@ -40,7 +36,7 @@ export class PreviewAutomationOverlayTimeoutError extends Schema.TaggedError<Pre
   }
 }
 
-export class PreviewAutomationNavigationTimeoutError extends Schema.TaggedError<PreviewAutomationNavigationTimeoutError>()(
+export class PreviewAutomationNavigationTimeoutError extends Schema.TaggedErrorClass<PreviewAutomationNavigationTimeoutError>()(
   "PreviewAutomationNavigationTimeoutError",
   {
     requestId: TrimmedNonEmptyString,
@@ -60,7 +56,7 @@ export class PreviewAutomationNavigationTimeoutError extends Schema.TaggedError<
   }
 }
 
-export class PreviewAutomationViewportTimeoutError extends Schema.TaggedError<PreviewAutomationViewportTimeoutError>()(
+export class PreviewAutomationViewportTimeoutError extends Schema.TaggedErrorClass<PreviewAutomationViewportTimeoutError>()(
   "PreviewAutomationViewportTimeoutError",
   {
     requestId: TrimmedNonEmptyString,
@@ -79,7 +75,7 @@ export class PreviewAutomationViewportTimeoutError extends Schema.TaggedError<Pr
   }
 }
 
-export class PreviewAutomationTargetUnavailableError extends Schema.TaggedError<PreviewAutomationTargetUnavailableError>()(
+export class PreviewAutomationTargetUnavailableError extends Schema.TaggedErrorClass<PreviewAutomationTargetUnavailableError>()(
   "PreviewAutomationTargetUnavailableError",
   {
     requestId: TrimmedNonEmptyString,
@@ -99,7 +95,7 @@ export class PreviewAutomationTargetUnavailableError extends Schema.TaggedError<
   }
 }
 
-export class PreviewAutomationRecordingNotActiveError extends Schema.TaggedError<PreviewAutomationRecordingNotActiveError>()(
+export class PreviewAutomationRecordingNotActiveError extends Schema.TaggedErrorClass<PreviewAutomationRecordingNotActiveError>()(
   "PreviewAutomationRecordingNotActiveError",
   {
     requestId: TrimmedNonEmptyString,
@@ -117,7 +113,7 @@ export class PreviewAutomationRecordingNotActiveError extends Schema.TaggedError
   }
 }
 
-export class PreviewAutomationTargetNotEditableHostError extends Schema.TaggedError<PreviewAutomationTargetNotEditableHostError>()(
+export class PreviewAutomationTargetNotEditableHostError extends Schema.TaggedErrorClass<PreviewAutomationTargetNotEditableHostError>()(
   "PreviewAutomationTargetNotEditableHostError",
   {
     requestId: TrimmedNonEmptyString,
@@ -172,7 +168,7 @@ const targetNotEditableDiagnostics = (
   };
 };
 
-export class PreviewAutomationOperationError extends Schema.TaggedError<PreviewAutomationOperationError>()(
+export class PreviewAutomationOperationError extends Schema.TaggedErrorClass<PreviewAutomationOperationError>()(
   "PreviewAutomationOperationError",
   {
     requestId: TrimmedNonEmptyString,
@@ -210,10 +206,6 @@ export class PreviewAutomationOperationError extends Schema.TaggedError<PreviewA
 }
 
 export const PreviewAutomationHostError = Schema.Union([
-  PreviewAutomationRecordingTransferError,
-  PreviewAutomationRecordingDesktopUpdateRequiredError,
-  PreviewAutomationRecordingTooLargeError,
-  PreviewAutomationRecordingDeadlineExpiredError,
   PreviewAutomationOverlayTimeoutError,
   PreviewAutomationNavigationTimeoutError,
   PreviewAutomationViewportTimeoutError,
@@ -236,7 +228,7 @@ export function serializePreviewAutomationHostError(
     ),
   );
   return {
-    _tag: "responseTag" in error ? error.responseTag : error._tag,
+    _tag: error.responseTag,
     message: error.message,
     ...(Object.keys(detail).length === 0 ? {} : { detail }),
   };

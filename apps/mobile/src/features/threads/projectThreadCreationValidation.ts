@@ -1,7 +1,7 @@
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
-export class ProjectThreadTaskRequiredError extends Schema.TaggedError<ProjectThreadTaskRequiredError>()(
+export class ProjectThreadTaskRequiredError extends Schema.TaggedErrorClass<ProjectThreadTaskRequiredError>()(
   "ProjectThreadTaskRequiredError",
   {
     environmentId: EnvironmentId,
@@ -14,7 +14,7 @@ export class ProjectThreadTaskRequiredError extends Schema.TaggedError<ProjectTh
   }
 }
 
-export class ProjectThreadBaseBranchRequiredError extends Schema.TaggedError<ProjectThreadBaseBranchRequiredError>()(
+export class ProjectThreadBaseBranchRequiredError extends Schema.TaggedErrorClass<ProjectThreadBaseBranchRequiredError>()(
   "ProjectThreadBaseBranchRequiredError",
   {
     environmentId: EnvironmentId,

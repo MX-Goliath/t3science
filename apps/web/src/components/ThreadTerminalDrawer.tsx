@@ -57,7 +57,7 @@ import {
 } from "~/terminal/ghostty/surface";
 import { type GhosttyColor, type GhosttyTheme } from "~/terminal/ghostty/core";
 import { useOpenInPreferredEditor } from "../editorPreferences";
-import { isTerminalUrl, resolvePathLinkTarget } from "../terminal-links";
+import { isTerminalLinkActivation, isTerminalUrl, resolvePathLinkTarget } from "../terminal-links";
 import {
   isDiffToggleShortcut,
   isTerminalClearShortcut,
@@ -782,6 +782,7 @@ export function TerminalViewport({
       }
 
       function handleLinkActivate(text: string, event: MouseEvent): void {
+        if (!isTerminalLinkActivation(event)) return;
         const latestTerminal = terminalRef.current;
         if (!latestTerminal) return;
         if (isTerminalUrl(text)) {
@@ -802,7 +803,6 @@ export function TerminalViewport({
             threadRef,
             openPreview,
             fallbackToBrowser,
-            forceBrowser: event.metaKey || event.ctrlKey,
           }).catch((error: unknown) => {
             toastManager.add(
               stackedThreadToast({

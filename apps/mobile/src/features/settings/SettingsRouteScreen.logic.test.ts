@@ -3,10 +3,10 @@ import { describe, expect, it } from "vite-plus/test";
 import { resolveAgentAwarenessPlatformPresentation } from "./SettingsRouteScreen.logic";
 
 describe("resolveAgentAwarenessPlatformPresentation", () => {
-  it("supports agent awareness settings on Android", () => {
+  it("explains that agent awareness settings are unavailable on Android", () => {
     expect(resolveAgentAwarenessPlatformPresentation("android")).toEqual({
-      supported: true,
-      subtitle: undefined,
+      supported: false,
+      subtitle: "iOS only",
     });
   });
 

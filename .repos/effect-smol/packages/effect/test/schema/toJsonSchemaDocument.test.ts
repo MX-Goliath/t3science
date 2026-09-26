@@ -1,5 +1,6 @@
 import type { Options as AjvOptions } from "ajv"
 import { Effect, JsonSchema, Option, Predicate, Schema, SchemaGetter } from "effect"
+// import { FastCheck } from "effect/testing"
 import { describe, it } from "vitest"
 import { assertTrue, deepStrictEqual, throws } from "../utils/assert.ts"
 
@@ -28,10 +29,7 @@ function assertJsonSchemaDocument<T, E, RD>(
   expected: { schema: JsonSchema.JsonSchema; definitions?: JsonSchema.Definitions },
   options?: Schema.ToJsonSchemaOptions
 ) {
-  const document = Schema.toJsonSchemaDocument(schema, {
-    onExcessProperty: "error",
-    ...options
-  })
+  const document = Schema.toJsonSchemaDocument(schema, options)
   deepStrictEqual(document, {
     dialect: "draft-2020-12",
     schema: expected.schema,
@@ -44,18 +42,26 @@ function assertJsonSchemaDocument<T, E, RD>(
   }
   const valid = ajvDraft2020_12.validateSchema(jsonSchema)
   assertTrue(valid)
+  // const validate = ajvDraft2020_12.compile(jsonSchema)
+  // const arb = Schema.toArbitrary(schema)
+  // const codec = Schema.toCodecJson(schema)
+  // const encode = Schema.encodeSync(codec)
+  // FastCheck.assert(FastCheck.property(arb, (t) => {
+  //   const e = encode(t)
+  //   return validate(e)
+  // }))
 }
 
 describe("toJsonSchemaDocument", () => {
-  describe("unsupported schemas", () => {
-    it("rejects tuple post-rest elements", () => {
+  describe("Unsupported schemas", () => {
+    it("Tuple: unsupported post-rest elements", () => {
       assertUnsupportedSchema(
         Schema.TupleWithRest(Schema.Tuple([]), [Schema.Finite, Schema.String]),
         `Invalid schema representation document\n  at ["representation"]["rest"]`
       )
     })
 
-    it("rejects symbol property names", () => {
+    it("Struct: unsupported property signature name", () => {
       const a = Symbol.for("effect/Schema/test/a")
       assertUnsupportedSchema(
         Schema.Struct({ [a]: Schema.String }),
@@ -69,14 +75,13 @@ describe("toJsonSchemaDocument", () => {
       schema: {
         type: "object",
         patternProperties: {
-          "^Symbol\\(([\\s\\S]*)\\)$": { type: "number" }
-        },
-        additionalProperties: false
+          "^Symbol\\((.*)\\)$": { type: "number" }
+        }
       }
     })
   })
 
-  it("emits content annotations", () => {
+  it("emits built-in JSON Schema annotations", () => {
     assertJsonSchemaDocument(
       Schema.String.annotate({
         description: "encoded payload",
@@ -89,6 +94,62 @@ describe("toJsonSchemaDocument", () => {
           description: "encoded payload",
           contentMediaType: "application/json",
           contentSchema: { type: "number" }
+        }
+      }
+    )
+  })
+
+  it("preserves shared non-trivial schemas with references", () => {
+    const shared = Schema.Struct({ value: Schema.String })
+
+    assertJsonSchemaDocument(
+      Schema.Struct({ left: shared, right: shared }),
+      {
+        schema: {
+          type: "object",
+          properties: {
+            left: { $ref: "#/$defs/Objects_" },
+            right: { $ref: "#/$defs/Objects_" }
+          },
+          required: ["left", "right"],
+          additionalProperties: false
+        },
+        definitions: {
+          Objects_: {
+            type: "object",
+            properties: {
+              value: { type: "string" }
+            },
+            required: ["value"],
+            additionalProperties: false
+          }
+        }
+      }
+    )
+  })
+
+  it("inlines shared canonical unions of leaf schemas", () => {
+    assertJsonSchemaDocument(
+      Schema.Struct({ left: Schema.Number, right: Schema.Number }),
+      {
+        schema: {
+          type: "object",
+          properties: {
+            left: {
+              anyOf: [
+                { type: "number" },
+                { type: "string", enum: ["Infinity", "-Infinity", "NaN"] }
+              ]
+            },
+            right: {
+              anyOf: [
+                { type: "number" },
+                { type: "string", enum: ["Infinity", "-Infinity", "NaN"] }
+              ]
+            }
+          },
+          required: ["left", "right"],
+          additionalProperties: false
         }
       }
     )
@@ -118,39 +179,8 @@ describe("toJsonSchemaDocument", () => {
       )
     })
 
-    describe("onExcessProperty", () => {
-      it("defaults to ignore", () => {
-        deepStrictEqual(Schema.toJsonSchemaDocument(Schema.Struct({})).schema, {
-          not: { type: "null" }
-        })
-        deepStrictEqual(Schema.toJsonSchemaDocument(Schema.Struct({ a: Schema.String })).schema, {
-          type: "object",
-          properties: { a: { type: "string" } },
-          required: ["a"],
-          additionalProperties: true
-        })
-      })
-
-      it(`ignore (default)`, () => {
-        const schema = Schema.Struct({ a: Schema.String })
-
-        assertJsonSchemaDocument(schema, {
-          schema: {
-            "type": "object",
-            "properties": {
-              "a": {
-                "type": "string"
-              }
-            },
-            "required": ["a"],
-            "additionalProperties": true
-          }
-        }, {
-          onExcessProperty: "ignore"
-        })
-      })
-
-      it(`error`, () => {
+    describe("additionalProperties", () => {
+      it(`false (default)`, () => {
         const schema = Schema.Struct({ a: Schema.String })
 
         assertJsonSchemaDocument(schema, {
@@ -165,40 +195,47 @@ describe("toJsonSchemaDocument", () => {
             "additionalProperties": false
           }
         }, {
-          onExcessProperty: "error"
+          additionalProperties: false
         })
       })
 
-      it("applies to properties not covered by patternProperties", () => {
-        assertJsonSchemaDocument(Schema.Record(Schema.TemplateLiteral(["x-", Schema.String]), Schema.Number), {
+      it(`true`, () => {
+        const schema = Schema.Struct({ a: Schema.String })
+
+        assertJsonSchemaDocument(schema, {
           schema: {
-            type: "object",
-            patternProperties: {
-              "^x-[\\s\\S]*?$": {
-                anyOf: [
-                  { type: "number" },
-                  { type: "string", enum: ["Infinity", "-Infinity", "NaN"] }
-                ]
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "string"
               }
             },
-            additionalProperties: false
+            "required": ["a"],
+            "additionalProperties": true
           }
         }, {
-          onExcessProperty: "error"
+          additionalProperties: true
         })
       })
 
-      it("uses the representable part of an index-signature key", () => {
-        const key = Schema.String.check(Schema.makeFilter((value) => value.startsWith("x-")))
+      it(`schema`, () => {
+        const schema = Schema.Struct({ a: Schema.String })
 
-        assertJsonSchemaDocument(Schema.Record(key, Schema.String), {
+        assertJsonSchemaDocument(schema, {
           schema: {
-            type: "object",
-            propertyNames: { type: "string" },
-            additionalProperties: { type: "string" }
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "string"
+              }
+            },
+            "required": ["a"],
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }, {
-          onExcessProperty: "error"
+          additionalProperties: { "type": "string" }
         })
       })
     })
@@ -361,7 +398,7 @@ describe("toJsonSchemaDocument", () => {
     })
   })
 
-  it("emits standard annotations", () => {
+  it("should support JSON Schema annotations", () => {
     const schema = Schema.String.annotate({
       title: "a",
       description: "b",
@@ -383,8 +420,8 @@ describe("toJsonSchemaDocument", () => {
     })
   })
 
-  describe("identifiers", () => {
-    it(`escapes "~" and "/" in JSON Pointer references`, () => {
+  describe("identifier handling", () => {
+    it(`refs should escape "~" and "/"`, () => {
       const S = Schema.String.annotate({ identifier: "id~a/b" })
       assertJsonSchemaDocument(
         S,
@@ -397,7 +434,7 @@ describe("toJsonSchemaDocument", () => {
       )
     })
 
-    it("reuses a definition for repeated occurrences of the same identified AST", () => {
+    it("using the same identifier annotated schema twice", () => {
       const S = Schema.String.annotate({ identifier: "id" })
       assertJsonSchemaDocument(
         Schema.Union([S, S]),
@@ -415,26 +452,15 @@ describe("toJsonSchemaDocument", () => {
       )
     })
 
-    it("suffixes duplicate identifiers on different schemas", () => {
+    it("should reject duplicate identifiers on different schemas", () => {
       const S = Schema.Union([
         Schema.String.annotate({ identifier: "id", description: "a" }),
         Schema.String.annotate({ identifier: "id", description: "b" })
       ])
-      assertJsonSchemaDocument(S, {
-        schema: {
-          anyOf: [
-            { $ref: "#/$defs/id" },
-            { $ref: "#/$defs/id_1" }
-          ]
-        },
-        definitions: {
-          id: { type: "string", description: "a" },
-          id_1: { type: "string", description: "b" }
-        }
-      })
+      throws(() => Schema.toJsonSchemaDocument(S), `Duplicate identifier: "id"`)
     })
 
-    it("reuses one definition when the same identified AST appears in different schema shapes", () => {
+    it("should handle duplicate identifiers on different schemas with the same representation", () => {
       const X = Schema.String.annotate({ title: "X", identifier: "X" })
       const S = Schema.Struct({
         a: X,
@@ -524,7 +550,7 @@ describe("toJsonSchemaDocument", () => {
     })
 
     it("Error", () => {
-      const schema = Schema.ErrorInstance()
+      const schema = Schema.Error()
       assertJsonSchemaDocument(schema, {
         schema: {
           "type": "object",
@@ -602,7 +628,9 @@ describe("toJsonSchemaDocument", () => {
                 },
                 "value": {
                   "type": "string",
-                  "pattern": "^-?\\d+$"
+                  "allOf": [
+                    { "pattern": "^-?\\d+$" }
+                  ]
                 }
               },
               "required": ["_tag", "value"],
@@ -764,7 +792,9 @@ describe("toJsonSchemaDocument", () => {
       {
         schema: {
           "type": "string",
-          "pattern": "^-?\\d+$"
+          "allOf": [
+            { "pattern": "^-?\\d+$" }
+          ]
         }
       }
     )
@@ -777,7 +807,9 @@ describe("toJsonSchemaDocument", () => {
       {
         schema: {
           "type": "string",
-          "pattern": "^Symbol\\(([\\s\\S]*)\\)$"
+          "allOf": [
+            { "pattern": "^Symbol\\((.*)\\)$" }
+          ]
         }
       }
     )
@@ -790,16 +822,9 @@ describe("toJsonSchemaDocument", () => {
       {
         schema: {
           "type": "string",
-          "enum": ["Symbol(a)"]
-        }
-      }
-    )
-
-    assertJsonSchemaDocument(
-      Schema.UniqueSymbol(Symbol("a")),
-      {
-        schema: {
-          "not": {}
+          "allOf": [
+            { "pattern": "^Symbol\\((.*)\\)$" }
+          ]
         }
       }
     )
@@ -871,7 +896,7 @@ describe("toJsonSchemaDocument", () => {
       )
     })
 
-    it("ignores annotateKey annotations when the schema is not contextual", () => {
+    it("should ignore annotateKey annotations if the schema is not contextual", () => {
       assertJsonSchemaDocument(
         Schema.String.annotateKey({
           description: "a"
@@ -890,7 +915,9 @@ describe("toJsonSchemaDocument", () => {
         {
           schema: {
             "type": "string",
-            "minLength": 2
+            "allOf": [
+              { "minLength": 2 }
+            ]
           }
         }
       )
@@ -914,7 +941,9 @@ describe("toJsonSchemaDocument", () => {
           schema: {
             "type": "string",
             "description": "a",
-            "minLength": 2
+            "allOf": [
+              { "minLength": 2 }
+            ]
           }
         }
       )
@@ -928,8 +957,9 @@ describe("toJsonSchemaDocument", () => {
         {
           schema: {
             "type": "string",
-            "minLength": 2,
-            "description": "a"
+            "allOf": [
+              { "minLength": 2, "description": "a" }
+            ]
           }
         }
       )
@@ -941,8 +971,10 @@ describe("toJsonSchemaDocument", () => {
         {
           schema: {
             "type": "string",
-            "minLength": 2,
-            "maxLength": 3
+            "allOf": [
+              { "minLength": 2 },
+              { "maxLength": 3 }
+            ]
           }
         }
       )
@@ -955,8 +987,10 @@ describe("toJsonSchemaDocument", () => {
           schema: {
             "type": "string",
             "description": "a",
-            "minLength": 2,
-            "maxLength": 3
+            "allOf": [
+              { "minLength": 2 },
+              { "maxLength": 3 }
+            ]
           }
         }
       )
@@ -970,9 +1004,15 @@ describe("toJsonSchemaDocument", () => {
         {
           schema: {
             "type": "string",
-            "minLength": 2,
-            "maxLength": 3,
-            "description": "a"
+            "allOf": [
+              {
+                "minLength": 2
+              },
+              {
+                "maxLength": 3,
+                "description": "a"
+              }
+            ]
           }
         }
       )
@@ -988,8 +1028,10 @@ describe("toJsonSchemaDocument", () => {
           schema: {
             "type": "string",
             "description": "a",
-            "minLength": 2,
             "allOf": [
+              {
+                "minLength": 2
+              },
               {
                 "maxLength": 3,
                 "description": "c"
@@ -1009,9 +1051,11 @@ describe("toJsonSchemaDocument", () => {
         {
           schema: {
             "type": "string",
-            "minLength": 2,
-            "description": "b",
             "allOf": [
+              {
+                "minLength": 2,
+                "description": "b"
+              },
               {
                 "maxLength": 3,
                 "description": "c"
@@ -1052,14 +1096,10 @@ describe("toJsonSchemaDocument", () => {
         assertJsonSchemaDocument(Schema.String.check(Schema.isPattern(/^abb+$/)), {
           schema: {
             "type": "string",
-            "pattern": "^abb+$"
+            "allOf": [
+              { "pattern": "^abb+$" }
+            ]
           }
-        })
-      })
-
-      it("emits isPattern source without RegExp flags", () => {
-        assertJsonSchemaDocument(Schema.String.check(Schema.isPattern(/^abb+$/i)), {
-          schema: { type: "string", pattern: "^abb+$" }
         })
       })
 
@@ -1074,7 +1114,7 @@ describe("toJsonSchemaDocument", () => {
           assertJsonSchemaDocument(Schema.String.check(check), {
             schema: {
               "type": "string",
-              pattern
+              "allOf": [{ pattern }]
             }
           })
         }
@@ -1085,7 +1125,9 @@ describe("toJsonSchemaDocument", () => {
         assertJsonSchemaDocument(schema, {
           schema: {
             "type": "string",
-            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+            "allOf": [
+              { "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$" }
+            ]
           }
         })
       })
@@ -1095,7 +1137,9 @@ describe("toJsonSchemaDocument", () => {
         assertJsonSchemaDocument(schema, {
           schema: {
             "type": "string",
-            "pattern": "^[^A-Z]*$"
+            "allOf": [
+              { "pattern": "^[^A-Z]*$" }
+            ]
           }
         })
       })
@@ -1105,7 +1149,9 @@ describe("toJsonSchemaDocument", () => {
         assertJsonSchemaDocument(schema, {
           schema: {
             "type": "string",
-            "pattern": "^[^a-z]*$"
+            "allOf": [
+              { "pattern": "^[^a-z]*$" }
+            ]
           }
         })
       })
@@ -1115,7 +1161,9 @@ describe("toJsonSchemaDocument", () => {
         assertJsonSchemaDocument(schema, {
           schema: {
             "type": "string",
-            "pattern": "^(?:[^a-z][\\s\\S]*)?$"
+            "allOf": [
+              { "pattern": "^[^a-z]?.*$" }
+            ]
           }
         })
       })
@@ -1125,7 +1173,9 @@ describe("toJsonSchemaDocument", () => {
         assertJsonSchemaDocument(schema, {
           schema: {
             "type": "string",
-            "pattern": "^(?:[^A-Z][\\s\\S]*)?$"
+            "allOf": [
+              { "pattern": "^[^A-Z]?.*$" }
+            ]
           }
         })
       })
@@ -1194,7 +1244,9 @@ describe("toJsonSchemaDocument", () => {
             {
               schema: {
                 "type": "string",
-                "minLength": 2
+                "allOf": [
+                  { "minLength": 2 }
+                ]
               }
             }
           )
@@ -1209,7 +1261,9 @@ describe("toJsonSchemaDocument", () => {
                 "items": {
                   "type": "string"
                 },
-                "minItems": 2
+                "allOf": [
+                  { "minItems": 2 }
+                ]
               }
             }
           )
@@ -1244,7 +1298,9 @@ describe("toJsonSchemaDocument", () => {
             {
               schema: {
                 "type": "string",
-                "maxLength": 2
+                "allOf": [
+                  { "maxLength": 2 }
+                ]
               }
             }
           )
@@ -1259,7 +1315,9 @@ describe("toJsonSchemaDocument", () => {
                 "items": {
                   "type": "string"
                 },
-                "maxItems": 2
+                "allOf": [
+                  { "maxItems": 2 }
+                ]
               }
             }
           )
@@ -1271,14 +1329,16 @@ describe("toJsonSchemaDocument", () => {
             {
               schema: {
                 "type": "array",
-                "maxItems": 2,
                 "minItems": 1,
                 "prefixItems": [{
                   "type": "string"
                 }],
                 "items": {
                   "type": "string"
-                }
+                },
+                "allOf": [
+                  { "maxItems": 2 }
+                ]
               }
             }
           )
@@ -1292,9 +1352,13 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "string",
               "description": "description",
-              "format": "uuid",
-              "pattern":
-                "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|[fF]{8}-[fF]{4}-[fF]{4}-[fF]{4}-[fF]{12})$"
+              "allOf": [
+                {
+                  "format": "uuid",
+                  "pattern":
+                    "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|[fF]{8}-[fF]{4}-[fF]{4}-[fF]{4}-[fF]{12})$"
+                }
+              ]
             }
           }
         )
@@ -1307,7 +1371,11 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "string",
               "description": "description",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+              "allOf": [
+                {
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+                }
+              ]
             }
           }
         )
@@ -1320,7 +1388,9 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "string",
               "description": "description",
-              "pattern": "^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$"
+              "allOf": [
+                { "pattern": "^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$" }
+              ]
             }
           }
         )
@@ -1333,7 +1403,9 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "string",
               "description": "description",
-              "pattern": "^([0-9a-zA-Z-_]{4})*(([0-9a-zA-Z-_]{2}(==)?)|([0-9a-zA-Z-_]{3}(=)?))?$"
+              "allOf": [
+                { "pattern": "^([0-9a-zA-Z-_]{4})*(([0-9a-zA-Z-_]{2}(==)?)|([0-9a-zA-Z-_]{3}(=)?))?$" }
+              ]
             }
           }
         )
@@ -1408,7 +1480,9 @@ describe("toJsonSchemaDocument", () => {
         {
           schema: {
             "type": "number",
-            "description": "a"
+            "allOf": [{
+              "description": "a"
+            }]
           }
         }
       )
@@ -1494,7 +1568,9 @@ describe("toJsonSchemaDocument", () => {
           {
             schema: {
               "type": "number",
-              "exclusiveMinimum": 1
+              "allOf": [
+                { "exclusiveMinimum": 1 }
+              ]
             }
           }
         )
@@ -1506,7 +1582,9 @@ describe("toJsonSchemaDocument", () => {
           {
             schema: {
               "type": "number",
-              "minimum": 1
+              "allOf": [
+                { "minimum": 1 }
+              ]
             }
           }
         )
@@ -1516,7 +1594,9 @@ describe("toJsonSchemaDocument", () => {
         assertJsonSchemaDocument(Schema.Finite.check(Schema.isLessThan(1)), {
           schema: {
             "type": "number",
-            "exclusiveMaximum": 1
+            "allOf": [
+              { "exclusiveMaximum": 1 }
+            ]
           }
         })
       })
@@ -1525,7 +1605,9 @@ describe("toJsonSchemaDocument", () => {
         assertJsonSchemaDocument(Schema.Finite.check(Schema.isLessThanOrEqualTo(1)), {
           schema: {
             "type": "number",
-            "maximum": 1
+            "allOf": [
+              { "maximum": 1 }
+            ]
           }
         })
       })
@@ -1536,8 +1618,9 @@ describe("toJsonSchemaDocument", () => {
           {
             schema: {
               "type": "number",
-              "minimum": 1,
-              "maximum": 10
+              "allOf": [
+                { "minimum": 1, "maximum": 10 }
+              ]
             }
           }
         )
@@ -1548,8 +1631,9 @@ describe("toJsonSchemaDocument", () => {
           {
             schema: {
               "type": "number",
-              "exclusiveMinimum": 1,
-              "maximum": 10
+              "allOf": [
+                { "exclusiveMinimum": 1, "maximum": 10 }
+              ]
             }
           }
         )
@@ -1560,8 +1644,9 @@ describe("toJsonSchemaDocument", () => {
           {
             schema: {
               "type": "number",
-              "minimum": 1,
-              "exclusiveMaximum": 10
+              "allOf": [
+                { "minimum": 1, "exclusiveMaximum": 10 }
+              ]
             }
           }
         )
@@ -1572,8 +1657,9 @@ describe("toJsonSchemaDocument", () => {
           {
             schema: {
               "type": "number",
-              "exclusiveMinimum": 1,
-              "exclusiveMaximum": 10
+              "allOf": [
+                { "exclusiveMinimum": 1, "exclusiveMaximum": 10 }
+              ]
             }
           }
         )
@@ -1585,16 +1671,9 @@ describe("toJsonSchemaDocument", () => {
           {
             schema: {
               "type": "integer",
-              "multipleOf": 2
-            }
-          }
-        )
-        assertJsonSchemaDocument(
-          Schema.Int.check(Schema.isMultipleOf(-2)),
-          {
-            schema: {
-              "type": "integer",
-              "multipleOf": 2
+              "allOf": [
+                { "multipleOf": 2 }
+              ]
             }
           }
         )
@@ -2255,7 +2334,10 @@ describe("toJsonSchemaDocument", () => {
         schema,
         {
           schema: {
-            "not": { "type": "null" }
+            "anyOf": [
+              { "type": "object" },
+              { "type": "array" }
+            ]
           }
         }
       )
@@ -2263,7 +2345,14 @@ describe("toJsonSchemaDocument", () => {
         schema.annotate({ description: "a" }),
         {
           schema: {
-            "not": { "type": "null" },
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "array"
+              }
+            ],
             "description": "a"
           }
         }
@@ -2749,33 +2838,6 @@ describe("toJsonSchemaDocument", () => {
       )
     })
 
-    it("Record(String, Struct({}))", () => {
-      assertJsonSchemaDocument(
-        Schema.Record(Schema.String, Schema.Struct({})),
-        {
-          schema: {
-            type: "object",
-            additionalProperties: { not: { type: "null" } }
-          }
-        }
-      )
-    })
-
-    it("Record(isStartsWith, Struct({}))", () => {
-      assertJsonSchemaDocument(
-        Schema.Record(Schema.String.check(Schema.isStartsWith("a")), Schema.Struct({})),
-        {
-          schema: {
-            type: "object",
-            patternProperties: {
-              "^a": { not: { type: "null" } }
-            },
-            additionalProperties: false
-          }
-        }
-      )
-    })
-
     it("Record(String, Finite)", () => {
       assertJsonSchemaDocument(
         Schema.Record(Schema.String, Schema.Finite),
@@ -2798,7 +2860,9 @@ describe("toJsonSchemaDocument", () => {
             "type": "object",
             "additionalProperties": {
               "type": "number",
-              "description": "v"
+              "allOf": [{
+                "description": "v"
+              }]
             },
             "description": "r"
           }
@@ -2806,8 +2870,8 @@ describe("toJsonSchemaDocument", () => {
       )
     })
 
-    it("JsonObject", () => {
-      const schema = Schema.JsonObject
+    it("Record(String, Json)", () => {
+      const schema = Schema.Record(Schema.String, Schema.Json)
       assertJsonSchemaDocument(
         schema,
         {
@@ -2826,8 +2890,7 @@ describe("toJsonSchemaDocument", () => {
               "^a[\\s\\S]*?$": {
                 "type": "number"
               }
-            },
-            "additionalProperties": false
+            }
           }
         }
       )
@@ -2860,88 +2923,10 @@ describe("toJsonSchemaDocument", () => {
               "^[^a-z]*$": {
                 "type": "number"
               }
-            },
-            "additionalProperties": false
+            }
           }
         }
       )
-    })
-
-    it("uses propertyNames for conjunctive record key patterns", () => {
-      assertJsonSchemaDocument(
-        Schema.Record(Schema.String.check(Schema.isPattern(/^ab/)), Schema.Finite),
-        {
-          schema: {
-            type: "object",
-            patternProperties: {
-              "^ab": { type: "number" }
-            },
-            additionalProperties: false
-          }
-        }
-      )
-      assertJsonSchemaDocument(
-        Schema.Record(
-          Schema.String.check(Schema.isPattern(/^ab/), Schema.isEndsWith("z")),
-          Schema.Finite
-        ),
-        {
-          schema: {
-            type: "object",
-            propertyNames: {
-              type: "string",
-              pattern: "^ab",
-              allOf: [{ pattern: "z$" }]
-            },
-            additionalProperties: { type: "number" }
-          }
-        }
-      )
-      assertJsonSchemaDocument(
-        Schema.Record(
-          Schema.String.check(Schema.isStartsWith("A"), Schema.isUppercased()),
-          Schema.Finite
-        ),
-        {
-          schema: {
-            type: "object",
-            propertyNames: {
-              type: "string",
-              pattern: "^A",
-              allOf: [{ pattern: "^[^a-z]*$" }]
-            },
-            additionalProperties: { type: "number" }
-          }
-        }
-      )
-    })
-
-    it("does not use a partial pattern as an index selector", () => {
-      const schema = Schema.Record(
-        Schema.String.check(Schema.isStartsWith("x"), Schema.isMinLength(3)),
-        Schema.Finite
-      )
-      assertJsonSchemaDocument(
-        schema,
-        {
-          schema: {
-            type: "object",
-            additionalProperties: true
-          }
-        },
-        { onExcessProperty: "ignore" }
-      )
-      assertJsonSchemaDocument(schema, {
-        schema: {
-          type: "object",
-          propertyNames: {
-            type: "string",
-            pattern: "^x",
-            minLength: 3
-          },
-          additionalProperties: { type: "number" }
-        }
-      })
     })
 
     describe("checks", () => {
@@ -2954,7 +2939,9 @@ describe("toJsonSchemaDocument", () => {
               "additionalProperties": {
                 "type": "number"
               },
-              "minProperties": 2
+              "allOf": [
+                { "minProperties": 2 }
+              ]
             }
           }
         )
@@ -2967,7 +2954,7 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "object",
               "additionalProperties": { "type": "number" },
-              "maxProperties": 2
+              "allOf": [{ "maxProperties": 2 }]
             }
           }
         )
@@ -2980,8 +2967,7 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "object",
               "additionalProperties": { "type": "number" },
-              "minProperties": 2,
-              "maxProperties": 2
+              "allOf": [{ "minProperties": 2, "maxProperties": 2 }]
             }
           }
         )
@@ -2989,81 +2975,27 @@ describe("toJsonSchemaDocument", () => {
     })
   })
 
-  describe("StructWithRest", () => {
-    it("property and string index", () => {
-      assertJsonSchemaDocument(
-        Schema.StructWithRest(Schema.Struct({ a: Schema.String }), [
-          Schema.Record(Schema.String, Schema.Union([Schema.Finite, Schema.String]))
-        ]),
-        {
-          schema: {
-            "type": "object",
-            "properties": {
-              "a": { "type": "string" }
-            },
-            "allOf": [{
-              "type": "object",
-              "additionalProperties": {
-                "anyOf": [
-                  { "type": "number" },
-                  { "type": "string" }
-                ]
-              }
-            }],
-            "required": ["a"]
-          }
+  it("StructWithRest", () => {
+    assertJsonSchemaDocument(
+      Schema.StructWithRest(Schema.Struct({ a: Schema.String }), [
+        Schema.Record(Schema.String, Schema.Union([Schema.Finite, Schema.String]))
+      ]),
+      {
+        schema: {
+          "type": "object",
+          "properties": {
+            "a": { "type": "string" }
+          },
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "number" },
+              { "type": "string" }
+            ]
+          },
+          "required": ["a"]
         }
-      )
-    })
-
-    it("pattern and string indexes", () => {
-      assertJsonSchemaDocument(
-        Schema.StructWithRest(Schema.Struct({}), [
-          Schema.Record(Schema.String.check(Schema.isUppercased()), Schema.Finite),
-          Schema.Record(Schema.String, Schema.Boolean)
-        ]),
-        {
-          schema: {
-            type: "object",
-            patternProperties: {
-              "^[^a-z]*$": { type: "number" }
-            },
-            allOf: [{ type: "object", additionalProperties: { type: "boolean" } }]
-          }
-        }
-      )
-    })
-
-    it("property and compound pattern index", () => {
-      assertJsonSchemaDocument(
-        Schema.StructWithRest(Schema.Struct({ a: Schema.String }), [
-          Schema.Record(
-            Schema.String.check(Schema.isStartsWith("x"), Schema.isEndsWith("z")),
-            Schema.Finite
-          )
-        ]),
-        {
-          schema: {
-            type: "object",
-            properties: {
-              a: { type: "string" }
-            },
-            required: ["a"],
-            propertyNames: {
-              anyOf: [
-                { enum: ["a"] },
-                {
-                  type: "string",
-                  pattern: "^x",
-                  allOf: [{ pattern: "z$" }]
-                }
-              ]
-            },
-            additionalProperties: { type: "number" }
-          }
-        }
-      )
-    })
+      }
+    )
   })
 
   describe("Tuple", () => {
@@ -3314,7 +3246,9 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "array",
               "items": { "type": "string" },
-              "minItems": 2
+              "allOf": [
+                { "minItems": 2 }
+              ]
             }
           }
         )
@@ -3327,7 +3261,9 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "array",
               "items": { "type": "string" },
-              "maxItems": 2
+              "allOf": [
+                { "maxItems": 2 }
+              ]
             }
           }
         )
@@ -3356,7 +3292,9 @@ describe("toJsonSchemaDocument", () => {
             schema: {
               "type": "array",
               "items": { "type": "string" },
-              "uniqueItems": true
+              "allOf": [
+                { "uniqueItems": true }
+              ]
             }
           }
         )
@@ -3433,20 +3371,6 @@ describe("toJsonSchemaDocument", () => {
       )
     })
 
-    it("does not compact duplicate enum values", () => {
-      assertJsonSchemaDocument(
-        Schema.Union([Schema.Literal("a"), Schema.Literal("a")]),
-        {
-          schema: {
-            anyOf: [
-              { type: "string", enum: ["a"] },
-              { type: "string", enum: ["a"] }
-            ]
-          }
-        }
-      )
-    })
-
     it("String | Number", () => {
       assertJsonSchemaDocument(
         Schema.Union([
@@ -3490,7 +3414,9 @@ describe("toJsonSchemaDocument", () => {
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^-?\\d+$"
+                "allOf": [
+                  { "pattern": "^-?\\d+$" }
+                ]
               },
               { "type": "string" }
             ]
@@ -3698,10 +3624,10 @@ describe("toJsonSchemaDocument", () => {
         Schema.fromJsonString(MyEvent),
         {
           schema: {
-            "$ref": "#/$defs/MyEventEncoded"
+            "$ref": "#/$defs/MyEventJsonEncoding"
           },
           definitions: {
-            "MyEventEncoded": {
+            "MyEventJsonEncoding": {
               "type": "string",
               "contentMediaType": "application/json"
             }
@@ -3743,10 +3669,10 @@ describe("toJsonSchemaDocument", () => {
       A,
       {
         schema: {
-          "$ref": "#/$defs/AEncoded"
+          "$ref": "#/$defs/AJsonEncoding"
         },
         definitions: {
-          "AEncoded": {
+          "AJsonEncoding": {
             "type": "object",
             "properties": {
               "a": { "type": "string" }
@@ -3760,16 +3686,16 @@ describe("toJsonSchemaDocument", () => {
     )
   })
 
-  it("Error preserves its identifier as a canonical reference", () => {
-    class E extends Schema.Error<E>("E")({
+  it("ErrorClass preserves its identifier as a canonical reference", () => {
+    class E extends Schema.ErrorClass<E>("E")({
       a: Schema.String
     }) {}
     assertJsonSchemaDocument(E, {
       schema: {
-        "$ref": "#/$defs/EEncoded"
+        "$ref": "#/$defs/EJsonEncoding"
       },
       definitions: {
-        "EEncoded": {
+        "EJsonEncoding": {
           "type": "object",
           "properties": {
             "a": { "type": "string" }

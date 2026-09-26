@@ -52,20 +52,13 @@ describe("pullRequestChecksState", () => {
   });
 });
 
-/**
- * Every element of the tree the row returned, so a nested indicator can be looked for. The row
- * hands its slots to the shared row lines as props rather than children, so every prop that
- * holds an element is walked too.
- */
+/** Every element of the tree the row returned, so a nested indicator can be looked for. */
 function flatten(node: ReactNode): ReadonlyArray<ReturnType<typeof Object>> {
   const found: unknown[] = [];
   for (const child of Children.toArray(node)) {
     if (!isValidElement(child)) continue;
     found.push(child);
-    for (const value of Object.values(child.props as Record<string, unknown>)) {
-      if (isValidElement(value)) found.push(...flatten(value));
-      else if (Array.isArray(value)) found.push(...flatten(value.filter(isValidElement)));
-    }
+    found.push(...flatten((child.props as { readonly children?: ReactNode }).children));
   }
   return found as ReadonlyArray<ReturnType<typeof Object>>;
 }

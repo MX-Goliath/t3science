@@ -38,7 +38,7 @@ export class SecretsManagerTestFunction extends Lambda.Function<Lambda.Function>
 export default SecretsManagerTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const stringSecret = yield* SecretsManager.Secret("StringSecret", {

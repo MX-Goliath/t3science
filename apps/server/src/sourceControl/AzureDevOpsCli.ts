@@ -29,7 +29,7 @@ const azureDevOpsCommandErrorFields = {
   cause: Schema.Defect(),
 };
 
-export class AzureDevOpsCliUnavailableError extends Schema.TaggedError<AzureDevOpsCliUnavailableError>()(
+export class AzureDevOpsCliUnavailableError extends Schema.TaggedErrorClass<AzureDevOpsCliUnavailableError>()(
   "AzureDevOpsCliUnavailableError",
   azureDevOpsCommandErrorFields,
 ) {
@@ -42,7 +42,7 @@ export class AzureDevOpsCliUnavailableError extends Schema.TaggedError<AzureDevO
   }
 }
 
-export class AzureDevOpsCliAuthenticationError extends Schema.TaggedError<AzureDevOpsCliAuthenticationError>()(
+export class AzureDevOpsCliAuthenticationError extends Schema.TaggedErrorClass<AzureDevOpsCliAuthenticationError>()(
   "AzureDevOpsCliAuthenticationError",
   azureDevOpsCommandErrorFields,
 ) {
@@ -55,7 +55,7 @@ export class AzureDevOpsCliAuthenticationError extends Schema.TaggedError<AzureD
   }
 }
 
-export class AzureDevOpsCliRateLimitError extends Schema.TaggedError<AzureDevOpsCliRateLimitError>()(
+export class AzureDevOpsCliRateLimitError extends Schema.TaggedErrorClass<AzureDevOpsCliRateLimitError>()(
   "AzureDevOpsCliRateLimitError",
   azureDevOpsCommandErrorFields,
 ) {
@@ -68,7 +68,7 @@ export class AzureDevOpsCliRateLimitError extends Schema.TaggedError<AzureDevOps
   }
 }
 
-export class AzureDevOpsPullRequestNotFoundError extends Schema.TaggedError<AzureDevOpsPullRequestNotFoundError>()(
+export class AzureDevOpsPullRequestNotFoundError extends Schema.TaggedErrorClass<AzureDevOpsPullRequestNotFoundError>()(
   "AzureDevOpsPullRequestNotFoundError",
   azureDevOpsCommandErrorFields,
 ) {
@@ -81,7 +81,7 @@ export class AzureDevOpsPullRequestNotFoundError extends Schema.TaggedError<Azur
   }
 }
 
-export class AzureDevOpsCommandFailedError extends Schema.TaggedError<AzureDevOpsCommandFailedError>()(
+export class AzureDevOpsCommandFailedError extends Schema.TaggedErrorClass<AzureDevOpsCommandFailedError>()(
   "AzureDevOpsCommandFailedError",
   azureDevOpsCommandErrorFields,
 ) {
@@ -137,7 +137,7 @@ const azureDevOpsDecodeErrorFields = {
   cause: Schema.Defect(),
 };
 
-export class AzureDevOpsPullRequestListDecodeError extends Schema.TaggedError<AzureDevOpsPullRequestListDecodeError>()(
+export class AzureDevOpsPullRequestListDecodeError extends Schema.TaggedErrorClass<AzureDevOpsPullRequestListDecodeError>()(
   "AzureDevOpsPullRequestListDecodeError",
   {
     operation: Schema.Literal("listPullRequests"),
@@ -153,7 +153,7 @@ export class AzureDevOpsPullRequestListDecodeError extends Schema.TaggedError<Az
   }
 }
 
-export class AzureDevOpsPullRequestDecodeError extends Schema.TaggedError<AzureDevOpsPullRequestDecodeError>()(
+export class AzureDevOpsPullRequestDecodeError extends Schema.TaggedErrorClass<AzureDevOpsPullRequestDecodeError>()(
   "AzureDevOpsPullRequestDecodeError",
   {
     operation: Schema.Literal("getPullRequest"),
@@ -175,7 +175,7 @@ const AzureDevOpsRepositoryDecodeOperation = Schema.Literals([
   "createRepository",
 ]);
 
-export class AzureDevOpsRepositoryDecodeError extends Schema.TaggedError<AzureDevOpsRepositoryDecodeError>()(
+export class AzureDevOpsRepositoryDecodeError extends Schema.TaggedErrorClass<AzureDevOpsRepositoryDecodeError>()(
   "AzureDevOpsRepositoryDecodeError",
   {
     operation: AzureDevOpsRepositoryDecodeOperation,
@@ -202,6 +202,8 @@ export const AzureDevOpsCliError = Schema.Union([
   AzureDevOpsRepositoryDecodeError,
 ]);
 export type AzureDevOpsCliError = typeof AzureDevOpsCliError.Type;
+
+export const isAzureDevOpsCliError = Schema.is(AzureDevOpsCliError);
 
 export interface AzureDevOpsRepositoryCloneUrls {
   readonly nameWithOwner: string;
@@ -350,7 +352,6 @@ function decodeAzureDevOpsJson<S extends Schema.Top>(
   );
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const process = yield* VcsProcess.VcsProcess;
 

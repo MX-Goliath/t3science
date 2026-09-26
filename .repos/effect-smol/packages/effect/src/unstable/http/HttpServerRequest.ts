@@ -33,7 +33,6 @@ import * as HttpClientRequest from "./HttpClientRequest.ts"
 import * as HttpIncomingMessage from "./HttpIncomingMessage.ts"
 import { hasBody, type HttpMethod } from "./HttpMethod.ts"
 import { HttpServerError, type RequestError, RequestParseError } from "./HttpServerError.ts"
-import * as bodyInternal from "./internal/httpBody.ts"
 import * as Multipart from "./Multipart.ts"
 import * as UrlParams from "./UrlParams.ts"
 
@@ -46,7 +45,7 @@ export {
    * Use to configure the maximum body size accepted while reading server
    * request bodies.
    *
-   * @category references
+   * @category fiber refs
    * @since 4.0.0
    */
   MaxBodySize
@@ -106,7 +105,7 @@ export interface HttpServerRequest extends HttpIncomingMessage.HttpIncomingMessa
  * Use to access the request currently being handled by HTTP server routes and
  * middleware.
  *
- * @category services
+ * @category context
  * @since 4.0.0
  */
 export const HttpServerRequest: Context.Service<HttpServerRequest, HttpServerRequest> = Context.Service(
@@ -126,7 +125,7 @@ export const HttpServerRequest: Context.Service<HttpServerRequest, HttpServerReq
  * Each key maps to a string value, or to an array when the parameter appears more
  * than once.
  *
- * @category services
+ * @category search params
  * @since 4.0.0
  */
 export class ParsedSearchParams extends Context.Service<
@@ -141,7 +140,7 @@ export class ParsedSearchParams extends Context.Service<
  *
  * Repeated parameters are represented as arrays in insertion order.
  *
- * @category parsing
+ * @category search params
  * @since 4.0.0
  */
 export const searchParamsFromURL = (url: URL): ReadonlyRecord<string, string | Array<string>> => {
@@ -245,7 +244,7 @@ export const schemaSearchParams = <
  */
 export const schemaBodyJson = <A, RD>(
   schema: Schema.ConstraintDecoder<A, RD>,
-  options?: (ParseOptions & HttpIncomingMessage.JsonOptions) | undefined
+  options?: ParseOptions | undefined
 ): Effect.Effect<A, HttpServerError | Schema.SchemaError, HttpServerRequest | RD> => {
   const parse = HttpIncomingMessage.schemaBodyJson(schema, options)
   return Effect.flatMap(HttpServerRequest, parse)
@@ -347,11 +346,11 @@ export const schemaBodyMultipart = <A, I extends Partial<Multipart.Persisted>, R
  */
 export const schemaBodyFormJson = <A, RD>(
   schema: Schema.ConstraintDecoder<A, RD>,
-  options?: (ParseOptions & HttpIncomingMessage.JsonOptions) | undefined
+  options?: ParseOptions | undefined
 ) => {
   const parseMultipart = Multipart.schemaJson(schema, options)
   return (field: string) => {
-    const parseUrlParams = Schema.JsonFromUrlParamsField(field, options).pipe(
+    const parseUrlParams = UrlParams.schemaJsonField(field).pipe(
       Schema.decodeTo(schema),
       Schema.decodeEffect
     )
@@ -424,36 +423,34 @@ export const fromWeb = (request: globalThis.Request): HttpServerRequest =>
  * @category converting
  * @since 4.0.0
  */
-export const toClientRequest = (request: HttpServerRequest): HttpClientRequest.HttpClientRequest => {
-  const body = toClientBody(request)
-  const headers = body._tag !== "Empty" && body.contentLength === undefined
-    ? Headers.remove(request.headers, "content-length")
-    : request.headers
-  return HttpClientRequest.setUrl(
+export const toClientRequest = (request: HttpServerRequest): HttpClientRequest.HttpClientRequest =>
+  HttpClientRequest.setUrl(
     HttpClientRequest.makeWith(
       request.method,
       "",
       UrlParams.empty,
       Option.none(),
-      headers,
-      body
+      request.headers,
+      toClientBody(request)
     ),
     Option.getOrElse(toURL(request), () => request.url)
   )
-}
 
-const toClientBody = (request: HttpServerRequest): HttpBody.HttpBody => {
-  if (!hasBody(request.method)) {
-    return HttpBody.empty
-  }
-  const formData = getFormDataBody(request)
-  return formData === undefined
+const toClientBody = (request: HttpServerRequest): HttpBody.HttpBody =>
+  hasBody(request.method)
     ? HttpBody.stream(
       request.stream,
       request.headers["content-type"],
-      bodyInternal.parseContentLength(request.headers["content-length"])
+      parseContentLength(request.headers["content-length"])
     )
-    : HttpBody.formData(formData)
+    : HttpBody.empty
+
+const parseContentLength = (contentLength: string | undefined): number | undefined => {
+  if (contentLength === undefined) {
+    return undefined
+  }
+  const parsed = Number.parseInt(contentLength, 10)
+  return Number.isNaN(parsed) ? undefined : parsed
 }
 
 const removeHost = (url: string) => {
@@ -840,11 +837,7 @@ class ClientRequestImpl extends Inspectable.Class implements HttpServerRequest {
   }
 
   get arrayBuffer(): Effect.Effect<ArrayBuffer, HttpServerError> {
-    return Effect.map(
-      this.bytes,
-      // Copy this view because Buffer views may share a larger ArrayBuffer.
-      (bytes) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
-    )
+    return Effect.map(this.bytes, (bytes) => bytes.slice().buffer)
   }
 
   get upgrade(): Effect.Effect<Socket.Socket, HttpServerError> {
@@ -870,24 +863,24 @@ const rawBodyStream = (request: HttpServerRequest, body: unknown): Stream.Stream
   if (body instanceof Request) {
     return streamFromReadable(request, body.body)
   }
+  if (isFormData(body)) {
+    return streamFromReadable(request, new Response(body).body)
+  }
   if (isReadableStream(body)) {
     return streamFromReadable(request, body)
-  }
-  if (isBodyInit(body)) {
-    return streamFromReadable(request, new Response(body).body)
   }
   return Stream.fail(requestParseError(request, "Unsupported body type"))
 }
 
 const rawBodyBytes = (request: HttpServerRequest, body: unknown): Effect.Effect<Uint8Array, HttpServerError> => {
+  if (body instanceof Blob) {
+    return bytesFromBodyInit(request, body)
+  }
   if (body instanceof Request) {
     return Effect.tryPromise({
       try: () => body.arrayBuffer().then((buffer) => new Uint8Array(buffer)),
       catch: (cause) => requestParseError(request, undefined, cause)
     })
-  }
-  if (isBodyInit(body)) {
-    return bytesFromBodyInit(request, body)
   }
   return Effect.fail(requestParseError(request, "Unsupported body type"))
 }
@@ -1001,14 +994,6 @@ const isReadableStream = (u: unknown): u is ReadableStream<Uint8Array> =>
   typeof ReadableStream !== "undefined" && u instanceof ReadableStream
 
 const isFormData = (u: unknown): u is FormData => typeof FormData !== "undefined" && u instanceof FormData
-
-const isBodyInit = (u: unknown): u is BodyInit =>
-  typeof u === "string" ||
-  (typeof ArrayBuffer !== "undefined" && (u instanceof ArrayBuffer || ArrayBuffer.isView(u))) ||
-  (typeof Blob !== "undefined" && u instanceof Blob) ||
-  isFormData(u) ||
-  (typeof URLSearchParams !== "undefined" && u instanceof URLSearchParams) ||
-  isReadableStream(u)
 
 const textDecoder = new TextDecoder()
 

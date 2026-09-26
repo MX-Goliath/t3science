@@ -55,7 +55,7 @@ const decodeThemeFileJsonExit = Schema.decodeUnknownExit(
 );
 const isEnvironmentThemeId = Schema.is(EnvironmentThemeId);
 
-export class ThemeSettingsUnreadableError extends Schema.TaggedError<ThemeSettingsUnreadableError>()(
+export class ThemeSettingsUnreadableError extends Schema.TaggedErrorClass<ThemeSettingsUnreadableError>()(
   "ThemeSettingsUnreadableError",
   { settingsPath: Schema.String, cause: Schema.Defect() },
 ) {
@@ -64,7 +64,7 @@ export class ThemeSettingsUnreadableError extends Schema.TaggedError<ThemeSettin
   }
 }
 
-export class ThemeSettingsMalformedError extends Schema.TaggedError<ThemeSettingsMalformedError>()(
+export class ThemeSettingsMalformedError extends Schema.TaggedErrorClass<ThemeSettingsMalformedError>()(
   "ThemeSettingsMalformedError",
   { settingsPath: Schema.String, cause: Schema.Defect() },
 ) {
@@ -73,7 +73,7 @@ export class ThemeSettingsMalformedError extends Schema.TaggedError<ThemeSetting
   }
 }
 
-export class ThemeSettingsBusyError extends Schema.TaggedError<ThemeSettingsBusyError>()(
+export class ThemeSettingsBusyError extends Schema.TaggedErrorClass<ThemeSettingsBusyError>()(
   "ThemeSettingsBusyError",
   { settingsPath: Schema.String, attempts: Schema.Number },
 ) {
@@ -82,7 +82,7 @@ export class ThemeSettingsBusyError extends Schema.TaggedError<ThemeSettingsBusy
   }
 }
 
-export class ThemeSettingsWriteError extends Schema.TaggedError<ThemeSettingsWriteError>()(
+export class ThemeSettingsWriteError extends Schema.TaggedErrorClass<ThemeSettingsWriteError>()(
   "ThemeSettingsWriteError",
   { settingsPath: Schema.String, cause: Schema.Defect() },
 ) {
@@ -91,7 +91,7 @@ export class ThemeSettingsWriteError extends Schema.TaggedError<ThemeSettingsWri
   }
 }
 
-export class ThemeFileUnreadableError extends Schema.TaggedError<ThemeFileUnreadableError>()(
+export class ThemeFileUnreadableError extends Schema.TaggedErrorClass<ThemeFileUnreadableError>()(
   "ThemeFileUnreadableError",
   // Optional: a path that never existed has no underlying failure to carry,
   // and a manufactured string there would only look like a real one.
@@ -102,7 +102,7 @@ export class ThemeFileUnreadableError extends Schema.TaggedError<ThemeFileUnread
   }
 }
 
-export class ThemeFileInvalidError extends Schema.TaggedError<ThemeFileInvalidError>()(
+export class ThemeFileInvalidError extends Schema.TaggedErrorClass<ThemeFileInvalidError>()(
   "ThemeFileInvalidError",
   { filePath: Schema.String, cause: Schema.Defect() },
 ) {
@@ -111,7 +111,7 @@ export class ThemeFileInvalidError extends Schema.TaggedError<ThemeFileInvalidEr
   }
 }
 
-export class ThemeFileTooLargeError extends Schema.TaggedError<ThemeFileTooLargeError>()(
+export class ThemeFileTooLargeError extends Schema.TaggedErrorClass<ThemeFileTooLargeError>()(
   "ThemeFileTooLargeError",
   { filePath: Schema.String, limit: Schema.Number },
 ) {
@@ -120,7 +120,7 @@ export class ThemeFileTooLargeError extends Schema.TaggedError<ThemeFileTooLarge
   }
 }
 
-export class ThemeFileColorlessError extends Schema.TaggedError<ThemeFileColorlessError>()(
+export class ThemeFileColorlessError extends Schema.TaggedErrorClass<ThemeFileColorlessError>()(
   "ThemeFileColorlessError",
   { filePath: Schema.String },
 ) {
@@ -129,7 +129,7 @@ export class ThemeFileColorlessError extends Schema.TaggedError<ThemeFileColorle
   }
 }
 
-export class ThemePublishError extends Schema.TaggedError<ThemePublishError>()(
+export class ThemePublishError extends Schema.TaggedErrorClass<ThemePublishError>()(
   "ThemePublishError",
   { themesDir: Schema.String, cause: Schema.Defect() },
 ) {
@@ -141,7 +141,7 @@ export class ThemePublishError extends Schema.TaggedError<ThemePublishError>()(
 const INVALID_THEME_ID_REASON =
   "is not a valid theme id (lowercase letters, digits, and hyphens; not an appearance keyword)";
 
-export class ThemeIdUnknownError extends Schema.TaggedError<ThemeIdUnknownError>()(
+export class ThemeIdUnknownError extends Schema.TaggedErrorClass<ThemeIdUnknownError>()(
   "ThemeIdUnknownError",
   { themeId: Schema.String, known: Schema.Array(Schema.String) },
 ) {
@@ -150,7 +150,7 @@ export class ThemeIdUnknownError extends Schema.TaggedError<ThemeIdUnknownError>
   }
 }
 
-export class ThemeIdInvalidError extends Schema.TaggedError<ThemeIdInvalidError>()(
+export class ThemeIdInvalidError extends Schema.TaggedErrorClass<ThemeIdInvalidError>()(
   "ThemeIdInvalidError",
   { themeId: Schema.String },
 ) {
@@ -160,7 +160,7 @@ export class ThemeIdInvalidError extends Schema.TaggedError<ThemeIdInvalidError>
 }
 
 /** A filename that cannot be a theme id, where --id is the way out. */
-export class ThemeFileIdInvalidError extends Schema.TaggedError<ThemeFileIdInvalidError>()(
+export class ThemeFileIdInvalidError extends Schema.TaggedErrorClass<ThemeFileIdInvalidError>()(
   "ThemeFileIdInvalidError",
   { themeId: Schema.String, filePath: Schema.String },
 ) {
@@ -169,7 +169,7 @@ export class ThemeFileIdInvalidError extends Schema.TaggedError<ThemeFileIdInval
   }
 }
 
-export class ThemeTargetMissingError extends Schema.TaggedError<ThemeTargetMissingError>()(
+export class ThemeTargetMissingError extends Schema.TaggedErrorClass<ThemeTargetMissingError>()(
   "ThemeTargetMissingError",
   {},
 ) {
@@ -178,7 +178,7 @@ export class ThemeTargetMissingError extends Schema.TaggedError<ThemeTargetMissi
   }
 }
 
-const envT3Home = Config.String("T3CODE_HOME").pipe(Config.option);
+const envT3Home = Config.string("T3CODE_HOME").pipe(Config.option);
 
 const resolveThemePaths = Effect.fn(function* (explicitBaseDir: Option.Option<string>) {
   // Same precedence as the rest of the CLI: --base-dir, then T3CODE_HOME,
@@ -463,11 +463,11 @@ const resolvableThemeIds = Effect.fn(function* (themesDir: string) {
 
 const themeSetCommand = Command.make("set", {
   baseDir: baseDirFlag,
-  id: Flag.String("id").pipe(
+  id: Flag.string("id").pipe(
     Flag.withDescription("Theme id to publish a file under, instead of its filename."),
     Flag.optional,
   ),
-  theme: Argument.String("theme").pipe(
+  theme: Argument.string("theme").pipe(
     Argument.withDescription(
       'A theme id (a built-in, or one this machine publishes — themes/nightfall.json is "nightfall"), or a path to a theme JSON file to publish and set in one step.',
     ),

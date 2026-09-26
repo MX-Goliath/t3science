@@ -20,75 +20,9 @@ import { redact } from "../../Redactable.ts"
 import * as Redacted from "../../Redacted.ts"
 import * as Schema from "../../Schema.ts"
 import type * as HttpClientError from "../http/HttpClientError.ts"
+import { HttpRequestDetails, HttpResponseDetails } from "./Response.ts"
 
-/**
- * Schema for HTTP requests to an AI provider.
- *
- * **Example** (Describing an HTTP request)
- *
- * ```ts import.meta.vitest
- * import type { AiError } from "effect/unstable/ai"
- *
- * const requestDetails: typeof AiError.HttpRequestDetails.Type = {
- *   method: "POST",
- *   url: "https://api.openai.com/v1/responses",
- *   urlParams: [],
- *   hash: undefined,
- *   headers: { "Content-Type": "application/json" }
- * }
- * const result = [requestDetails.method, requestDetails.urlParams] // => ["POST", []]
- * ```
- *
- * @category schemas
- * @since 4.0.0
- */
-export const HttpRequestDetails = Schema.Struct({
-  method: Schema.Literals(["GET", "POST", "PATCH", "PUT", "DELETE", "HEAD", "OPTIONS", "TRACE"]),
-  url: Schema.String,
-  urlParams: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
-  hash: Schema.optional(Schema.String),
-  headers: Schema.Record(
-    Schema.String,
-    Schema.Union([
-      Schema.String,
-      Schema.Redacted(Schema.String)
-    ])
-  )
-}).annotate({ identifier: "HttpRequestDetails" })
-
-/**
- * Schema for HTTP responses from an AI provider.
- *
- * **Example** (Describing an HTTP response)
- *
- * ```ts import.meta.vitest
- * import type { AiError } from "effect/unstable/ai"
- *
- * const responseDetails: typeof AiError.HttpResponseDetails.Type = {
- *   status: 200,
- *   headers: {
- *     "Content-Type": "application/json",
- *     "X-Request-Id": "req_abc123"
- *   }
- * }
- * const result = [responseDetails.status, responseDetails.headers["X-Request-Id"]] // => [200, "req_abc123"]
- * ```
- *
- * @category schemas
- * @since 4.0.0
- */
-export const HttpResponseDetails = Schema.Struct({
-  status: Schema.Int,
-  headers: Schema.Record(
-    Schema.String,
-    Schema.Union([
-      Schema.String,
-      Schema.Redacted(Schema.String)
-    ])
-  )
-}).annotate({ identifier: "HttpResponseDetails" })
-
-const ReasonTypeId = "~effect/ai/AiError/Reason" as const
+const ReasonTypeId = "~effect/unstable/ai/AiError/Reason" as const
 
 const providerMetadataWithDefaults = <Metadata extends ProviderMetadata>() =>
   (ProviderMetadata as unknown as typeof ProviderMetadata & Schema.Schema<Metadata>).pipe(
@@ -121,7 +55,7 @@ const redactHeaders = (headers: Record<string, string>): Record<string, string> 
  *
  * **Example** (Creating a network error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.NetworkError({
@@ -136,13 +70,15 @@ const redactHeaders = (headers: Record<string, string>): Record<string, string> 
  *   description: "Connection timeout after 30 seconds"
  * })
  *
- * const result = [error.reason, error.isRetryable] // => ["TransportError", true]
+ * console.log(error.isRetryable) // true
+ * console.log(error.message)
+ * // "Transport: Connection timeout after 30 seconds (POST https://api.openai.com/v1/completions)"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class NetworkError extends Schema.Error<NetworkError>(
+export class NetworkError extends Schema.ErrorClass<NetworkError>(
   "effect/ai/AiError/NetworkError"
 )({
   _tag: Schema.tag("NetworkError"),
@@ -171,17 +107,13 @@ export class NetworkError extends Schema.Error<NetworkError>(
    *
    * **Example** (Creating a network error from a request error)
    *
-   * ```ts import.meta.vitest
+   * ```ts
    * import { AiError } from "effect/unstable/ai"
-   * import { HttpClientError, HttpClientRequest } from "effect/unstable/http"
+   * import type { HttpClientError } from "effect/unstable/http"
    *
-   * const platformError = new HttpClientError.TransportError({
-   *   request: HttpClientRequest.get("https://example.com/models"),
-   *   description: "Connection refused"
-   * })
+   * declare const platformError: HttpClientError.RequestError
    *
    * const aiError = AiError.NetworkError.fromRequestError(platformError)
-   * aiError.reason // => "TransportError"
    * ```
    *
    * @since 4.0.0
@@ -252,7 +184,7 @@ export class NetworkError extends Schema.Error<NetworkError>(
  *
  * **Example** (Inspecting metadata shape)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * const metadata = {
  *   openai: {
  *     errorCode: "rate_limit_exceeded",
@@ -260,8 +192,6 @@ export class NetworkError extends Schema.Error<NetworkError>(
  *   },
  *   anthropic: null
  * }
- *
- * Array.of(metadata.openai.errorCode, metadata.anthropic) // => ["rate_limit_exceeded", null]
  * ```
  *
  * @category schemas
@@ -407,52 +337,6 @@ export const HttpContext = Schema.Struct({
   body: Schema.optional(Schema.String)
 }).annotate({ identifier: "HttpContext" })
 
-/**
- * Builds a description for an HTTP error returned by an AI provider.
- *
- * @category utilities
- * @since 4.0.0
- */
-export const buildErrorDescription = (params: {
-  readonly status: number
-  readonly message: string | undefined
-  readonly method: string
-  readonly url: string
-  readonly errorCode?: string | number | null | undefined
-  readonly errorType?: string | null | undefined
-  readonly requestId?: string | null | undefined
-  readonly body: string | undefined
-}): string => {
-  const parts: Array<string> = []
-
-  if (params.message) {
-    parts.push(params.message)
-  } else {
-    parts.push(`HTTP ${params.status}`)
-  }
-
-  parts.push(`(${params.method} ${params.url})`)
-
-  if (params.errorCode) {
-    parts.push(`[code: ${params.errorCode}]`)
-  } else if (params.errorType) {
-    parts.push(`[type: ${params.errorType}]`)
-  }
-
-  if (params.requestId) {
-    parts.push(`[requestId: ${params.requestId}]`)
-  }
-
-  if (!params.message && params.body) {
-    const truncated = params.body.length > 200
-      ? params.body.slice(0, 200) + "..."
-      : params.body
-    parts.push(`Response: ${truncated}`)
-  }
-
-  return parts.join(" ")
-}
-
 // =============================================================================
 // Reason Classes
 // =============================================================================
@@ -467,7 +351,7 @@ export const buildErrorDescription = (params: {
  *
  * **Example** (Creating a rate limit error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Duration } from "effect"
  * import { AiError } from "effect/unstable/ai"
  *
@@ -475,13 +359,14 @@ export const buildErrorDescription = (params: {
  *   retryAfter: Duration.seconds(60)
  * })
  *
- * const result = [rateLimitError._tag, rateLimitError.isRetryable] // => ["RateLimitError", true]
+ * console.log(rateLimitError.isRetryable) // true
+ * console.log(rateLimitError.message) // "Rate limit exceeded. Retry after 1 minute"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class RateLimitError extends Schema.Error<RateLimitError>(
+export class RateLimitError extends Schema.ErrorClass<RateLimitError>(
   "effect/ai/AiError/RateLimitError"
 )({
   _tag: Schema.tag("RateLimitError"),
@@ -521,18 +406,20 @@ export class RateLimitError extends Schema.Error<RateLimitError>(
  *
  * **Example** (Creating a quota exhausted error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const quotaError = new AiError.QuotaExhaustedError({})
  *
- * const result = [quotaError._tag, quotaError.isRetryable] // => ["QuotaExhaustedError", false]
+ * console.log(quotaError.isRetryable) // false
+ * console.log(quotaError.message)
+ * // "Quota exhausted. Check your account billing and usage limits."
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class QuotaExhaustedError extends Schema.Error<QuotaExhaustedError>(
+export class QuotaExhaustedError extends Schema.ErrorClass<QuotaExhaustedError>(
   "effect/ai/AiError/QuotaExhaustedError"
 )({
   _tag: Schema.tag("QuotaExhaustedError"),
@@ -572,32 +459,26 @@ export class QuotaExhaustedError extends Schema.Error<QuotaExhaustedError>(
  *
  * **Example** (Creating an authentication error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const authError = new AiError.AuthenticationError({
  *   kind: "InvalidKey"
  * })
  *
- * const result = [authError.kind, authError.isRetryable] // => ["InvalidKey", false]
- *
- * const detailed = new AiError.AuthenticationError({
- *   kind: "InsufficientPermissions",
- *   description: "Token expired"
- * })
- *
- * detailed.message // => "InsufficientPermissions: Your API key lacks required permissions. Token expired"
+ * console.log(authError.isRetryable) // false
+ * console.log(authError.message)
+ * // "InvalidKey: Verify your API key is correct"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class AuthenticationError extends Schema.Error<AuthenticationError>(
+export class AuthenticationError extends Schema.ErrorClass<AuthenticationError>(
   "effect/ai/AiError/AuthenticationError"
 )({
   _tag: Schema.tag("AuthenticationError"),
   kind: Schema.Literals(["InvalidKey", "ExpiredKey", "MissingKey", "InsufficientPermissions", "Unknown"]),
-  description: Schema.optional(Schema.String),
   metadata: providerMetadataWithDefaults<AuthenticationErrorMetadata>(),
   http: Schema.optional(HttpContext)
 }) {
@@ -625,9 +506,7 @@ export class AuthenticationError extends Schema.Error<AuthenticationError>(
       InsufficientPermissions: "Your API key lacks required permissions",
       Unknown: "Authentication failed. Check your credentials"
     }
-    let msg = `${this.kind}: ${suggestions[this.kind]}`
-    if (this.description) msg += `. ${this.description}`
-    return msg
+    return `${this.kind}: ${suggestions[this.kind]}`
   }
 }
 
@@ -640,20 +519,22 @@ export class AuthenticationError extends Schema.Error<AuthenticationError>(
  *
  * **Example** (Creating a content policy error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const policyError = new AiError.ContentPolicyError({
  *   description: "Input contains prohibited content"
  * })
  *
- * const result = [policyError.description, policyError.isRetryable] // => ["Input contains prohibited content", false]
+ * console.log(policyError.isRetryable) // false
+ * console.log(policyError.message)
+ * // "Content policy violation: Input contains prohibited content"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class ContentPolicyError extends Schema.Error<ContentPolicyError>(
+export class ContentPolicyError extends Schema.ErrorClass<ContentPolicyError>(
   "effect/ai/AiError/ContentPolicyError"
 )({
   _tag: Schema.tag("ContentPolicyError"),
@@ -691,7 +572,7 @@ export class ContentPolicyError extends Schema.Error<ContentPolicyError>(
  *
  * **Example** (Creating an invalid request error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const invalidRequestError = new AiError.InvalidRequestError({
@@ -700,13 +581,15 @@ export class ContentPolicyError extends Schema.Error<ContentPolicyError>(
  *   description: "Temperature value 5 is out of range"
  * })
  *
- * const result = [invalidRequestError.parameter, invalidRequestError.isRetryable] // => ["temperature", false]
+ * console.log(invalidRequestError.isRetryable) // false
+ * console.log(invalidRequestError.message)
+ * // "Invalid request: parameter 'temperature' must be between 0 and 2. Temperature value 5 is out of range"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class InvalidRequestError extends Schema.Error<InvalidRequestError>(
+export class InvalidRequestError extends Schema.ErrorClass<InvalidRequestError>(
   "effect/ai/AiError/InvalidRequestError"
 )({
   _tag: Schema.tag("InvalidRequestError"),
@@ -750,20 +633,22 @@ export class InvalidRequestError extends Schema.Error<InvalidRequestError>(
  *
  * **Example** (Creating an internal provider error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const providerError = new AiError.InternalProviderError({
  *   description: "Server encountered an unexpected error"
  * })
  *
- * const result = [providerError.description, providerError.isRetryable] // => ["Server encountered an unexpected error", true]
+ * console.log(providerError.isRetryable) // true
+ * console.log(providerError.message)
+ * // "Internal provider error: Server encountered an unexpected error"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class InternalProviderError extends Schema.Error<InternalProviderError>(
+export class InternalProviderError extends Schema.ErrorClass<InternalProviderError>(
   "effect/ai/AiError/InternalProviderError"
 )({
   _tag: Schema.tag("InternalProviderError"),
@@ -801,20 +686,22 @@ export class InternalProviderError extends Schema.Error<InternalProviderError>(
  *
  * **Example** (Creating an invalid output error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const parseError = new AiError.InvalidOutputError({
  *   description: "Expected a string but received a number"
  * })
  *
- * const result = [parseError.description, parseError.isRetryable] // => ["Expected a string but received a number", true]
+ * console.log(parseError.isRetryable) // true
+ * console.log(parseError.message)
+ * // "Invalid output: Expected a string but received a number"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class InvalidOutputError extends Schema.Error<InvalidOutputError>(
+export class InvalidOutputError extends Schema.ErrorClass<InvalidOutputError>(
   "effect/ai/AiError/InvalidOutputError"
 )({
   _tag: Schema.tag("InvalidOutputError"),
@@ -843,15 +730,13 @@ export class InvalidOutputError extends Schema.Error<InvalidOutputError>(
    *
    * **Example** (Creating an invalid output error from a schema error)
    *
-   * ```ts import.meta.vitest
-   * import { Effect, Schema } from "effect"
+   * ```ts
+   * import { Schema } from "effect"
    * import { AiError } from "effect/unstable/ai"
    *
-   * const schemaError = await Effect.runPromise(
-   *   Schema.decodeUnknownEffect(Schema.Number)("not a number").pipe(Effect.flip)
-   * )
+   * declare const schemaError: Schema.SchemaError
+   *
    * const parseError = AiError.InvalidOutputError.fromSchemaError(schemaError)
-   * parseError.description // => "Expected number"
    * ```
    *
    * @since 4.0.0
@@ -877,7 +762,7 @@ export class InvalidOutputError extends Schema.Error<InvalidOutputError>(
  *
  * **Example** (Creating a structured output error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.StructuredOutputError({
@@ -885,13 +770,15 @@ export class InvalidOutputError extends Schema.Error<InvalidOutputError>(
  *   responseText: "{\"foo\":}"
  * })
  *
- * const result = [error.description, error.responseText, error.isRetryable] // => ["Expected a valid JSON object", '{"foo":}', true]
+ * console.log(error.isRetryable) // true
+ * console.log(error.message)
+ * // "Structured output validation failed: Expected a valid JSON object"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class StructuredOutputError extends Schema.Error<StructuredOutputError>(
+export class StructuredOutputError extends Schema.ErrorClass<StructuredOutputError>(
   "effect/ai/AiError/StructuredOutputError"
 )({
   _tag: Schema.tag("StructuredOutputError"),
@@ -921,15 +808,14 @@ export class StructuredOutputError extends Schema.Error<StructuredOutputError>(
    *
    * **Example** (Creating a structured output error from a schema error)
    *
-   * ```ts import.meta.vitest
-   * import { Effect, Schema } from "effect"
+   * ```ts
+   * import { Schema } from "effect"
    * import { AiError } from "effect/unstable/ai"
    *
-   * const schemaError = await Effect.runPromise(
-   *   Schema.decodeUnknownEffect(Schema.Struct({ name: Schema.String }))({}).pipe(Effect.flip)
-   * )
-   * const parseError = AiError.StructuredOutputError.fromSchemaError(schemaError, "{}")
-   * parseError.responseText // => "{}"
+   * declare const schemaError: Schema.SchemaError
+   * declare const rawText: string
+   *
+   * const parseError = AiError.StructuredOutputError.fromSchemaError(schemaError, rawText)
    * ```
    *
    * @since 4.0.0
@@ -957,20 +843,22 @@ export class StructuredOutputError extends Schema.Error<StructuredOutputError>(
  *
  * **Example** (Creating an unsupported schema error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.UnsupportedSchemaError({
  *   description: "Unions are not supported in Anthropic structured output"
  * })
  *
- * const result = [error.description, error.isRetryable] // => ["Unions are not supported in Anthropic structured output", false]
+ * console.log(error.isRetryable) // false
+ * console.log(error.message)
+ * // "Unsupported schema: Unions are not supported in Anthropic structured output"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class UnsupportedSchemaError extends Schema.Error<UnsupportedSchemaError>(
+export class UnsupportedSchemaError extends Schema.ErrorClass<UnsupportedSchemaError>(
   "effect/ai/AiError/UnsupportedSchemaError"
 )({
   _tag: Schema.tag("UnsupportedSchemaError"),
@@ -1007,20 +895,22 @@ export class UnsupportedSchemaError extends Schema.Error<UnsupportedSchemaError>
  *
  * **Example** (Creating an unknown error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const unknownError = new AiError.UnknownError({
  *   description: "An unexpected error occurred"
  * })
  *
- * const result = [unknownError.description, unknownError.isRetryable] // => ["An unexpected error occurred", false]
+ * console.log(unknownError.isRetryable) // false
+ * console.log(unknownError.message)
+ * // "An unexpected error occurred"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class UnknownError extends Schema.Error<UnknownError>(
+export class UnknownError extends Schema.ErrorClass<UnknownError>(
   "effect/ai/AiError/UnknownError"
 )({
   _tag: Schema.tag("UnknownError"),
@@ -1063,7 +953,7 @@ export class UnknownError extends Schema.Error<UnknownError>(
  *
  * **Example** (Creating a tool not found error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.ToolNotFoundError({
@@ -1071,13 +961,15 @@ export class UnknownError extends Schema.Error<UnknownError>(
  *   availableTools: ["GetWeather", "GetTime"]
  * })
  *
- * const result = [error.toolName, error.availableTools, error.isRetryable] // => ["unknownTool", ["GetWeather", "GetTime"], true]
+ * console.log(error.isRetryable) // true
+ * console.log(error.message)
+ * // "Tool 'unknownTool' not found. Available tools: GetWeather, GetTime"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class ToolNotFoundError extends Schema.Error<ToolNotFoundError>(
+export class ToolNotFoundError extends Schema.ErrorClass<ToolNotFoundError>(
   "effect/ai/AiError/ToolNotFoundError"
 )({
   _tag: Schema.tag("ToolNotFoundError"),
@@ -1116,25 +1008,29 @@ export class ToolNotFoundError extends Schema.Error<ToolNotFoundError>(
  *
  * **Example** (Creating a tool parameter validation error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.ToolParameterValidationError({
  *   toolName: "GetWeather",
+ *   toolParams: { location: 123 },
  *   description: "Expected string, got number"
  * })
  *
- * const result = [error.toolName, error.description, error.isRetryable] // => ["GetWeather", "Expected string, got number", true]
+ * console.log(error.isRetryable) // true
+ * console.log(error.message)
+ * // "Invalid parameters for tool 'GetWeather': Expected string, got number"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class ToolParameterValidationError extends Schema.Error<ToolParameterValidationError>(
+export class ToolParameterValidationError extends Schema.ErrorClass<ToolParameterValidationError>(
   "effect/ai/AiError/ToolParameterValidationError"
 )({
   _tag: Schema.tag("ToolParameterValidationError"),
   toolName: Schema.String,
+  toolParams: Schema.Json,
   description: Schema.String
 }) {
   /**
@@ -1169,7 +1065,7 @@ export class ToolParameterValidationError extends Schema.Error<ToolParameterVali
  *
  * **Example** (Creating an invalid tool result error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.InvalidToolResultError({
@@ -1177,13 +1073,15 @@ export class ToolParameterValidationError extends Schema.Error<ToolParameterVali
  *   description: "Tool handler returned invalid result: missing 'temperature' field"
  * })
  *
- * const result = [error.toolName, error.isRetryable] // => ["GetWeather", false]
+ * console.log(error.isRetryable) // false
+ * console.log(error.message)
+ * // "Tool 'GetWeather' returned invalid result: missing 'temperature' field"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class InvalidToolResultError extends Schema.Error<InvalidToolResultError>(
+export class InvalidToolResultError extends Schema.ErrorClass<InvalidToolResultError>(
   "effect/ai/AiError/InvalidToolResultError"
 )({
   _tag: Schema.tag("InvalidToolResultError"),
@@ -1221,7 +1119,7 @@ export class InvalidToolResultError extends Schema.Error<InvalidToolResultError>
  *
  * **Example** (Creating a tool result encoding error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.ToolResultEncodingError({
@@ -1230,13 +1128,15 @@ export class InvalidToolResultError extends Schema.Error<InvalidToolResultError>
  *   description: "Cannot encode bigint values as JSON"
  * })
  *
- * const result = [error.toolName, error.description, error.isRetryable] // => ["GetWeather", "Cannot encode bigint values as JSON", false]
+ * console.log(error.isRetryable) // false
+ * console.log(error.message)
+ * // "Failed to encode result for tool 'GetWeather': Cannot encode bigint values as JSON"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class ToolResultEncodingError extends Schema.Error<ToolResultEncodingError>(
+export class ToolResultEncodingError extends Schema.ErrorClass<ToolResultEncodingError>(
   "effect/ai/AiError/ToolResultEncodingError"
 )({
   _tag: Schema.tag("ToolResultEncodingError"),
@@ -1275,7 +1175,7 @@ export class ToolResultEncodingError extends Schema.Error<ToolResultEncodingErro
  *
  * **Example** (Creating a tool configuration error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.ToolConfigurationError({
@@ -1283,13 +1183,15 @@ export class ToolResultEncodingError extends Schema.Error<ToolResultEncodingErro
  *   description: "Invalid container ID format"
  * })
  *
- * const result = [error.toolName, error.description, error.isRetryable] // => ["OpenAiCodeInterpreter", "Invalid container ID format", false]
+ * console.log(error.isRetryable) // false
+ * console.log(error.message)
+ * // "Invalid configuration for tool 'OpenAiCodeInterpreter': Invalid container ID format"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class ToolConfigurationError extends Schema.Error<ToolConfigurationError>(
+export class ToolConfigurationError extends Schema.ErrorClass<ToolConfigurationError>(
   "effect/ai/AiError/ToolConfigurationError"
 )({
   _tag: Schema.tag("ToolConfigurationError"),
@@ -1327,20 +1229,22 @@ export class ToolConfigurationError extends Schema.Error<ToolConfigurationError>
  *
  * **Example** (Creating a toolkit required error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.ToolkitRequiredError({
  *   pendingApprovals: ["GetWeather", "SendEmail"]
  * })
  *
- * const result = [error.pendingApprovals, error.isRetryable] // => [["GetWeather", "SendEmail"], false]
+ * console.log(error.isRetryable) // false
+ * console.log(error.message)
+ * // "Toolkit required to resolve pending tool approvals: GetWeather, SendEmail"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class ToolkitRequiredError extends Schema.Error<ToolkitRequiredError>(
+export class ToolkitRequiredError extends Schema.ErrorClass<ToolkitRequiredError>(
   "effect/ai/AiError/ToolkitRequiredError"
 )({
   _tag: Schema.tag("ToolkitRequiredError"),
@@ -1380,20 +1284,22 @@ export class ToolkitRequiredError extends Schema.Error<ToolkitRequiredError>(
  *
  * **Example** (Creating an invalid user input error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const error = new AiError.InvalidUserInputError({
  *   description: "Unsupported media type 'video/mp4'. Supported types include images, application/pdf, text/plain"
  * })
  *
- * const result = [error._tag, error.isRetryable] // => ["InvalidUserInputError", false]
+ * console.log(error.isRetryable) // false
+ * console.log(error.message)
+ * // "Invalid user input: Unsupported media type 'video/mp4'. Supported types include images, application/pdf, text/plain"
  * ```
  *
- * @category errors
+ * @category reason
  * @since 4.0.0
  */
-export class InvalidUserInputError extends Schema.Error<InvalidUserInputError>(
+export class InvalidUserInputError extends Schema.ErrorClass<InvalidUserInputError>(
   "effect/ai/AiError/InvalidUserInputError"
 )({
   _tag: Schema.tag("InvalidUserInputError"),
@@ -1433,7 +1339,7 @@ export class InvalidUserInputError extends Schema.Error<InvalidUserInputError>(
  * `isRetryable` getter. Provider-facing reasons may also include retry timing,
  * provider metadata, usage information, or HTTP context.
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
 export type AiErrorReason =
@@ -1516,7 +1422,7 @@ export const AiErrorReason: Schema.Union<[
 // Top-Level AiError
 // =============================================================================
 
-const TypeId = "~effect/ai/AiError" as const
+const TypeId = "~effect/unstable/ai/AiError/AiError" as const
 
 /**
  * Schema for the top-level AI error wrapper using the `reason` pattern.
@@ -1533,15 +1439,11 @@ const TypeId = "~effect/ai/AiError" as const
  *
  * **Example** (Handling an AI error by tag)
  *
- * ```ts import.meta.vitest
- * import { Duration, Effect } from "effect"
+ * ```ts
+ * import { Effect } from "effect"
  * import { AiError } from "effect/unstable/ai"
  *
- * const aiOperation = Effect.fail(new AiError.AiError({
- *   module: "OpenAI",
- *   method: "generateText",
- *   reason: new AiError.RateLimitError({ retryAfter: Duration.seconds(30) })
- * }))
+ * declare const aiOperation: Effect.Effect<string, AiError.AiError>
  *
  * // Handle specific reason types
  * const handled = aiOperation.pipe(
@@ -1552,14 +1454,12 @@ const TypeId = "~effect/ai/AiError" as const
  *     return Effect.fail(error)
  *   })
  * )
- *
- * await Effect.runPromise(handled) // => "Retry after 30000 millis"
  * ```
  *
  * @category schemas
  * @since 4.0.0
  */
-export class AiError extends Schema.Error<AiError>(
+export class AiError extends Schema.ErrorClass<AiError>(
   "effect/ai/AiError/AiError"
 )({
   _tag: Schema.tag("AiError"),
@@ -1606,7 +1506,7 @@ export type AiErrorEncoded = typeof AiError["Encoded"]
  *
  * **Example** (Checking for an AI error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const someError = new Error("generic error")
@@ -1616,7 +1516,8 @@ export type AiErrorEncoded = typeof AiError["Encoded"]
  *   reason: new AiError.RateLimitError({})
  * })
  *
- * const result = [AiError.isAiError(someError), AiError.isAiError(aiError)] // => [false, true]
+ * console.log(AiError.isAiError(someError)) // false
+ * console.log(AiError.isAiError(aiError)) // true
  * ```
  *
  * @category guards
@@ -1629,13 +1530,14 @@ export const isAiError = (u: unknown): u is AiError => Predicate.hasProperty(u, 
  *
  * **Example** (Checking for an AI error reason)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const rateLimitError = new AiError.RateLimitError({})
  * const genericError = new Error("generic error")
  *
- * const result = [AiError.isAiErrorReason(rateLimitError), AiError.isAiErrorReason(genericError)] // => [true, false]
+ * console.log(AiError.isAiErrorReason(rateLimitError)) // true
+ * console.log(AiError.isAiErrorReason(genericError)) // false
  * ```
  *
  * @category guards
@@ -1648,7 +1550,7 @@ export const isAiErrorReason = (u: unknown): u is AiErrorReason => Predicate.has
  *
  * **Example** (Creating an AI error)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Duration } from "effect"
  * import { AiError } from "effect/unstable/ai"
  *
@@ -1660,7 +1562,8 @@ export const isAiErrorReason = (u: unknown): u is AiErrorReason => Predicate.has
  *   })
  * })
  *
- * const result = [error.module, error.method, error.reason._tag] // => ["OpenAI", "completion", "RateLimitError"]
+ * console.log(error.message)
+ * // "OpenAI.completion: Rate limit exceeded. Retry after 1 minute"
  * ```
  *
  * @category constructors
@@ -1682,7 +1585,7 @@ export const make = (params: {
  *
  * **Example** (Mapping an HTTP status to a reason)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { AiError } from "effect/unstable/ai"
  *
  * const reason = AiError.reasonFromHttpStatus({
@@ -1690,7 +1593,7 @@ export const make = (params: {
  *   body: { error: "Rate limit exceeded" }
  * })
  *
- * reason._tag // => "RateLimitError"
+ * console.log(reason._tag) // "RateLimitError"
  * ```
  *
  * @category constructors

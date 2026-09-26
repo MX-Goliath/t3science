@@ -25,16 +25,26 @@ const TypeId = "~effect/cli/CliError"
  *
  * **Example** (Checking CLI errors)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { CliError } from "effect/unstable/cli"
  *
- * const error = new CliError.MissingOption({ option: "api-key" })
- * const program = CliError.isCliError(error)
- *   ? Effect.succeed(error.message)
- *   : Effect.fail("Unknown error")
+ * const handleError = (error: unknown) => {
+ *   if (CliError.isCliError(error)) {
+ *     console.log("CLI Error:", error.message)
+ *     return Effect.succeed("Handled CLI error")
+ *   }
+ *   return Effect.fail("Unknown error")
+ * }
  *
- * await Effect.runPromise(program) // => "Missing required flag: --api-key"
+ * // Example usage in error handling
+ * const program = Effect.gen(function*() {
+ *   const result = yield* Effect.try({
+ *     try: () => ({ success: true }),
+ *     catch: (error) => error
+ *   })
+ *   handleError(result)
+ * })
  * ```
  *
  * @category guards
@@ -47,28 +57,31 @@ export const isCliError = (u: unknown): u is CliError => Predicate.hasProperty(u
  *
  * **Example** (Handling CLI errors)
  *
- * ```ts import.meta.vitest
- * import { CliError } from "effect/unstable/cli"
+ * ```ts
+ * import type { CliError } from "effect/unstable/cli"
  *
- * const describe = (error: CliError.CliError): string => {
+ * const handleCliError = (error: CliError.CliError): void => {
  *   switch (error._tag) {
  *     case "UnrecognizedOption":
- *       return `Unknown flag: ${error.option}`
+ *       console.log(`Unknown flag: ${error.option}`)
+ *       break
  *     case "MissingOption":
- *       return `Required flag missing: ${error.option}`
+ *       console.log(`Required flag missing: ${error.option}`)
+ *       break
  *     case "InvalidValue":
- *       return `Invalid value: ${error.value} for ${error.option}`
+ *       console.log(`Invalid value: ${error.value} for ${error.option}`)
+ *       break
  *     case "ShowHelp":
- *       return `Help requested for: ${error.commandPath.join(" ")}`
+ *       // Display help for the command path
+ *       console.log(`Help requested for: ${error.commandPath.join(" ")}`)
+ *       break
  *     default:
- *       return error.message
+ *       console.log(error.message)
  *   }
  * }
- *
- * describe(new CliError.MissingOption({ option: "token" })) // => "Required flag missing: token"
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
 export type CliError =
@@ -87,7 +100,7 @@ export type CliError =
  *
  * **Example** (Creating unrecognized option errors)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { CliError } from "effect/unstable/cli"
  *
@@ -98,24 +111,24 @@ export type CliError =
  *   suggestions: ["--verbose", "--force"]
  * })
  *
- * unrecognizedError._tag // => "UnrecognizedOption"
- * unrecognizedError.option // => "--unknown-flag"
- * unrecognizedError.command // => ["deploy", "production"]
+ * console.log(unrecognizedError.message)
+ * // "Unrecognized flag: --unknown-flag in command deploy production
+ * //
+ * //  Did you mean this?
+ * //    --verbose
+ * //    --force"
  *
  * // In CLI parsing context
  * const parseCommand = Effect.gen(function*() {
  *   // If parsing encounters unknown flag
  *   return yield* unrecognizedError
  * })
- *
- * const parseError = await Effect.runPromise(Effect.flip(parseCommand))
- * parseError._tag // => "UnrecognizedOption"
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class UnrecognizedOption extends Schema.TaggedError<UnrecognizedOption>(
+export class UnrecognizedOption extends Schema.TaggedErrorClass<UnrecognizedOption>(
   `${TypeId}/UnrecognizedOption`
 )("UnrecognizedOption", {
   option: Schema.String,
@@ -150,7 +163,7 @@ export class UnrecognizedOption extends Schema.TaggedError<UnrecognizedOption>(
  *
  * **Example** (Creating duplicate option errors)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { CliError } from "effect/unstable/cli"
  *
  * const duplicateError = new CliError.DuplicateOption({
@@ -159,16 +172,15 @@ export class UnrecognizedOption extends Schema.TaggedError<UnrecognizedOption>(
  *   childCommand: "deploy"
  * })
  *
- * duplicateError._tag // => "DuplicateOption"
- * duplicateError.option // => "--verbose"
- * duplicateError.parentCommand // => "myapp"
- * duplicateError.childCommand // => "deploy"
+ * console.log(duplicateError.message)
+ * // "Duplicate flag name "--verbose" in parent command "myapp" and subcommand "deploy".
+ * // Parent will always claim this flag (Mode A semantics). Consider renaming one of them to avoid confusion."
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class DuplicateOption extends Schema.TaggedError<DuplicateOption>(
+export class DuplicateOption extends Schema.TaggedErrorClass<DuplicateOption>(
   `${TypeId}/DuplicateOption`
 )("DuplicateOption", {
   option: Schema.String,
@@ -198,7 +210,7 @@ export class DuplicateOption extends Schema.TaggedError<DuplicateOption>(
  *
  * **Example** (Creating missing option errors)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { CliError } from "effect/unstable/cli"
  *
@@ -206,7 +218,8 @@ export class DuplicateOption extends Schema.TaggedError<DuplicateOption>(
  *   option: "api-key"
  * })
  *
- * const details = [missingOptionError._tag, missingOptionError.option] // => ["MissingOption", "api-key"]
+ * console.log(missingOptionError.message)
+ * // "Missing required flag: --api-key"
  *
  * // In validation context
  * const validateRequiredOptions = (options: Record<string, string | undefined>) =>
@@ -217,15 +230,12 @@ export class DuplicateOption extends Schema.TaggedError<DuplicateOption>(
  *     }
  *     return apiKey
  *   })
- *
- * const validationError = await Effect.runPromise(Effect.flip(validateRequiredOptions({})))
- * validationError._tag // => "MissingOption"
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class MissingOption extends Schema.TaggedError<MissingOption>(
+export class MissingOption extends Schema.TaggedErrorClass<MissingOption>(
   `${TypeId}/MissingOption`
 )("MissingOption", {
   option: Schema.String
@@ -252,7 +262,7 @@ export class MissingOption extends Schema.TaggedError<MissingOption>(
  *
  * **Example** (Creating missing argument errors)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { CliError } from "effect/unstable/cli"
  *
@@ -260,7 +270,8 @@ export class MissingOption extends Schema.TaggedError<MissingOption>(
  *   argument: "target"
  * })
  *
- * const details = [missingArgError._tag, missingArgError.argument] // => ["MissingArgument", "target"]
+ * console.log(missingArgError.message)
+ * // "Missing required argument: target"
  *
  * // In argument parsing
  * const parseArguments = (args: Array<string>) =>
@@ -270,15 +281,12 @@ export class MissingOption extends Schema.TaggedError<MissingOption>(
  *     }
  *     return args[0]
  *   })
- *
- * const parseError = await Effect.runPromise(Effect.flip(parseArguments([])))
- * parseError._tag // => "MissingArgument"
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class MissingArgument extends Schema.TaggedError<MissingArgument>(
+export class MissingArgument extends Schema.TaggedErrorClass<MissingArgument>(
   `${TypeId}/MissingArgument`
 )("MissingArgument", {
   argument: Schema.String
@@ -306,20 +314,21 @@ export class MissingArgument extends Schema.TaggedError<MissingArgument>(
  *
  * **Example** (Reporting unexpected arguments)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { CliError } from "effect/unstable/cli"
  *
  * const error = new CliError.UnexpectedArgument({
  *   arguments: ["extra.txt"]
  * })
  *
- * const details = [error._tag, error.arguments] // => ["UnexpectedArgument", ["extra.txt"]]
+ * console.log(error.message)
+ * // "Unexpected positional argument: \"extra.txt\""
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class UnexpectedArgument extends Schema.TaggedError<UnexpectedArgument>(
+export class UnexpectedArgument extends Schema.TaggedErrorClass<UnexpectedArgument>(
   `${TypeId}/UnexpectedArgument`
 )("UnexpectedArgument", {
   arguments: Schema.Array(Schema.String)
@@ -347,7 +356,8 @@ export class UnexpectedArgument extends Schema.TaggedError<UnexpectedArgument>(
  *
  * **Example** (Creating invalid value errors)
  *
- * ```ts import.meta.vitest
+ * ```ts
+ * import { Effect } from "effect"
  * import { CliError } from "effect/unstable/cli"
  *
  * const invalidValueError = new CliError.InvalidValue({
@@ -357,10 +367,8 @@ export class UnexpectedArgument extends Schema.TaggedError<UnexpectedArgument>(
  *   kind: "flag"
  * })
  *
- * invalidValueError._tag // => "InvalidValue"
- * invalidValueError.kind // => "flag"
- * invalidValueError.option // => "port"
- * invalidValueError.value // => "abc123"
+ * console.log(invalidValueError.message)
+ * // "Invalid value for flag --port: "abc123". Expected: integer between 1 and 65535"
  *
  * // For positional arguments
  * const invalidArgError = new CliError.InvalidValue({
@@ -370,13 +378,14 @@ export class UnexpectedArgument extends Schema.TaggedError<UnexpectedArgument>(
  *   kind: "argument"
  * })
  *
- * const details = [invalidArgError.kind, invalidArgError.option, invalidArgError.value] // => ["argument", "count", "abc"]
+ * console.log(invalidArgError.message)
+ * // "Invalid value for argument <count>: "abc". Expected: integer"
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class InvalidValue extends Schema.TaggedError<InvalidValue>(
+export class InvalidValue extends Schema.TaggedErrorClass<InvalidValue>(
   `${TypeId}/InvalidValue`
 )("InvalidValue", {
   option: Schema.String,
@@ -415,7 +424,7 @@ export class InvalidValue extends Schema.TaggedError<InvalidValue>(
  *
  * **Example** (Creating unknown subcommand errors)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { CliError } from "effect/unstable/cli"
  *
@@ -425,9 +434,12 @@ export class InvalidValue extends Schema.TaggedError<InvalidValue>(
  *   suggestions: ["deploy", "destroy"]
  * })
  *
- * unknownSubcommandError._tag // => "UnknownSubcommand"
- * unknownSubcommandError.subcommand // => "deplyo"
- * unknownSubcommandError.parent // => ["myapp"]
+ * console.log(unknownSubcommandError.message)
+ * // "Unknown subcommand "deplyo" for "myapp"
+ * //
+ * //  Did you mean this?
+ * //    deploy
+ * //    destroy"
  *
  * // In subcommand parsing
  * const parseSubcommand = (subcommand: string) =>
@@ -438,17 +450,14 @@ export class InvalidValue extends Schema.TaggedError<InvalidValue>(
  *     }
  *     return subcommand
  *   })
- *
- * const parseError = await Effect.runPromise(Effect.flip(parseSubcommand("deplyo")))
- * parseError._tag // => "UnknownSubcommand"
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class UnknownSubcommand extends Schema.TaggedError<UnknownSubcommand>(
+export class UnknownSubcommand extends Schema.TaggedErrorClass<UnknownSubcommand>(
   `${TypeId}/UnknownSubcommand`
-)("UnknownSubcommand", {
+)("UnknownSubcomand", {
   subcommand: Schema.String,
   parent: Schema.optional(Schema.Array(Schema.String)),
   suggestions: Schema.Array(Schema.String)
@@ -478,22 +487,15 @@ export class UnknownSubcommand extends Schema.TaggedError<UnknownSubcommand>(
 /**
  * Error wrapper for user handler failures in the CLI error channel.
  *
- * **Details**
- *
- * `userMessage` can provide safe, user-facing text independently of the
- * underlying cause. When omitted or empty, `message` uses a non-empty string
- * cause or `Error.message`, then falls back to `"An error occurred"`.
- *
  * **Example** (Wrapping user errors)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Effect } from "effect"
  * import { CliError } from "effect/unstable/cli"
  *
  * // Wrapping user errors
  * const userError = new CliError.UserError({
- *   cause: new Error("Database connection failed for postgres://localhost"),
- *   userMessage: "Could not connect to the database"
+ *   cause: new Error("Database connection failed")
  * })
  *
  * // In command handler
@@ -508,23 +510,20 @@ export class UnknownSubcommand extends Schema.TaggedError<UnknownSubcommand>(
  * // In error handling
  * const handleError = (error: CliError.CliError): Effect.Effect<number> => {
  *   if (error._tag === "UserError") {
+ *     console.log("Command failed:", error.cause)
  *     return Effect.succeed(1) // Exit code 1
  *   }
  *   return Effect.succeed(0)
  * }
- *
- * await Effect.runPromise(deployCommand) // => { deployed: true }
- * await Effect.runPromise(handleError(userError)) // => 1
  * ```
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class UserError extends Schema.TaggedError<UserError>(
+export class UserError extends Schema.TaggedErrorClass<UserError>(
   `${TypeId}/UserError`
 )("UserError", {
-  cause: Schema.Defect(),
-  userMessage: Schema.optionalKey(Schema.String)
+  cause: Schema.Defect()
 }) {
   /**
    * Marks this value as a user handler error for runtime guards.
@@ -532,26 +531,6 @@ export class UserError extends Schema.TaggedError<UserError>(
    * @since 4.0.0
    */
   readonly [TypeId] = TypeId
-
-  /**
-   * Controls whether the runtime logger should report this error. The CLI
-   * runner sets this to `false` after rendering the error itself.
-   *
-   * @since 4.0.0
-   */
-  override [Runtime.errorReported] = true
-
-  /**
-   * Returns the explicit user-facing message or a safe fallback from `cause`.
-   *
-   * @since 4.0.0
-   */
-  override get message() {
-    if (this.userMessage) return this.userMessage
-    if (typeof this.cause === "string" && this.cause) return this.cause
-    if (this.cause instanceof Error && this.cause.message) return this.cause.message
-    return "An error occurred"
-  }
 }
 
 /**
@@ -562,7 +541,7 @@ export class UserError extends Schema.TaggedError<UserError>(
  * This excludes `ShowHelp` itself, allowing parse and validation errors to be
  * stored in `ShowHelp.errors` without nesting another help-control value.
  *
- * @category schemas
+ * @category models
  * @since 4.0.0
  */
 export const NonShowHelpErrors: Schema.Union<
@@ -596,7 +575,7 @@ export const NonShowHelpErrors: Schema.Union<
  * runner should display help along with the underlying parse or validation
  * failures.
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
 export type NonShowHelpErrors = typeof NonShowHelpErrors.Type
@@ -610,10 +589,10 @@ export type NonShowHelpErrors = typeof NonShowHelpErrors.Type
  * that should be shown with help text. When `errors` is non-empty, the runtime
  * exit code is `1`; otherwise it is `0`.
  *
- * @category errors
+ * @category models
  * @since 4.0.0
  */
-export class ShowHelp extends Schema.TaggedError<ShowHelp>(
+export class ShowHelp extends Schema.TaggedErrorClass<ShowHelp>(
   `${TypeId}/ShowHelp`
 )("ShowHelp", {
   commandPath: Schema.Array(Schema.String),

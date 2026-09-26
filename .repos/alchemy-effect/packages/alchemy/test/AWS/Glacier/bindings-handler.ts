@@ -19,7 +19,7 @@ export class GlacierBindingsFunction extends Lambda.Function<Lambda.Function>()(
 export default GlacierBindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const vault = yield* Glacier.Vault("BindingsVault");

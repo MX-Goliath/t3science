@@ -29,7 +29,7 @@ export class FSxBindingsFunction extends Lambda.Function<Lambda.Function>()(
 export default FSxBindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // Account-level bindings only — the file-system-scoped bindings

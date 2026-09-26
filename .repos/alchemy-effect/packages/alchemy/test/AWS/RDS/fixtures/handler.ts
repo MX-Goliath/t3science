@@ -38,7 +38,7 @@ export class RdsBindingsTestFunction extends Lambda.Function<Lambda.Function>()(
 export default RdsBindingsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const describeDBClusters = yield* RDS.DescribeDBClusters();

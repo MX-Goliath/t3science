@@ -92,7 +92,6 @@ import {
   DownloadIcon,
   EyeIcon,
   GlobeIcon,
-  GitPullRequestIcon,
   HammerIcon,
   MessageCircleIcon,
   Minimize2Icon,
@@ -213,7 +212,6 @@ interface TimelineRowSharedState {
   onRevertToTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
   onForkMessage: (messageId: MessageId) => void;
-  forkableMessageIds: ReadonlySet<MessageId> | null;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
   onFileDownload: (attachment: ChatFileAttachment) => void;
@@ -338,7 +336,6 @@ interface MessagesTimelineProps {
   onRevertToTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
   onForkMessage?: (messageId: MessageId) => void;
-  forkableMessageIds?: ReadonlySet<MessageId> | null;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen?: (attachment: ChatFileAttachment) => void;
@@ -401,7 +398,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onRevertToTurnCount,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
   onForkMessage = NOOP_FORK_MESSAGE,
-  forkableMessageIds = null,
   isRevertingCheckpoint,
   onImageExpand,
   onFileOpen = NOOP_OPEN_ATTACHMENT,
@@ -763,7 +759,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertToTurnCount,
       onUseArtifactTemplate,
       onForkMessage,
-      forkableMessageIds,
       onImageExpand,
       onFileOpen,
       onFileDownload,
@@ -789,7 +784,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertToTurnCount,
       onUseArtifactTemplate,
       onForkMessage,
-      forkableMessageIds,
       onImageExpand,
       onFileOpen,
       onFileDownload,
@@ -1555,9 +1549,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {displayedUserMessage.copyText && (
               <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
             )}
-            {(!ctx.forkableMessageIds || ctx.forkableMessageIds.has(row.message.id)) && (
-              <MessageForkButton onFork={() => ctx.onForkMessage(row.message.id)} />
-            )}
+            <MessageForkButton onFork={() => ctx.onForkMessage(row.message.id)} />
           </div>
         </div>
       </div>
@@ -1703,7 +1695,7 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
-      {!message.streaming && (!ctx.forkableMessageIds || ctx.forkableMessageIds.has(message.id)) ? (
+      {!message.streaming ? (
         <MessageForkButton onFork={() => ctx.onForkMessage(message.id)} />
       ) : null}
       {!message.streaming && modelMeta ? (
@@ -2235,8 +2227,6 @@ function toolGroupSummaryIconName(
       return "terminal";
     case "browser":
       return "browser";
-    case "device":
-      return "device";
     case "search":
       return "globe";
     case "code-search":
@@ -2251,8 +2241,6 @@ function toolGroupSummaryIconName(
       return "zap";
     case "update":
     case "mixed":
-      return "hammer";
-    default:
       return "hammer";
   }
 }
@@ -2355,17 +2343,12 @@ function AssistantChangedFilesSectionInner({
 
 const UserMessageTerminalContextInlineLabel = memo(
   function UserMessageTerminalContextInlineLabel(props: { context: ParsedTerminalContextEntry }) {
-    return (
-      <TerminalContextInlineChip
-        label={formatInlineTerminalContextLabel(props.context.header)}
-        terminalLabel={props.context.header}
-        lineStart={0}
-        lineEnd={0}
-        text={props.context.body}
-        detailsMode="popover"
-        surface="transcript"
-      />
-    );
+    const tooltipText =
+      props.context.body.length > 0
+        ? `${props.context.header}\n${props.context.body}`
+        : props.context.header;
+
+    return <TerminalContextInlineChip label={props.context.header} tooltipText={tooltipText} />;
   },
 );
 
@@ -2805,12 +2788,10 @@ type WorkEntryIconName =
   | "check"
   | "circle-alert"
   | "computer"
-  | "device"
   | "eye"
   | "globe"
   | "hammer"
   | "message-circle"
-  | "pull-request"
   | "search"
   | "square-pen"
   | "terminal"
@@ -3026,10 +3007,6 @@ function WorkEntryIcon({ name, className }: { name: WorkEntryIconName; className
       return <BrowserAppIcon className={className} />;
     case "computer":
       return <ComputerUseAppIcon className={className} />;
-    case "device":
-      return <ComputerUseAppIcon className={className} />;
-    case "pull-request":
-      return <GitPullRequestIcon className={className} aria-hidden />;
     case "t3-code":
       return <T3Wordmark className={className} aria-hidden />;
     case "check":

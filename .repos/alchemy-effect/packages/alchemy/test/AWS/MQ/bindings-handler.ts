@@ -16,7 +16,7 @@ export class MQBindingsFunction extends Lambda.Function<Lambda.Function>()(
 export default MQBindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // A single-instance mq.t3.micro ActiveMQ broker is the cheapest topology

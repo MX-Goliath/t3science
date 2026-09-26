@@ -9,7 +9,6 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react";
-import { useLocation } from "@tanstack/react-router";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -27,7 +26,7 @@ import {
   type ServerRemoveKeybindingInput,
   type ServerUpsertKeybindingInput,
 } from "@t3tools/contracts";
-import { mergeWithDefaultKeybindings } from "@t3tools/shared/keybindings";
+import { useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -37,8 +36,13 @@ import { isElectron } from "../../env";
 import { useOpenInPreferredEditor } from "../../editorPreferences";
 import { formatShortcutLabel } from "../../keybindings";
 import { cn } from "../../lib/utils";
-import { serverEnvironment } from "../../state/server";
-import { useSettingsScope } from "./SettingsScopeContext";
+import {
+  primaryServerAvailableEditorsAtom,
+  primaryServerKeybindingsAtom,
+  primaryServerKeybindingsConfigPathAtom,
+  serverEnvironment,
+} from "../../state/server";
+import { usePrimaryEnvironment } from "../../state/environments";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -66,7 +70,7 @@ import {
   whenNodeRemoveLabel,
 } from "./KeybindingsSettings.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
-import { keybindingSearchAnchorId, searchableSetting } from "./settingsSearch";
+import { searchableSetting } from "./settingsSearch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useAtomCommand } from "../../state/use-atom-command";
 
@@ -824,11 +828,7 @@ interface KeybindingRowActions {
   onRemove: (row: KeybindingRow) => void;
 }
 
-type KeybindingRowProps = KeybindingRowActions & {
-  row: KeybindingRow;
-  isSaving: boolean;
-  anchorId?: string | undefined;
-};
+type KeybindingRowProps = KeybindingRowActions & { row: KeybindingRow; isSaving: boolean };
 
 /** Shortcut pill that turns into a capture input when clicked, plus Save once the draft changes. */
 function KeybindingKeyControl({
@@ -1039,12 +1039,11 @@ function KeybindingHoverRowMenu(props: {
 
 /** One binding as a settings row: pills flush right, actions fading in beside them on hover. */
 function KeybindingSettingsRow(props: KeybindingRowProps) {
-  const { row, isSaving, anchorId, allRows, variables, onSave, onReset, onRemove } = props;
+  const { row, isSaving, allRows, variables, onSave, onReset, onRemove } = props;
   const editor = useKeybindingRowEditor({ row, allRows, onSave });
 
   return (
     <SettingsRow
-      id={anchorId}
       className="group/row rounded-none"
       title={<KeybindingRowTitle row={row} />}
       description={<KeybindingRowWhen row={row} editor={editor} variables={variables} />}
@@ -1302,17 +1301,6 @@ function KeybindingsList(props: KeybindingsListProps) {
     onSave: rowActions.onSave,
     onCancel: onCancelAdd,
   };
-  // Settings search jumps to a command, so only its first row anchors.
-  const anchorIds = useMemo(() => {
-    const ids = new Map<string, string>();
-    const seen = new Set<KeybindingCommand>();
-    for (const row of rows) {
-      if (seen.has(row.command)) continue;
-      seen.add(row.command);
-      ids.set(row.id, keybindingSearchAnchorId(row.command));
-    }
-    return ids;
-  }, [rows]);
   return (
     <div>
       {isAddingBinding ? <NewKeybindingSettingsRow {...newProps} /> : null}
@@ -1320,7 +1308,6 @@ function KeybindingsList(props: KeybindingsListProps) {
         <KeybindingSettingsRow
           key={row.id}
           row={row}
-          anchorId={anchorIds.get(row.id)}
           isSaving={savingCommand === row.command}
           {...rowActions}
         />
@@ -1348,17 +1335,10 @@ function BrowserKeybindingNotice() {
 }
 
 export function KeybindingsSettingsPanel() {
-  // The representative environment supplies the displayed bindings; edits
-  // fan out to every connected environment in the selection, so one
-  // shortcut change reaches each machine the user runs T3 Code on.
-  const { environment: primaryEnvironment, connectedEnvironments } = useSettingsScope();
-  const serverKeybindings = primaryEnvironment?.serverConfig?.keybindings;
-  const keybindings = useMemo(
-    () => mergeWithDefaultKeybindings(serverKeybindings ?? []),
-    [serverKeybindings],
-  );
-  const keybindingsConfigPath = primaryEnvironment?.serverConfig?.keybindingsConfigPath ?? null;
-  const availableEditors = primaryEnvironment?.serverConfig?.availableEditors ?? [];
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const keybindingsConfigPath = useAtomValue(primaryServerKeybindingsConfigPathAtom);
+  const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
+  const primaryEnvironment = usePrimaryEnvironment();
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
   });
@@ -1375,16 +1355,6 @@ export function KeybindingsSettingsPanel() {
   const [savingCommand, setSavingCommand] = useState<KeybindingCommand | null>(null);
   const [isAddingBinding, setIsAddingBinding] = useState(false);
   const rows = useMemo(() => buildKeybindingRows(keybindings, query), [keybindings, query]);
-  // The search-target context is provided by this panel's own page container,
-  // so the jump target is read from the route hash here.
-  const searchTargetId = useLocation({ select: (location) => location.hash.replace(/^#/, "") });
-  const [handledSearchTargetId, setHandledSearchTargetId] = useState(searchTargetId);
-
-  // A settings-search jump must not be hidden by the page's own filter.
-  if (searchTargetId !== handledSearchTargetId) {
-    setHandledSearchTargetId(searchTargetId);
-    if (searchTargetId.startsWith("keybinding-")) setQuery("");
-  }
   const commandOptions = useMemo(() => buildKeybindingCommandOptions(keybindings), [keybindings]);
   const whenVariables = useMemo(() => buildWhenVariableOptions(), []);
 
@@ -1441,19 +1411,17 @@ export function KeybindingsSettingsPanel() {
         ...(input.replace ? { replace: input.replace } : {}),
       };
       void (async () => {
-        const results = await Promise.all(
-          connectedEnvironments.map((target) =>
-            upsertKeybinding({ environmentId: target.environmentId, input: payload }),
-          ),
-        );
+        const result = await upsertKeybinding({
+          environmentId: primaryEnvironment.environmentId,
+          input: payload,
+        });
         setSavingCommand(null);
-        const failed = results.find((result) => result._tag === "Failure");
-        if (!failed) {
+        if (result._tag === "Success") {
           setIsAddingBinding(false);
           return;
         }
-        if (!isAtomCommandInterrupted(failed)) {
-          const error = squashAtomCommandFailure(failed);
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
           toastManager.add({
             title: "Unable to save keybinding",
             description: error instanceof Error ? error.message : "The keybinding was not saved.",
@@ -1462,7 +1430,7 @@ export function KeybindingsSettingsPanel() {
         }
       })();
     },
-    [connectedEnvironments, primaryEnvironment, upsertKeybinding],
+    [primaryEnvironment, upsertKeybinding],
   );
 
   const removeKeybinding = useCallback(
@@ -1470,17 +1438,12 @@ export function KeybindingsSettingsPanel() {
       if (!primaryEnvironment) return;
       setSavingCommand(row.command);
       void (async () => {
-        const results = await Promise.all(
-          connectedEnvironments.map((target) =>
-            removeKeybindingMutation({
-              environmentId: target.environmentId,
-              input: rowKeybindingTarget(row),
-            }),
-          ),
-        );
+        const result = await removeKeybindingMutation({
+          environmentId: primaryEnvironment.environmentId,
+          input: rowKeybindingTarget(row),
+        });
         setSavingCommand(null);
-        const result = results.find((entry) => entry._tag === "Failure") ?? results[0];
-        if (result?._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
           const error = squashAtomCommandFailure(result);
           toastManager.add({
             title: "Unable to remove keybinding",
@@ -1490,7 +1453,7 @@ export function KeybindingsSettingsPanel() {
         }
       })();
     },
-    [connectedEnvironments, primaryEnvironment, removeKeybindingMutation],
+    [primaryEnvironment, removeKeybindingMutation],
   );
 
   const resetKeybinding = useCallback(

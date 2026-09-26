@@ -25,11 +25,11 @@ describe("Tool representation v2", () => {
       properties: {
         value: {
           type: "string",
-          minLength: 2
+          allOf: [{ minLength: 2 }]
         }
       },
       required: ["value"],
-      additionalProperties: true
+      additionalProperties: false
     })
   })
 })

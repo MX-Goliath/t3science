@@ -1,4 +1,3 @@
-import type { ClientSettings } from "@t3tools/contracts/settings";
 import type { AssistantCitation } from "@t3tools/contracts";
 import {
   serializeAssistantCitation,
@@ -8,10 +7,11 @@ import {
   splitPromptIntoComposerSegments,
   type ComposerPromptSegment,
 } from "./composer-editor-mentions";
+import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
-export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
+export type ComposerTriggerKind = "path" | "slash-command" | "skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
-export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
+export type ComposerSubmissionIntent = "foreground" | "background";
 
 export interface ComposerTrigger {
   kind: ComposerTriggerKind;
@@ -29,17 +29,9 @@ export function composerSubmissionIntentForEnter(input: {
   shiftKey: boolean;
   modifierKey: boolean;
   isDraftThread: boolean;
-  isRunning?: boolean;
-  sendShortcut?: ClientSettings["sendShortcut"];
-  prompt?: string;
 }): ComposerSubmissionIntent | null {
-  const requiresModifier =
-    input.sendShortcut === "mod-enter" ||
-    (input.sendShortcut === "mod-enter-multiline" && /[\r\n]/.test(input.prompt ?? ""));
-  if (input.isMobileViewport || (requiresModifier && !input.modifierKey)) return null;
-  if (input.shiftKey && !(requiresModifier && input.modifierKey && input.isRunning)) return null;
-  if (input.isRunning && input.modifierKey && (!requiresModifier || input.shiftKey)) {
-    return "alternate";
+  if (input.isMobileViewport || input.shiftKey) {
+    return null;
   }
   return input.modifierKey && input.isDraftThread ? "background" : "foreground";
 }
@@ -52,7 +44,13 @@ function clampCursor(text: string, cursor: number): number {
 }
 
 function isWhitespace(char: string): boolean {
-  return char === " " || char === "\n" || char === "\t" || char === "\r";
+  return (
+    char === " " ||
+    char === "\n" ||
+    char === "\t" ||
+    char === "\r" ||
+    char === INLINE_TERMINAL_CONTEXT_PLACEHOLDER
+  );
 }
 
 function tokenStartForCursor(text: string, cursor: number): number {
@@ -74,11 +72,7 @@ export function expandCollapsedComposerCursor(text: string, cursorInput: number)
   let expandedCursor = 0;
 
   for (const segment of segments) {
-    if (
-      segment.type === "mention" ||
-      segment.type === "citation" ||
-      segment.type === "context-reference"
-    ) {
+    if (segment.type === "mention" || segment.type === "citation") {
       const expandedLength = segment.source.length;
       if (remaining <= 1) {
         return expandedCursor + (remaining === 0 ? 0 : expandedLength);
@@ -88,12 +82,20 @@ export function expandCollapsedComposerCursor(text: string, cursorInput: number)
       continue;
     }
     if (segment.type === "skill") {
-      const expandedLength = segment.source.length;
+      const expandedLength = segment.name.length + 1;
       if (remaining <= 1) {
         return expandedCursor + (remaining === 0 ? 0 : expandedLength);
       }
       remaining -= 1;
       expandedCursor += expandedLength;
+      continue;
+    }
+    if (segment.type === "terminal-context") {
+      if (remaining <= 1) {
+        return expandedCursor + remaining;
+      }
+      remaining -= 1;
+      expandedCursor += 1;
       continue;
     }
 
@@ -147,11 +149,7 @@ export function collapseExpandedComposerCursor(text: string, cursorInput: number
   let collapsedCursor = 0;
 
   for (const segment of segments) {
-    if (
-      segment.type === "mention" ||
-      segment.type === "citation" ||
-      segment.type === "context-reference"
-    ) {
+    if (segment.type === "mention" || segment.type === "citation") {
       const expandedLength = segment.source.length;
       if (remaining === 0) {
         return collapsedCursor;
@@ -164,7 +162,7 @@ export function collapseExpandedComposerCursor(text: string, cursorInput: number
       continue;
     }
     if (segment.type === "skill") {
-      const expandedLength = segment.source.length;
+      const expandedLength = segment.name.length + 1;
       if (remaining === 0) {
         return collapsedCursor;
       }
@@ -172,6 +170,14 @@ export function collapseExpandedComposerCursor(text: string, cursorInput: number
         return collapsedCursor + 1;
       }
       remaining -= expandedLength;
+      collapsedCursor += 1;
+      continue;
+    }
+    if (segment.type === "terminal-context") {
+      if (remaining <= 1) {
+        return collapsedCursor + remaining;
+      }
+      remaining -= 1;
       collapsedCursor += 1;
       continue;
     }
@@ -235,20 +241,10 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
 
   const tokenStart = tokenStartForCursor(text, cursor);
   const token = text.slice(tokenStart, cursor);
-  const pullRequestMatch = /^#([\p{L}\p{N}][\p{L}\p{N}_-]*)?$/u.exec(token);
-  if (pullRequestMatch) {
-    return {
-      kind: "pull-request",
-      query: pullRequestMatch[1] ?? "",
-      rangeStart: tokenStart,
-      rangeEnd: cursor,
-    };
-  }
-  const skillPrefix = /^\p{Sc}/u.exec(token);
-  if (skillPrefix) {
+  if (token.startsWith("$")) {
     return {
       kind: "skill",
-      query: token.slice(skillPrefix[0].length),
+      query: token.slice(1),
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };
@@ -262,18 +258,6 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
     query: token.slice(1),
     rangeStart: tokenStart,
     rangeEnd: cursor,
-  };
-}
-
-/** Caret and trigger after replacing composer text and continuing at the end. */
-export function composerStateAtPromptEnd(text: string): {
-  cursor: number;
-  trigger: ComposerTrigger | null;
-} {
-  const cursor = collapseExpandedComposerCursor(text, text.length);
-  return {
-    cursor,
-    trigger: detectComposerTrigger(text, expandCollapsedComposerCursor(text, cursor)),
   };
 }
 

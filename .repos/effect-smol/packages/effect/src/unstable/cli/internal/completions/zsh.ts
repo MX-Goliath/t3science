@@ -14,9 +14,6 @@ import type * as Completions from "../../Completions.ts"
 
 const escapeZsh = (s: string): string => s.replace(/\\/g, "\\\\").replace(/'/g, "'\\''").replace(/:/g, "\\:")
 
-/** Escape choices for the second parse of a Zsh `_arguments` action. */
-const escapeZshChoice = (s: string): string => s.replace(/[^A-Za-z0-9_.,/@%+-]/gu, "\\$&").replace(/'/g, "'\\''")
-
 const sanitize = (s: string): string => s.replace(/[^a-zA-Z0-9_]/g, "_")
 
 /**
@@ -38,12 +35,12 @@ const valueAction = (type: Completions.FlagType): string => {
     case "Boolean":
       return ""
     case "Choice":
-      return `:value:(${type.values.map(escapeZshChoice).join(" ")})`
+      return `:value:(${type.values.join(" ")})`
     case "Path":
       return type.pathType === "directory" ? `:directory:_directories` : `:file:_files`
-    case "Int":
+    case "Integer":
       return `:integer:`
-    case "Finite":
+    case "Float":
       return `:float:`
     case "Date":
       return `:date:`
@@ -55,7 +52,7 @@ const valueAction = (type: Completions.FlagType): string => {
 const argAction = (type: Completions.ArgumentType): string => {
   switch (type._tag) {
     case "Choice":
-      return `(${type.values.map(escapeZshChoice).join(" ")})`
+      return `(${type.values.join(" ")})`
     case "Path":
       return type.pathType === "directory" ? `_directories` : `_files`
     default:
@@ -136,14 +133,8 @@ const generateFunction = (
         lines.push(`    ${spec}`)
       }
     }
-    if (descriptor.arguments.length > 0) {
-      lines.push(`    -`)
-      lines.push(`    parent-arguments`)
-      for (const arg of descriptor.arguments) {
-        lines.push(`    ${argSpec(arg)}`)
-      }
-      lines.push(`    -`)
-      lines.push(`    subcommands`)
+    for (const arg of descriptor.arguments) {
+      lines.push(`    ${argSpec(arg)}`)
     }
     lines.push(`    '1:command:->command'`)
     lines.push(`    '*::arg:->args'`)

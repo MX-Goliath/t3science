@@ -170,10 +170,7 @@ describe.sequential("Certificate", () => {
         yield* stack.destroy();
 
         yield* waitForGone(zoneId, cert.certificateId);
-      }).pipe(
-        Effect.ensuring(stack.destroy().pipe(Effect.orDie).pipe(Effect.ignore)),
-        logLevel,
-      ),
+      }).pipe(Effect.ensuring(stack.destroy().pipe(Effect.ignore)), logLevel),
     { timeout: 200_000 },
   );
 
@@ -215,10 +212,7 @@ describe.sequential("Certificate", () => {
         yield* stack.destroy();
 
         yield* waitForGone(zoneId, replaced.certificateId);
-      }).pipe(
-        Effect.ensuring(stack.destroy().pipe(Effect.orDie).pipe(Effect.ignore)),
-        logLevel,
-      ),
+      }).pipe(Effect.ensuring(stack.destroy().pipe(Effect.ignore)), logLevel),
     { timeout: 200_000 },
   );
 
@@ -274,10 +268,7 @@ describe.sequential("Certificate", () => {
         yield* stack.destroy();
 
         yield* waitForGone(zoneId, cert.certificateId);
-      }).pipe(
-        Effect.ensuring(stack.destroy().pipe(Effect.orDie).pipe(Effect.ignore)),
-        logLevel,
-      ),
+      }).pipe(Effect.ensuring(stack.destroy().pipe(Effect.ignore)), logLevel),
     // With the poll backoffs now CAPPED (steady cadence, see
     // `waitForGone`/`forbiddenRetrySchedule`), this test's three sequential
     // eventual-consistency waits are each bounded to ~60s — the list-appear

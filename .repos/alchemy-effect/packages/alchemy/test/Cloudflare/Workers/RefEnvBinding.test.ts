@@ -41,7 +41,7 @@ test.provider(
           const namespace = yield* Cloudflare.KV.Namespace("RefNamespace");
           const worker = yield* Cloudflare.Worker("ref-binding-worker", {
             script,
-            workersDev: true,
+            subdomain: { enabled: true },
             env: {
               KV: yield* Cloudflare.KV.Namespace.ref("RefNamespace"),
             },

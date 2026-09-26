@@ -1,4 +1,3 @@
-import { EMPTY_PROJECT_SCRIPT_INPUT } from "./components/projectScriptEditor";
 import { MAX_SCRIPT_ID_LENGTH } from "@t3tools/contracts";
 import { shortcutLabelForCommand } from "./keybindings";
 import { describe, expect, it } from "vite-plus/test";
@@ -21,10 +20,12 @@ describe("projectScripts helpers", () => {
     expect(
       buildProjectScript("dev", {
         name: "Dev server",
+        kind: "command",
         command: "pnpm dev",
+        prompt: "",
+        modelSelection: null,
         icon: "debug",
         runOnWorktreeCreate: false,
-        waitForSetup: false,
         previewUrl: "http://localhost:5733",
         autoOpenPreview: true,
       }),
@@ -43,10 +44,12 @@ describe("projectScripts helpers", () => {
     expect(
       buildProjectScript("test", {
         name: "Test",
+        kind: "command",
         command: "pnpm test",
+        prompt: "",
+        modelSelection: null,
         icon: "test",
         runOnWorktreeCreate: false,
-        waitForSetup: false,
         previewUrl: null,
         autoOpenPreview: false,
       }),
@@ -59,24 +62,36 @@ describe("projectScripts helpers", () => {
     });
   });
 
-  it("only records async: false for setup scripts that should block the agent", () => {
-    const input = {
-      ...EMPTY_PROJECT_SCRIPT_INPUT,
-      name: "Setup",
-      command: "pnpm i",
-      icon: "configure",
-      previewUrl: null,
-      autoOpenPreview: false,
-    } as const;
+  it("builds prompt actions with their model selection", () => {
     expect(
-      buildProjectScript("setup", { ...input, runOnWorktreeCreate: true, waitForSetup: true }),
-    ).toMatchObject({ runOnWorktreeCreate: true, async: false });
-    expect(
-      buildProjectScript("setup", { ...input, runOnWorktreeCreate: true, waitForSetup: false }),
-    ).not.toHaveProperty("async");
-    expect(
-      buildProjectScript("setup", { ...input, runOnWorktreeCreate: false, waitForSetup: true }),
-    ).not.toHaveProperty("async");
+      buildProjectScript("review", {
+        name: "Review",
+        kind: "prompt",
+        command: "",
+        prompt: "Review the current changes.",
+        modelSelection: {
+          instanceId: "codex" as never,
+          model: "gpt-5.4",
+          options: [{ id: "reasoningEffort", value: "high" }],
+        },
+        icon: "play",
+        runOnWorktreeCreate: false,
+        previewUrl: null,
+        autoOpenPreview: false,
+      }),
+    ).toEqual({
+      id: "review",
+      name: "Review",
+      kind: "prompt",
+      prompt: "Review the current changes.",
+      modelSelection: {
+        instanceId: "codex",
+        model: "gpt-5.4",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      },
+      icon: "play",
+      runOnWorktreeCreate: false,
+    });
   });
 
   it("builds and parses script run commands", () => {

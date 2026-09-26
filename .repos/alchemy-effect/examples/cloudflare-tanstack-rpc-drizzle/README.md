@@ -73,7 +73,7 @@ every value over the wire.
 
 Requires Cloudflare and Neon credentials (same as the other Neon examples):
 
-- `CLOUDFLARE_API_TOKEN` (or `alchemy profile edit --add Cloudflare`)
+- `CLOUDFLARE_API_TOKEN` (or `alchemy login`)
 - `NEON_API_KEY`
 
 ```sh

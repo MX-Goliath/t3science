@@ -18,7 +18,7 @@ describe("LanguageModel representation v2", () => {
 
     assert.deepStrictEqual(LanguageModel.defaultCodecTransformer(schema).jsonSchema, {
       type: "string",
-      minLength: 2
+      allOf: [{ minLength: 2 }]
     })
   })
 })

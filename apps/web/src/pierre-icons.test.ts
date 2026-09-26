@@ -14,21 +14,18 @@ describe("Pierre file icons", () => {
     assert.equal(resolvePierreIconForEntry("vite.config.ts", "file")?.token, "vite");
   });
 
-  it("uses built-in Pierre icons where available", () => {
-    assert.equal(resolvePierreIconForEntry("package.json", "file")?.name, "file-tree-builtin-npm");
+  it("extends Pierre with T3-specific exact filename icons", () => {
+    assert.equal(
+      resolvePierreIconForEntry("package.json", "file")?.name,
+      "t3-file-icon-package-json",
+    );
     assert.equal(
       resolvePierreIconForEntry("config/tsconfig.json", "file")?.name,
-      "file-tree-builtin-typescript",
+      "t3-file-icon-tsconfig",
     );
-    assert.equal(resolvePierreIconForEntry("CLAUDE.md", "file")?.name, "file-tree-builtin-claude");
-    assert.equal(
-      resolvePierreIconForEntry("README.md", "file")?.name,
-      "file-tree-builtin-markdown",
-    );
-  });
-
-  it("extends Pierre with T3-specific exact filename icons", () => {
     assert.equal(resolvePierreIconForEntry("AGENTS.md", "file")?.name, "t3-file-icon-agents");
+    assert.equal(resolvePierreIconForEntry("CLAUDE.md", "file")?.name, "t3-file-icon-claude");
+    assert.equal(resolvePierreIconForEntry("README.md", "file")?.name, "t3-file-icon-readme");
     assert.equal(resolvePierreIconForEntry("pnpm-lock.yaml", "file")?.name, "t3-file-icon-pnpm");
     assert.equal(
       resolvePierreIconForEntry("pnpm-workspace.yaml", "file")?.name,
@@ -37,9 +34,7 @@ describe("Pierre file icons", () => {
   });
 
   it("ships every custom icon referenced by the extended resolver", () => {
-    const customIconNames = new Set(
-      Object.values(T3_PIERRE_ICONS.byFileName).filter((name) => name.startsWith("t3-")),
-    );
+    const customIconNames = new Set(Object.values(T3_PIERRE_ICONS.byFileName));
     for (const iconName of customIconNames) {
       assert.include(T3_PIERRE_ICONS.spriteSheet, `id="${iconName}"`);
     }

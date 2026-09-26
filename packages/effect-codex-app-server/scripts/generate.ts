@@ -61,7 +61,7 @@ interface JsonSchemaFile {
   readonly qualifiedName: string;
 }
 
-class GeneratorError extends Schema.TaggedError<GeneratorError>()("GeneratorError", {
+class GeneratorError extends Schema.TaggedErrorClass<GeneratorError>()("GeneratorError", {
   detail: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {
@@ -413,7 +413,7 @@ function addAsyncQuestionFields(value: Schema.Json): Schema.Json {
     return {
       ...value,
       properties: {
-        ...Object.fromEntries(Object.entries(properties).filter(([key]) => key !== "type")),
+        ...properties,
         delivery: { anyOf: [{ type: "string", enum: ["async"] }, { type: "null" }] },
         questions: {
           anyOf: [
@@ -433,7 +433,6 @@ function addAsyncQuestionFields(value: Schema.Json): Schema.Json {
             { type: "null" },
           ],
         },
-        type: itemType,
       },
     };
   }
@@ -761,8 +760,7 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
   for (const [name, schema] of Object.entries(aggregateSchemas).toSorted(([left], [right]) =>
     left.localeCompare(right),
   )) {
-    aggregateSchemas[name] = addAsyncQuestionFields(schema);
-    generator.addSchema(name, aggregateSchemas[name] as never);
+    generator.addSchema(name, addAsyncQuestionFields(schema) as never);
   }
 
   const generatedEntries = new Map<string, string>();

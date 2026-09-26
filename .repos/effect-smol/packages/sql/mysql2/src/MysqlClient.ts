@@ -153,7 +153,7 @@ export type TypeId = "~@effect/sql-mysql2/MysqlClient"
 /**
  * mysql2-backed SQL client service, extending `SqlClient` with its runtime type marker and client configuration.
  *
- * @category services
+ * @category models
  * @since 4.0.0
  */
 export interface MysqlClient extends Client.SqlClient {
@@ -455,7 +455,7 @@ export const layer = (
 /**
  * Creates the MySQL statement compiler, using `?` placeholders and backtick-escaped identifiers.
  *
- * @category constructors
+ * @category compiler
  * @since 4.0.0
  */
 export const makeCompiler = (transform?: (_: string) => string) =>

@@ -77,16 +77,17 @@ export const makeHttpFlagshipClient = (
     context?: EvaluationContext,
   ): Effect.Effect<EvaluationDetails<T>, FlagshipError, RuntimeContext> =>
     evaluate(flagKey, context).pipe(
-      Effect.map((r): EvaluationDetails<T> =>
-        match(r.value)
-          ? { flagKey, value: r.value, variant: r.variant, reason: r.reason }
-          : {
-              flagKey,
-              value: defaultValue,
-              variant: r.variant,
-              reason: r.reason,
-              errorCode: "TYPE_MISMATCH",
-            },
+      Effect.map(
+        (r): EvaluationDetails<T> =>
+          match(r.value)
+            ? { flagKey, value: r.value, variant: r.variant, reason: r.reason }
+            : {
+                flagKey,
+                value: defaultValue,
+                variant: r.variant,
+                reason: r.reason,
+                errorCode: "TYPE_MISMATCH",
+              },
       ),
       Effect.catch((error) =>
         Effect.succeed<EvaluationDetails<T>>({
@@ -152,21 +153,22 @@ export const makeHttpFlagshipClient = (
       details(flagKey, defaultValue, isNumber, context),
     getObjectDetails: (flagKey, defaultValue, context) =>
       evaluate(flagKey, context).pipe(
-        Effect.map((r): EvaluationDetails<typeof defaultValue> =>
-          isObjectLike(r.value)
-            ? {
-                flagKey,
-                value: r.value as typeof defaultValue,
-                variant: r.variant,
-                reason: r.reason,
-              }
-            : {
-                flagKey,
-                value: defaultValue,
-                variant: r.variant,
-                reason: r.reason,
-                errorCode: "TYPE_MISMATCH",
-              },
+        Effect.map(
+          (r): EvaluationDetails<typeof defaultValue> =>
+            isObjectLike(r.value)
+              ? {
+                  flagKey,
+                  value: r.value as typeof defaultValue,
+                  variant: r.variant,
+                  reason: r.reason,
+                }
+              : {
+                  flagKey,
+                  value: defaultValue,
+                  variant: r.variant,
+                  reason: r.reason,
+                  errorCode: "TYPE_MISMATCH",
+                },
         ),
         Effect.catch((error) =>
           Effect.succeed<EvaluationDetails<typeof defaultValue>>({

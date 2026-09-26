@@ -222,12 +222,9 @@ export function PullRequestThreadDialog({
                 if (event.key !== "Enter") {
                   return;
                 }
-                if (event.nativeEvent.isComposing || event.keyCode === 229) {
-                  return;
-                }
                 event.preventDefault();
                 if (!isResolving && !preparePullRequestThreadAction.isPending) {
-                  void handleConfirm("worktree");
+                  void handleConfirm("local");
                 }
               }}
             />
@@ -252,7 +249,7 @@ export function PullRequestThreadDialog({
 
           {isResolving ? (
             <div className="flex items-center gap-2 text-muted-foreground text-xs">
-              <Spinner size="sm" />
+              <Spinner className="size-3.5" />
               Resolving {terminology.singular}...
             </div>
           ) : null}

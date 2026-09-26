@@ -1,16 +1,3 @@
-# T3 Science
-
-This project is a fork of [T3 Code](https://github.com/pingdotgg/t3code) focused on
-scientific research workflows. It keeps the original coding workflows while adding
-features for local, portable projects.
-
-## Changes compared to the original T3 Code
-
-- Conversations can be stored directly in the project root, which keeps project
-  history local and portable.
-- The Pi provider is supported alongside the built-in provider integrations.
-- Codex usage limits show both the five-hour and weekly windows when available.
-
 # T3 Code
 
 T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
@@ -36,21 +23,17 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 > - Antigravity: enable it in Settings, then use **Install Antigravity** and **Sign in with Google**. No CLI is required.
 > - Pi: install [Pi](https://pi.dev) and configure a model by running `pi`
 
-### Command line
+### Try it out (install-free)
+
+The easiest way to test T3 Code is to run the server in your terminal (requires Node.js 22.16+, 23.11+, or 24.10+):
 
 ```bash
-curl -fsSL https://t3.codes/install.sh | sh
+npx t3@latest
 ```
 
-On Windows, in PowerShell:
+This will launch T3 Code's backend on your machine as well as the local web app to control your agents.
 
-```powershell
-irm https://t3.codes/install.ps1 | iex
-```
-
-Then run `t3` to start the server and open the local web app. `t3 service install` keeps it running in the background, `t3 update` moves to a newer release, and `t3 --help` has the full reference.
-
-To try it once without installing, run `npx t3@latest` instead.
+Tip: Use `npx t3@latest --help` for the full CLI reference.
 
 ### Desktop app
 
@@ -98,14 +81,11 @@ Full docs live in [docs/](./docs). There's no docs site yet.
 - [Permission modes](./docs/user/permission-modes.md)
 - [Keyboard shortcuts](./docs/user/keybindings.md)
 - [Project settings](./docs/user/project-settings.md)
-- [Usage and limits](./docs/user/usage.md)
-- [Portable local conversations](./docs/user/portable-conversations.md)
-- [Desktop pets](./docs/user/desktop-pets.md)
 - [Remote access from a phone or another machine](./docs/user/remote-access.md)
 - [Keeping app and server in sync](./docs/user/updating.md)
 - [Desktop tray and startup](./docs/user/desktop-tray.md)
 - [Source control integrations](./docs/user/source-control.md)
-- Provider guides: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md) · [Pi](./docs/user/providers-pi.md)
+- Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)
 - [Run T3 Code as a background service](./docs/user/background-service.md)
 
 Building from source? Start at [docs/internals/overview.md](./docs/internals/overview.md).

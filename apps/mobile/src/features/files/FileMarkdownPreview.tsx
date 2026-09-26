@@ -191,12 +191,10 @@ function useMarkdownPreviewStyles(renderImage?: MarkdownImageRenderer): Markdown
 
 export function FileMarkdownPreview(props: {
   readonly cwd: string;
-  readonly captured?: boolean;
   readonly environmentId: EnvironmentId;
   readonly markdown: string;
   readonly relativePath: string;
-  /** Absent for a file opened from a project draft, which has no thread yet. */
-  readonly threadId: ThreadId | null;
+  readonly threadId: ThreadId;
   readonly onRefresh?: () => Promise<void> | void;
 }) {
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
@@ -218,19 +216,14 @@ export function FileMarkdownPreview(props: {
   const renderImage = useCallback<MarkdownImageRenderer>(
     (image) => {
       const media = resolveMediaSource(image.href, {
-        threadId: props.threadId ?? undefined,
+        threadId: props.threadId,
         workspaceRoot: markdownDirectory,
         imageEmbed: true,
       });
       if (media?.access === "direct") {
         return null;
       }
-      if (
-        props.captured ||
-        media === null ||
-        media.kind !== "image" ||
-        media.access === "unavailable"
-      ) {
+      if (media === null || media.kind !== "image" || media.access === "unavailable") {
         return <ThreadMarkdownImageUnavailable alt={image.alt} />;
       }
       return (
@@ -243,7 +236,7 @@ export function FileMarkdownPreview(props: {
         />
       );
     },
-    [markdownDirectory, props.environmentId, props.threadId, props.captured],
+    [markdownDirectory, props.environmentId, props.threadId],
   );
   const styles = useMarkdownPreviewStyles(renderImage);
   const onLinkPress = useCallback((href: string) => {

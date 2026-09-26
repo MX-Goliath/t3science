@@ -34,7 +34,7 @@ export const BoundMrapLive = Layer.effect(
 export default S3ControlMrapBindingsFunction.make(
   {
     main: import.meta.url,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(60),
   },
   Effect.gen(function* () {

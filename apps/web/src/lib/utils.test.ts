@@ -4,7 +4,7 @@ import { getLocalFileManagerName, isWindowsPlatform } from "./utils";
 describe("getLocalFileManagerName", () => {
   it.each([
     ["MacIntel", "Finder"],
-    ["Win32", "File Explorer"],
+    ["Win32", "Explorer"],
     ["Linux", "Files"],
   ])("uses the %s file manager name", (platform, expected) => {
     assert.strictEqual(getLocalFileManagerName(platform), expected);

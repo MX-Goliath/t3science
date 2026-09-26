@@ -36,7 +36,7 @@ const DEFAULT_HOST_POWER_ACTIVE_INTERVAL_MS = 30_000;
 const DEFAULT_HOST_POWER_IDLE_INTERVAL_MS = 120_000;
 const STALE_CHECK_INTERVAL = Duration.seconds(30);
 
-export class DesktopTelemetryDescriptorUnavailable extends Schema.TaggedError<DesktopTelemetryDescriptorUnavailable>()(
+export class DesktopTelemetryDescriptorUnavailable extends Schema.TaggedErrorClass<DesktopTelemetryDescriptorUnavailable>()(
   "DesktopTelemetryDescriptorUnavailable",
   {
     mode: Schema.String,
@@ -47,7 +47,7 @@ export class DesktopTelemetryDescriptorUnavailable extends Schema.TaggedError<De
   }
 }
 
-export class DesktopTelemetryProtocolMismatch extends Schema.TaggedError<DesktopTelemetryProtocolMismatch>()(
+export class DesktopTelemetryProtocolMismatch extends Schema.TaggedErrorClass<DesktopTelemetryProtocolMismatch>()(
   "DesktopTelemetryProtocolMismatch",
   {
     expectedVersion: Schema.Number,
@@ -59,7 +59,7 @@ export class DesktopTelemetryProtocolMismatch extends Schema.TaggedError<Desktop
   }
 }
 
-export class DesktopTelemetryDecodeFailed extends Schema.TaggedError<DesktopTelemetryDecodeFailed>()(
+export class DesktopTelemetryDecodeFailed extends Schema.TaggedErrorClass<DesktopTelemetryDecodeFailed>()(
   "DesktopTelemetryDecodeFailed",
   {
     cause: Schema.Defect(),
@@ -70,7 +70,7 @@ export class DesktopTelemetryDecodeFailed extends Schema.TaggedError<DesktopTele
   }
 }
 
-export class DesktopTelemetryStreamFailed extends Schema.TaggedError<DesktopTelemetryStreamFailed>()(
+export class DesktopTelemetryStreamFailed extends Schema.TaggedErrorClass<DesktopTelemetryStreamFailed>()(
   "DesktopTelemetryStreamFailed",
   {
     fd: Schema.Number,
@@ -82,7 +82,7 @@ export class DesktopTelemetryStreamFailed extends Schema.TaggedError<DesktopTele
   }
 }
 
-export class DesktopTelemetryStreamClosed extends Schema.TaggedError<DesktopTelemetryStreamClosed>()(
+export class DesktopTelemetryStreamClosed extends Schema.TaggedErrorClass<DesktopTelemetryStreamClosed>()(
   "DesktopTelemetryStreamClosed",
   {
     fd: Schema.Number,
@@ -93,7 +93,7 @@ export class DesktopTelemetryStreamClosed extends Schema.TaggedError<DesktopTele
   }
 }
 
-export class DesktopTelemetryStale extends Schema.TaggedError<DesktopTelemetryStale>()(
+export class DesktopTelemetryStale extends Schema.TaggedErrorClass<DesktopTelemetryStale>()(
   "DesktopTelemetryStale",
   {
     fd: Schema.Number,
@@ -112,7 +112,7 @@ export type DesktopTelemetryReceiverError =
   | DesktopTelemetryStreamFailed
   | DesktopTelemetryStreamClosed;
 
-export class DesktopTelemetryControlFailed extends Schema.TaggedError<DesktopTelemetryControlFailed>()(
+export class DesktopTelemetryControlFailed extends Schema.TaggedErrorClass<DesktopTelemetryControlFailed>()(
   "DesktopTelemetryControlFailed",
   {
     fd: Schema.Number,
@@ -125,7 +125,7 @@ export class DesktopTelemetryControlFailed extends Schema.TaggedError<DesktopTel
   }
 }
 
-export class DesktopTelemetryControlStalled extends Schema.TaggedError<DesktopTelemetryControlStalled>()(
+export class DesktopTelemetryControlStalled extends Schema.TaggedErrorClass<DesktopTelemetryControlStalled>()(
   "DesktopTelemetryControlStalled",
   {
     fd: Schema.Number,
@@ -327,7 +327,6 @@ export function requireDesktopTelemetryWriteProgress(
     : Effect.fail(new DesktopTelemetryControlStalled({ fd, remainingBytes }));
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")(function* () {
   const config = yield* ServerConfig;
   const serverSettings = yield* ServerSettingsService;

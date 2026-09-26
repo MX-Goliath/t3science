@@ -20,7 +20,7 @@ export class DAXTestFunction extends Lambda.Function<Lambda.Function>()(
 export default DAXTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const describeClusters = yield* DAX.DescribeClusters();

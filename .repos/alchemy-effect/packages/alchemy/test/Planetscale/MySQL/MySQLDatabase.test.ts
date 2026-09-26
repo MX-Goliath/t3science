@@ -3,7 +3,7 @@ import * as Planetscale from "@/Planetscale";
 import * as Provider from "@/Provider";
 import * as RemovalPolicy from "@/RemovalPolicy.ts";
 import * as Test from "@/Test/Alchemy";
-import * as ps from "@distilled.cloud/planetscale";
+import * as ops from "@distilled.cloud/planetscale/Operations";
 import { describe, expect } from "alchemy-test";
 import { Data, Schedule } from "effect";
 import * as Cause from "effect/Cause";
@@ -257,7 +257,7 @@ describe
           // keyspace resize request after creation.
           expect(database.replicas).toEqual(3);
 
-          const keyspaces = yield* ps.listKeyspaces({
+          const keyspaces = yield* ops.listKeyspaces({
             organization: database.organization,
             database: database.name,
             branch: "main",
@@ -352,7 +352,7 @@ describe
                 "MySQLDatabaseMigrations",
                 {
                   clusterSize: "PS_10",
-                  migrations: `${fixturesDir}/migrations`,
+                  migrationsDir: `${fixturesDir}/migrations`,
                   importFiles: [importFile],
                 },
               );
@@ -469,7 +469,7 @@ describe
           );
 
           // Verify database still exists (was not deleted via API)
-          const live = yield* ps.getDatabase({
+          const live = yield* ops.getDatabase({
             organization: database.organization,
             database: database.name,
           });
@@ -480,7 +480,7 @@ describe
           expect(live.kind).toEqual("mysql");
 
           // Clean up manually for the test
-          yield* ps
+          yield* ops
             .deleteDatabase({
               organization: database.organization,
               database: database.name,
@@ -495,7 +495,7 @@ const waitForDatabaseToBeDeleted = Effect.fn(function* (
   database: string,
   organization: string,
 ) {
-  yield* ps
+  yield* ops
     .getDatabase({
       organization,
       database,

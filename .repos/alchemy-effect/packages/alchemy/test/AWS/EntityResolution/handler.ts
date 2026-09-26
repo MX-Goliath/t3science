@@ -29,7 +29,7 @@ export class EntityResolutionTestFunction extends Lambda.Function<Lambda.Functio
 export default EntityResolutionTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(60),
   },
   Effect.gen(function* () {

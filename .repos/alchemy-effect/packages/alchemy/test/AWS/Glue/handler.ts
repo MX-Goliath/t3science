@@ -21,7 +21,7 @@ export class GlueTestFunction extends Lambda.Function<Lambda.Function>()(
 export default GlueTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(90),
   },
   Effect.gen(function* () {

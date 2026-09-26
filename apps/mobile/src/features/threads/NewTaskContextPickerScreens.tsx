@@ -1,4 +1,3 @@
-import { MaterialListRow } from "../../components/MaterialListRow";
 import type { VcsRef } from "@t3tools/client-runtime/state/vcs";
 import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
 import { LegendList } from "@legendapp/list/react-native";
@@ -21,7 +20,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
-import { MaterialScreenContent } from "../../components/MaterialScreenContent";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { EnvironmentMachineSymbol } from "../../components/EnvironmentMachineSymbol";
@@ -48,34 +46,6 @@ function SelectionRow(props: {
   readonly subtitle?: string;
   readonly title: string;
 }) {
-  if (Platform.OS === "android") {
-    return (
-      <MaterialListRow
-        title={props.title}
-        subtitle={props.subtitle}
-        leading={
-          props.icon === "arrow.triangle.branch" ? (
-            <SymbolView
-              name="arrow.triangle.branch"
-              size={24}
-              tintColorClassName="accent-icon-muted"
-            />
-          ) : (
-            props.icon
-          )
-        }
-        trailing={
-          props.selected ? (
-            <SymbolView name="checkmark" size={20} tintColorClassName="accent-focus" />
-          ) : null
-        }
-        accessibilityRole="radio"
-        accessibilityState={{ checked: props.selected }}
-        disabled={props.disabled}
-        onPress={props.onPress}
-      />
-    );
-  }
   return (
     <Pressable
       accessibilityLabel={[props.title, props.subtitle].filter(Boolean).join(", ")}
@@ -93,7 +63,7 @@ function SelectionRow(props: {
         <SymbolView
           name="arrow.triangle.branch"
           size={17}
-          tintColorClassName="accent-icon-muted"
+          tintColorClassName={"accent-icon-muted"}
           type="monochrome"
         />
       ) : (
@@ -113,7 +83,7 @@ function SelectionRow(props: {
         <SymbolView
           name="checkmark"
           size={16}
-          tintColorClassName="accent-icon"
+          tintColorClassName={"accent-icon"}
           type="monochrome"
           weight="semibold"
         />
@@ -129,13 +99,7 @@ function ToggleRow(props: {
 }) {
   return (
     <View className="min-h-14 flex-row items-center gap-3 bg-card px-4 py-3">
-      <Text
-        className={cn(
-          "min-w-0 flex-1 text-base text-foreground",
-          Platform.OS !== "android" && "font-t3-medium",
-        )}
-        numberOfLines={1}
-      >
+      <Text className="min-w-0 flex-1 text-base font-t3-medium text-foreground" numberOfLines={1}>
         {props.title}
       </Text>
       <ThemedSwitch
@@ -161,14 +125,8 @@ function BranchSelectionRow(props: {
   return (
     <View
       className={cn(
-        props.isFirst &&
-          (Platform.OS === "android"
-            ? "overflow-hidden rounded-t-[28px]"
-            : "overflow-hidden rounded-t-2xl"),
-        props.isLast &&
-          (Platform.OS === "android"
-            ? "overflow-hidden rounded-b-[28px]"
-            : "overflow-hidden rounded-b-2xl"),
+        props.isFirst && "overflow-hidden rounded-t-2xl",
+        props.isLast && "overflow-hidden rounded-b-2xl",
       )}
     >
       <SelectionRow
@@ -185,17 +143,7 @@ function BranchSelectionRow(props: {
 }
 
 function PickerSurface(props: { readonly children: ReactNode }) {
-  return (
-    <View
-      className={
-        Platform.OS === "android"
-          ? "overflow-hidden rounded-[28px] bg-card"
-          : "overflow-hidden rounded-2xl bg-card"
-      }
-    >
-      {props.children}
-    </View>
-  );
+  return <View className="overflow-hidden rounded-2xl bg-card">{props.children}</View>;
 }
 
 export function NewTaskEnvironmentPickerRouteScreen() {
@@ -213,48 +161,42 @@ export function NewTaskEnvironmentPickerRouteScreen() {
         }}
       />
       {Platform.OS === "android" ? (
-        <AndroidScreenHeader
-          title="Environment"
-          hideBottomBorder
-          onBack={() => navigation.goBack()}
-        />
+        <AndroidScreenHeader title="Environment" onBack={() => navigation.goBack()} />
       ) : null}
-      <MaterialScreenContent>
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={{
-            paddingBottom: Math.max(insets.bottom, 16) + 16,
-            paddingHorizontal: 16,
-            paddingTop: 16,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          <PickerSurface>
-            {flow.environments.map((environment, index) => (
-              <SelectionRow
-                key={String(environment.environmentId)}
-                icon={
-                  <EnvironmentMachineSymbol
-                    kind={resolveEnvironmentMachineKind(
-                      serverConfigs.get(environment.environmentId) ?? null,
-                    )}
-                    size={Platform.OS === "android" ? 24 : 17}
-                    tintColorClassName="accent-icon-muted"
-                  />
-                }
-                isLast={index === flow.environments.length - 1}
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  flow.selectEnvironment(environment.environmentId);
-                  navigation.goBack();
-                }}
-                selected={flow.selectedEnvironmentId === environment.environmentId}
-                title={environment.environmentLabel}
-              />
-            ))}
-          </PickerSurface>
-        </ScrollView>
-      </MaterialScreenContent>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom, 16) + 16,
+          paddingHorizontal: 16,
+          paddingTop: 16,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <PickerSurface>
+          {flow.environments.map((environment, index) => (
+            <SelectionRow
+              key={String(environment.environmentId)}
+              icon={
+                <EnvironmentMachineSymbol
+                  kind={resolveEnvironmentMachineKind(
+                    serverConfigs.get(environment.environmentId) ?? null,
+                  )}
+                  size={17}
+                  tintColorClassName="accent-icon-muted"
+                />
+              }
+              isLast={index === flow.environments.length - 1}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                flow.selectEnvironment(environment.environmentId);
+                navigation.goBack();
+              }}
+              selected={flow.selectedEnvironmentId === environment.environmentId}
+              title={environment.environmentLabel}
+            />
+          ))}
+        </PickerSurface>
+      </ScrollView>
     </View>
   );
 }
@@ -283,7 +225,7 @@ export function NewTaskBranchPickerRouteScreen() {
           ? 16
           : Math.max(insets.bottom, 16) + 16,
       paddingHorizontal: 16,
-      paddingTop: 16,
+      paddingTop: 12,
     }),
     [insets.bottom, usesNativeMailSearchToolbar],
   );
@@ -385,12 +327,7 @@ export function NewTaskBranchPickerRouteScreen() {
 
   const branchListHeader =
     flow.workspaceMode === "worktree" ? (
-      <View
-        className={cn(
-          "mb-3 overflow-hidden",
-          Platform.OS === "android" ? "rounded-[28px]" : "rounded-2xl",
-        )}
-      >
+      <View className="mb-3 overflow-hidden rounded-2xl">
         <ToggleRow
           onValueChange={flow.setStartFromOrigin}
           title="Start from origin"
@@ -402,9 +339,9 @@ export function NewTaskBranchPickerRouteScreen() {
   const branchContent =
     flow.filteredBranches.length === 0 ? (
       <ScrollView
-        className={Platform.OS === "android" ? "flex-1 bg-sheet-solid" : "flex-1 bg-sheet"}
+        className="flex-1 bg-sheet"
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingTop: 16 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingTop: 12 }}
         scrollEnabled={false}
         showsVerticalScrollIndicator={false}
       >
@@ -443,7 +380,7 @@ export function NewTaskBranchPickerRouteScreen() {
         alwaysBounceVertical={false}
         automaticallyAdjustsScrollIndicatorInsets
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
-        className={Platform.OS === "android" ? "flex-1 bg-sheet-solid" : "flex-1 bg-sheet"}
+        className="flex-1 bg-sheet"
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={branchListContentStyle}
         data={flow.filteredBranches}
@@ -471,27 +408,19 @@ export function NewTaskBranchPickerRouteScreen() {
     return (
       <View className="flex-1 bg-sheet" collapsable={false}>
         <NativeStackScreenOptions options={{ headerShown: false }} />
-        <AndroidScreenHeader
-          title={screenTitle}
-          hideBottomBorder
-          onBack={() => navigation.goBack()}
-        />
-        <View className="bg-header px-4 pb-3 pt-1">
+        <AndroidScreenHeader title={screenTitle} onBack={() => navigation.goBack()} />
+        <View className="px-4 pb-2 pt-3">
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
-            accessibilityLabel="Find a branch"
-            className="h-12 rounded-full border border-input-border bg-input px-4 font-sans text-base text-foreground"
-            selectionColorClassName="accent-focus/32"
-            cursorColorClassName="accent-focus"
-            selectionHandleColorClassName="accent-focus"
+            className="h-11 rounded-xl bg-card px-4 font-sans text-base text-foreground"
             onChangeText={flow.setBranchQuery}
             placeholder="Find a branch"
-            placeholderTextColorClassName="accent-placeholder"
+            placeholderTextColorClassName={"accent-placeholder"}
             value={flow.branchQuery}
           />
         </View>
-        <MaterialScreenContent>{branchContent}</MaterialScreenContent>
+        {branchContent}
       </View>
     );
   }

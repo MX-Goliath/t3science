@@ -89,7 +89,6 @@ export interface NewProjectScriptInput {
   modelSelection: ModelSelection | null;
   icon: ProjectScriptIcon;
   runOnWorktreeCreate: boolean;
-  waitForSetup: boolean;
   keybinding: string | null;
   /** Optional URL to open in the in-app preview when this script runs. */
   previewUrl: string | null;
@@ -107,7 +106,6 @@ export const EMPTY_PROJECT_SCRIPT_INPUT: NewProjectScriptInput = {
   modelSelection: null,
   icon: "play",
   runOnWorktreeCreate: false,
-  waitForSetup: false,
   keybinding: null,
   previewUrl: null,
   autoOpenPreview: false,
@@ -135,7 +133,6 @@ export function editorRequestForScript(
       modelSelection: isProjectPromptAction(script) ? script.modelSelection : null,
       icon: script.icon,
       runOnWorktreeCreate: script.runOnWorktreeCreate,
-      waitForSetup: script.runOnWorktreeCreate && script.async === false,
       keybinding: keybindingValueForCommand(keybindings, commandForProjectScript(script.id)),
       previewUrl: script.previewUrl ?? null,
       autoOpenPreview: script.autoOpenPreview ?? false,
@@ -184,7 +181,6 @@ export function ProjectScriptEditorDialog({
   const [icon, setIcon] = useState<ProjectScriptIcon>("play");
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [runOnWorktreeCreate, setRunOnWorktreeCreate] = useState(false);
-  const [waitForSetup, setWaitForSetup] = useState(false);
   const [keybinding, setKeybinding] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [autoOpenPreview, setAutoOpenPreview] = useState(false);
@@ -208,7 +204,6 @@ export function ProjectScriptEditorDialog({
     setIcon(request.initial.icon);
     setIconPickerOpen(false);
     setRunOnWorktreeCreate(request.initial.runOnWorktreeCreate);
-    setWaitForSetup(request.initial.waitForSetup);
     setKeybinding(request.initial.keybinding ?? "");
     setPreviewUrl(request.initial.previewUrl ?? "");
     setAutoOpenPreview(request.initial.autoOpenPreview);
@@ -272,7 +267,6 @@ export function ProjectScriptEditorDialog({
         modelSelection: kind === "prompt" ? modelSelection : null,
         icon,
         runOnWorktreeCreate: kind === "command" ? runOnWorktreeCreate : false,
-        waitForSetup: kind === "command" && runOnWorktreeCreate && waitForSetup,
         keybinding: keybindingRule?.key ?? null,
         previewUrl: kind === "command" && trimmedPreviewUrl.length > 0 ? trimmedPreviewUrl : null,
         autoOpenPreview:
@@ -492,18 +486,6 @@ export function ProjectScriptEditorDialog({
                   <Switch
                     checked={runOnWorktreeCreate}
                     onCheckedChange={(checked) => setRunOnWorktreeCreate(Boolean(checked))}
-                  />
-                </label>
-              ) : null}
-              {kind === "command" ? (
-                <label
-                  className={`flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035] ${runOnWorktreeCreate ? "" : "opacity-60"}`}
-                >
-                  <span>Wait for it to finish before the agent starts</span>
-                  <Switch
-                    checked={waitForSetup}
-                    disabled={!runOnWorktreeCreate}
-                    onCheckedChange={(checked) => setWaitForSetup(Boolean(checked))}
                   />
                 </label>
               ) : null}

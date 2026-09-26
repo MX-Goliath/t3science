@@ -65,9 +65,7 @@ const program = (opts: {
   rules: Cloudflare.R2.BucketEventNotificationRule[];
 }) =>
   Effect.gen(function* () {
-    const bucket = yield* Cloudflare.R2.Bucket("EventBucket", {
-      forceDestroy: true,
-    });
+    const bucket = yield* Cloudflare.R2.Bucket("EventBucket");
     const queue = yield* Cloudflare.Queues.Queue("EventQueueA");
     const notification = yield* Cloudflare.R2.BucketEventNotification(
       "Notification",
@@ -88,9 +86,7 @@ const replacementProgram = (opts: {
   target: "A" | "B";
 }) =>
   Effect.gen(function* () {
-    const bucket = yield* Cloudflare.R2.Bucket("EventBucket", {
-      forceDestroy: true,
-    });
+    const bucket = yield* Cloudflare.R2.Bucket("EventBucket");
     const queueA = yield* Cloudflare.Queues.Queue("EventQueueA");
     const queueB = yield* Cloudflare.Queues.Queue("EventQueueB");
     const target = opts.target === "B" ? queueB : queueA;

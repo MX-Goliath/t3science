@@ -59,11 +59,6 @@ export * as Brand from "./Brand.ts"
 /**
  * @since 4.0.0
  */
-export * as ByteSize from "./ByteSize.ts"
-
-/**
- * @since 4.0.0
- */
 export * as Cache from "./Cache.ts"
 
 /**
@@ -534,6 +529,11 @@ export * as SchemaAST from "./SchemaAST.ts"
 /**
  * @since 4.0.0
  */
+export * as SchemaError from "./SchemaError.ts"
+
+/**
+ * @since 4.0.0
+ */
 export * as SchemaGetter from "./SchemaGetter.ts"
 
 /**
@@ -580,11 +580,6 @@ export * as Semaphore from "./Semaphore.ts"
  * @since 2.0.0
  */
 export * as Sink from "./Sink.ts"
-
-/**
- * @since 4.0.0
- */
-export * as StandardSchema from "./StandardSchema.ts"
 
 /**
  * @since 4.0.0

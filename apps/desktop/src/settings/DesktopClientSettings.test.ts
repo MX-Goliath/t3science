@@ -1,10 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
-import {
-  ClientSettingsSchema,
-  DEFAULT_CLIENT_SETTINGS,
-  type ClientSettings,
-} from "@t3tools/contracts";
+import { ClientSettingsSchema, type ClientSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -17,9 +13,6 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 const clientSettings: ClientSettings = {
-  ...DEFAULT_CLIENT_SETTINGS,
-  notificationMode: "notifications-and-sound",
-  inAppNotificationsEnabled: true,
   appearanceContrast: 100,
   browserDefaultViewport: { _tag: "preset", width: 1024, height: 600, presetId: "nest-hub" },
   browserDefaultZoomFactor: 1.25,
@@ -36,7 +29,6 @@ const clientSettings: ClientSettings = {
   contextWindowMeterEnabled: false,
   composerCollapseOnScroll: true,
   dismissedProviderUpdateNotificationKeys: [],
-  diffFilesCollapsed: true,
   diffIgnoreWhitespace: true,
   diffLayout: "stacked",
   environmentIdentificationMode: "artwork",
@@ -50,6 +42,7 @@ const clientSettings: ClientSettings = {
   fontSizePrompt: 14,
   fontSizeTerminal: 12,
   fontSmoothing: true,
+  generalChatsEnabled: false,
   glassOpacity: 80,
   onboardingCompletedAt: null,
   panelAnimationDurationMs: 0,
@@ -67,7 +60,8 @@ const clientSettings: ClientSettings = {
   legacySidebarEnabled: false,
   loadBalancingEnabled: false,
   loadBalancingWeights: { "environment-1": 75, "environment-2": 0 },
-  pullRequestMergeMethodOverrides: {},
+  webChatEnabled: false,
+  webChatProvider: "chatgpt",
   timestampFormat: "24-hour",
   wordWrap: true,
 };

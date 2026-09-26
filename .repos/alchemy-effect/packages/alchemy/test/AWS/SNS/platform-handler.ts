@@ -50,7 +50,7 @@ const formatError = (error: unknown) =>
 export const PlatformApiFunctionLive = PlatformApiFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const { application } = yield* PlatformFixture;

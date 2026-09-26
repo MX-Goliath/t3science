@@ -1,6 +1,6 @@
 import * as Arr from "../../../Array.ts"
 import * as InternalRecord from "../../../internal/record.ts"
-import * as JsonSchema from "../../../JsonSchema.ts"
+import type * as JsonSchema from "../../../JsonSchema.ts"
 import * as Option from "../../../Option.ts"
 import * as Predicate from "../../../Predicate.ts"
 import * as Schema from "../../../Schema.ts"
@@ -19,29 +19,6 @@ const TUPLE_DESCRIPTION =
 const TUPLE_TAIL_DESCRIPTION = `${TUPLE_DESCRIPTION}. Post-rest elements use '__tail_0__', '__tail_1__', and so on`
 
 /** @internal */
-export function resolveReference($ref: string, definitions: JsonSchema.Definitions): JsonSchema.JsonSchema {
-  const key = JsonSchema.getReferenceKey($ref)
-  if (key === undefined) {
-    throw new Error(`Unsupported reference ${JSON.stringify($ref)}`)
-  }
-  if (!Object.hasOwn(definitions, key)) {
-    throw new Error(`Invalid reference ${JSON.stringify($ref)}`)
-  }
-  return definitions[key]
-}
-
-/** @internal */
-export function resolveTopLevelReference(
-  document: JsonSchema.Document<"draft-2020-12">
-): JsonSchema.Document<"draft-2020-12"> {
-  if (typeof document.schema.$ref !== "string") return document
-  return {
-    ...document,
-    schema: resolveReference(document.schema.$ref, document.definitions)
-  }
-}
-
-/** @internal */
 export function toCodec<T, E, RD, RE>(
   schema: Schema.ConstraintCodec<T, E, RD, RE>
 ): Schema.ConstraintCodec<T, unknown, RD, RE> {
@@ -57,18 +34,21 @@ export function toCodec<T, E, RD, RE>(
 }
 
 function transform(root: SchemaAST.AST): SchemaAST.AST {
-  let cache: Map<SchemaAST.AST, SchemaAST.AST> | undefined
+  const cache = new Map<SchemaAST.AST, SchemaAST.AST>()
 
   function recur(ast: SchemaAST.AST): SchemaAST.AST {
+    const cached = cache.get(ast)
+    if (cached !== undefined) return cached
+
     switch (ast._tag) {
       case "Union": {
         const types = SchemaAST.mapOrSame(ast.types, recur)
         const checks = prepareChecks(ast.checks)
-        const options = ast.options?.mode === "oneOf" ? { ...ast.options, mode: "anyOf" as const } : ast.options
-        if (types === ast.types && checks === ast.checks && options === ast.options) return ast
+        const mode = ast.mode === "oneOf" ? "anyOf" : ast.mode
+        if (types === ast.types && checks === ast.checks && mode === ast.mode) return ast
         return new SchemaAST.Union(
           types,
-          options,
+          mode,
           ast.annotations,
           checks,
           ast.encoding,
@@ -80,12 +60,13 @@ function transform(root: SchemaAST.AST): SchemaAST.AST {
         if (ast.elements.length > 0 || ast.rest.length > 1) {
           return tupleToObject(ast, recur)
         }
+        const elements = SchemaAST.mapOrSame(ast.elements, recur)
         const rest = SchemaAST.mapOrSame(ast.rest, recur)
         const checks = prepareChecks(ast.checks)
-        if (rest === ast.rest && checks === ast.checks) return ast
+        if (elements === ast.elements && rest === ast.rest && checks === ast.checks) return ast
         return new SchemaAST.Arrays(
           ast.isMutable,
-          ast.elements,
+          elements,
           rest,
           ast.annotations,
           checks,
@@ -112,16 +93,24 @@ function transform(root: SchemaAST.AST): SchemaAST.AST {
             ? propertySignature
             : new SchemaAST.PropertySignature(propertySignature.name, type)
         })
+        const indexSignatures = SchemaAST.mapOrSame(ast.indexSignatures, (indexSignature) => {
+          const parameter = recur(indexSignature.parameter)
+          const type = recur(indexSignature.type)
+          return parameter === indexSignature.parameter && type === indexSignature.type
+            ? indexSignature
+            : new SchemaAST.IndexSignature(parameter, type, indexSignature.merge)
+        })
         const checks = prepareChecks(ast.checks)
         if (
           propertySignatures === ast.propertySignatures &&
+          indexSignatures === ast.indexSignatures &&
           checks === ast.checks
         ) {
           return ast
         }
         return new SchemaAST.Objects(
           propertySignatures,
-          ast.indexSignatures,
+          indexSignatures,
           ast.annotations,
           checks,
           ast.encoding,
@@ -130,8 +119,6 @@ function transform(root: SchemaAST.AST): SchemaAST.AST {
         )
       }
       case "Suspend": {
-        const cached = cache?.get(ast)
-        if (cached !== undefined) return cached
         const out = new SchemaAST.Suspend(
           () => recur(ast.thunk()),
           ast.annotations,
@@ -139,7 +126,6 @@ function transform(root: SchemaAST.AST): SchemaAST.AST {
           ast.encoding,
           ast.context
         )
-        if (cache === undefined) cache = new Map()
         cache.set(ast, out)
         return out
       }
@@ -184,16 +170,13 @@ function tupleToObject(ast: SchemaAST.Arrays, recur: (ast: SchemaAST.AST) => Sch
     ast,
     SchemaTransformation.transform({
       decode: (object) => {
-        const tuple: Array<unknown> = []
+        let tuple: Array<unknown> = []
         for (let index = 0; index < ast.elements.length; index++) {
           const key = String(index)
           if (object[key] !== undefined) tuple.push(object[key])
         }
         if (REST_PROPERTY_NAME in object) {
-          const rest = object[REST_PROPERTY_NAME]
-          for (let index = 0; index < rest.length; index++) {
-            tuple.push(rest[index])
-          }
+          tuple = [...tuple, ...object[REST_PROPERTY_NAME]]
         }
         for (let index = 1; index < ast.rest.length; index++) {
           tuple.push(object[`${TAIL_PROPERTY_PREFIX}${index - 1}__`])
@@ -252,9 +235,8 @@ function objectToEntries(
 }
 
 function unionOrSingle(types: ReadonlyArray<SchemaAST.AST>): SchemaAST.AST {
-  if (types.length === 1) return types[0]
   const unique = Array.from(new Set(types))
-  return unique.length === 1 ? unique[0] : new SchemaAST.Union(unique)
+  return unique.length === 1 ? unique[0] : new SchemaAST.Union(unique, "anyOf")
 }
 
 function combineChecks(
@@ -300,7 +282,7 @@ function compilerAnnotations(
 
 function optionalToNullable(type: SchemaAST.AST): SchemaAST.AST {
   return SchemaAST.decodeTo(
-    new SchemaAST.Union([type, SchemaAST.null]),
+    new SchemaAST.Union([type, SchemaAST.null], "anyOf"),
     SchemaAST.optionalKey(type),
     SchemaTransformation.transformOptional({
       decode: Option.filter(Predicate.isNotNull),

@@ -18,7 +18,6 @@ import * as HttpRouter from "../http/HttpRouter.ts"
 import type * as HttpServer from "../http/HttpServer.ts"
 import type { HttpServerRequest } from "../http/HttpServerRequest.ts"
 import type { HttpServerResponse } from "../http/HttpServerResponse.ts"
-import * as NetAddress from "../net/NetAddress.ts"
 import * as RpcClient from "../rpc/RpcClient.ts"
 import * as RpcSerialization from "../rpc/RpcSerialization.ts"
 import * as RpcServer from "../rpc/RpcServer.ts"
@@ -57,20 +56,14 @@ export const layerClientProtocolHttp = (options: {
       const serialization = yield* RpcSerialization.RpcSerialization
       const client = yield* HttpClient.HttpClient
       const https = options.https ?? false
-      const path = options.path.startsWith("/") ? options.path : `/${options.path}`
-      return {
-        codecFor: serialization.codecFor,
-        make: (address) => {
-          const clientWithUrl = HttpClient.mapRequest(
-            client,
-            HttpClientRequest.prependUrl(
-              `http${https ? "s" : ""}://${NetAddress.formatUrlHostString(address.host)}:${address.port}${path}`
-            )
-          )
-          return RpcClient.makeProtocolHttp(clientWithUrl).pipe(
-            Effect.provideService(RpcSerialization.RpcSerialization, serialization)
-          )
-        }
+      return (address) => {
+        const clientWithUrl = HttpClient.mapRequest(
+          client,
+          HttpClientRequest.prependUrl(`http${https ? "s" : ""}://${address.host}:${address.port}/${options.path}`)
+        )
+        return RpcClient.makeProtocolHttp(clientWithUrl).pipe(
+          Effect.provideService(RpcSerialization.RpcSerialization, serialization)
+        )
       }
     })
   )
@@ -111,22 +104,18 @@ export const layerClientProtocolWebsocket = (options: {
     Effect.gen(function*() {
       const serialization = yield* RpcSerialization.RpcSerialization
       const https = options.https ?? false
-      const path = options.path.startsWith("/") ? options.path : `/${options.path}`
       const constructor = yield* Socket.WebSocketConstructor
-      return {
-        codecFor: serialization.codecFor,
-        make: Effect.fnUntraced(function*(address) {
-          const socket = yield* Socket.makeWebSocket(
-            `ws${https ? "s" : ""}://${NetAddress.formatUrlHostString(address.host)}:${address.port}${path}`
-          ).pipe(
-            Effect.provideService(Socket.WebSocketConstructor, constructor)
-          )
-          return yield* RpcClient.makeProtocolSocket().pipe(
-            Effect.provideService(Socket.Socket, socket),
-            Effect.provideService(RpcSerialization.RpcSerialization, serialization)
-          )
-        })
-      }
+      return Effect.fnUntraced(function*(address) {
+        const socket = yield* Socket.makeWebSocket(
+          `ws${https ? "s" : ""}://${address.host}:${address.port}/${options.path}`
+        ).pipe(
+          Effect.provideService(Socket.WebSocketConstructor, constructor)
+        )
+        return yield* RpcClient.makeProtocolSocket().pipe(
+          Effect.provideService(Socket.Socket, socket),
+          Effect.provideService(RpcSerialization.RpcSerialization, serialization)
+        )
+      })
     })
   )
 
@@ -150,7 +139,7 @@ export const layerClientProtocolWebsocketDefault: Layer.Layer<
  * The returned effect is produced from `RunnerServer.layerHandlers` and the
  * cluster runner RPC group.
  *
- * @category running
+ * @category http app
  * @since 4.0.0
  */
 export const toHttpEffect: Effect.Effect<
@@ -158,20 +147,11 @@ export const toHttpEffect: Effect.Effect<
   never,
   Scope | RpcSerialization.RpcSerialization | Sharding.Sharding | MessageStorage
 > = Effect.gen(function*() {
-  const { httpEffect, protocol } = yield* RpcServer.makeProtocolWithHttpEffect()
-  const handlers = yield* Layer.build(RunnerServer.layerHandlers).pipe(
-    Effect.provideService(RpcServer.Protocol, protocol)
-  )
-  yield* RpcServer.make(Runners.Rpcs, {
+  const handlers = yield* Layer.build(RunnerServer.layerHandlers)
+  return yield* RpcServer.toHttpEffect(Runners.Rpcs, {
     spanPrefix: "RunnerServer",
-    disableTracing: true,
-    disableFatalDefects: true
-  }).pipe(
-    Effect.provideContext(handlers),
-    Effect.provideService(RpcServer.Protocol, protocol),
-    Effect.forkScoped
-  )
-  return httpEffect
+    disableTracing: true
+  }).pipe(Effect.provideContext(handlers))
 })
 
 /**
@@ -182,7 +162,7 @@ export const toHttpEffect: Effect.Effect<
  * The returned effect is produced from `RunnerServer.layerHandlers` and the
  * cluster runner RPC group.
  *
- * @category running
+ * @category http app
  * @since 4.0.0
  */
 export const toHttpEffectWebsocket: Effect.Effect<
@@ -190,20 +170,11 @@ export const toHttpEffectWebsocket: Effect.Effect<
   never,
   Scope | RpcSerialization.RpcSerialization | Sharding.Sharding | MessageStorage
 > = Effect.gen(function*() {
-  const { httpEffect, protocol } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket
-  const handlers = yield* Layer.build(RunnerServer.layerHandlers).pipe(
-    Effect.provideService(RpcServer.Protocol, protocol)
-  )
-  yield* RpcServer.make(Runners.Rpcs, {
+  const handlers = yield* Layer.build(RunnerServer.layerHandlers)
+  return yield* RpcServer.toHttpEffectWebsocket(Runners.Rpcs, {
     spanPrefix: "RunnerServer",
-    disableTracing: true,
-    disableFatalDefects: true
-  }).pipe(
-    Effect.provideContext(handlers),
-    Effect.provideService(RpcServer.Protocol, protocol),
-    Effect.forkScoped
-  )
-  return httpEffect
+    disableTracing: true
+  }).pipe(Effect.provideContext(handlers))
 })
 
 /**

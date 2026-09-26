@@ -1,24 +1,20 @@
 import * as Cause from "effect/Cause";
-import type * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
-import { buildEventTelemetry } from "../../TelemetryRuntime.ts";
 import { isScopeEjected } from "../Workers/HttpServer.ts";
 import { getWorkerExport } from "../Workers/WorkerBridge.ts";
-import type {
-  WorkflowExport,
-  WorkflowImpl,
-  WorkflowStepConfig,
-  WorkflowStepEvent,
-  WorkflowTaskOptions,
-} from "./Workflow.ts";
 import {
   WorkflowEvent as WorkflowEventService,
+  type WorkflowExport,
+  type WorkflowImpl,
   WorkflowStep,
   WorkflowStepContext,
-} from "./WorkflowRuntime.ts";
+  type WorkflowStepConfig,
+  type WorkflowStepEvent,
+  type WorkflowTaskOptions,
+} from "./Workflow.ts";
 
 /**
  * Create a WorkflowBridge class that extends `WorkflowEntrypoint` and
@@ -53,31 +49,18 @@ export const makeWorkflowBridge =
     });
 
     return class WorkflowBridge extends WorkflowEntrypoint {
-      readonly build: Promise<{
-        readonly context: Context.Context<never>;
-        readonly fn: WorkflowImpl<unknown, unknown>;
-        readonly telemetry: () => Layer.Layer<never, any, any> | undefined;
-      }>;
+      readonly fn: Promise<WorkflowImpl<unknown, unknown>>;
 
       constructor(ctx: unknown, env: unknown) {
         super(ctx, env);
 
-        this.build = build(() => {}).then(
-          ({ context, export: wf, telemetry }) =>
-            wf.make(env).pipe(
-              Effect.provideContext(context),
-              Effect.map((fn) => ({
-                context,
-                fn: fn as WorkflowImpl<unknown, unknown>,
-                telemetry,
-              })),
-              Effect.runPromise,
-            ),
-        );
+        this.fn = build(() => {}).then(({ context, export: wf }) =>
+          wf.make(env).pipe(Effect.provideContext(context), Effect.runPromise),
+        ) as Promise<WorkflowImpl<unknown, unknown>>;
       }
 
       async run(event: any, step: any): Promise<unknown> {
-        const { context, fn, telemetry } = await this.build;
+        const fn = await this.fn;
         // Each run-invocation gets a fresh `Scope`, following the same
         // per-invocation-scope pattern as `WorkerBridge.processEvent`. `task`
         // threads it into every step via the surrounding body context, so
@@ -88,18 +71,15 @@ export const makeWorkflowBridge =
         const exit = await Effect.runPromiseExit(
           fn(event.payload).pipe(
             Effect.provide(
-              Layer.mergeAll(
-                Layer.succeed(WorkflowEventService, wrapWorkflowEvent(event)),
-                Layer.succeed(WorkflowStep, wrapWorkflowStep(step)),
-                Layer.succeed(Scope.Scope, scope),
-                // The configured telemetry exporters, attached to the run's
-                // scope by `buildEventTelemetry` so buffered telemetry
-                // flushes when the scope closes at the end of the
-                // run-invocation.
-                Layer.effectContext(
-                  buildEventTelemetry(context, scope, telemetry()),
+              Layer.succeed(
+                WorkflowEventService,
+                wrapWorkflowEvent(event),
+              ).pipe(
+                Layer.provideMerge(
+                  Layer.succeed(WorkflowStep, wrapWorkflowStep(step)),
                 ),
-              ).pipe(Layer.provideMerge(Layer.succeedContext(context))),
+                Layer.provideMerge(Layer.succeed(Scope.Scope, scope)),
+              ),
             ),
           ) as Effect.Effect<unknown>,
         );
@@ -133,7 +113,7 @@ const wrapWorkflowEvent = (event: any): WorkflowEventService["Service"] => ({
       : new Date(event.timestamp),
   instanceId: event.instanceId ?? "",
   workflowName: event.workflowName ?? "",
-  schedule: event.schedule ?? undefined,
+  schedule: event.schedule,
 });
 
 export const wrapWorkflowStep = (step: any): WorkflowStep["Service"] => ({
@@ -194,8 +174,6 @@ export const wrapWorkflowStep = (step: any): WorkflowStep["Service"] => ({
 const toWorkflowStepConfig = (
   options: WorkflowTaskOptions<any, any, any>,
 ): WorkflowStepConfig | undefined => {
-  const config: WorkflowStepConfig = {};
-  if (options.retries) config.retries = options.retries;
-  if (options.timeout !== undefined) config.timeout = options.timeout;
-  return Object.keys(config).length > 0 ? config : undefined;
+  if (!options.retries && !options.timeout) return undefined;
+  return { retries: options.retries, timeout: options.timeout };
 };

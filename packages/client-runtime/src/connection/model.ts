@@ -75,7 +75,7 @@ export const ConnectionBlockedReason = Schema.Literals([
 ]);
 export type ConnectionBlockedReason = typeof ConnectionBlockedReason.Type;
 
-export class ConnectionTransientError extends Schema.TaggedError<ConnectionTransientError>()(
+export class ConnectionTransientError extends Schema.TaggedErrorClass<ConnectionTransientError>()(
   "ConnectionTransientError",
   {
     reason: ConnectionTransientReason,
@@ -88,7 +88,7 @@ export class ConnectionTransientError extends Schema.TaggedError<ConnectionTrans
   }
 }
 
-export class ConnectionBlockedError extends Schema.TaggedError<ConnectionBlockedError>()(
+export class ConnectionBlockedError extends Schema.TaggedErrorClass<ConnectionBlockedError>()(
   "ConnectionBlockedError",
   {
     reason: ConnectionBlockedReason,

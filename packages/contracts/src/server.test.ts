@@ -5,7 +5,6 @@ import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import {
   resolveEnvironmentMachineKind,
   ServerConfig,
-  ServerObservability,
   ServerProvider,
   ServerProviders,
   ServerUpsertKeybindingResult,
@@ -14,7 +13,6 @@ import { ServerSettings } from "./settings.ts";
 
 const decodeServerProvider = Schema.decodeUnknownSync(ServerProvider);
 const decodeServerProviders = Schema.decodeUnknownSync(ServerProviders);
-const decodeServerObservability = Schema.decodeUnknownSync(ServerObservability);
 const decodeUpsertKeybindingResult = Schema.decodeUnknownSync(ServerUpsertKeybindingResult);
 const decodeAvailableEditors = Schema.decodeUnknownSync(ServerConfig.fields.availableEditors);
 
@@ -179,21 +177,6 @@ describe("server config forward compatibility", () => {
   });
 });
 
-describe("ServerObservability", () => {
-  it("reads a server from before the log signal as exporting no logs", () => {
-    const parsed = decodeServerObservability({
-      logsDirectoryPath: "/tmp/t3/logs",
-      localTracingEnabled: true,
-      otlpTracesUrl: "https://collector.example.com/v1/traces",
-      otlpTracesEnabled: true,
-      otlpMetricsEnabled: false,
-    });
-
-    expect(parsed.otlpLogsEnabled).toBe(false);
-    expect(parsed.otlpLogsUrl).toBeUndefined();
-  });
-});
-
 describe("resolveEnvironmentMachineKind", () => {
   const decodeDescriptor = Schema.decodeUnknownSync(ExecutionEnvironmentDescriptor);
   const decodeSettings = Schema.decodeUnknownSync(ServerSettings);
@@ -222,12 +205,6 @@ describe("resolveEnvironmentMachineKind", () => {
         settings: decodeSettings({}),
       }),
     ).toBe("mac-mini");
-  });
-
-  it("uses detection from a bare descriptor before connecting", () => {
-    expect(resolveEnvironmentMachineKind({ environment: descriptor({ machine: "laptop" }) })).toBe(
-      "laptop",
-    );
   });
 
   it("falls back to a server for older servers and before connect", () => {

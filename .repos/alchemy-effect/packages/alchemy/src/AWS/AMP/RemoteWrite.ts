@@ -36,8 +36,9 @@ export interface RemoteWriteRequest {
  * The protobuf + snappy remote-write body is encoded internally — callers
  * pass plain metric names, labels, and samples.
  *
- * ### Writing Metrics
- * **Example:** Push a Counter Sample
+ * @binding
+ * @section Writing Metrics
+ * @example Push a Counter Sample
  * ```typescript
  * const remoteWrite = yield* AMP.RemoteWrite(workspace);
  *
@@ -50,7 +51,7 @@ export interface RemoteWriteRequest {
  * });
  * ```
  *
- * **Example:** Backfill Samples with Explicit Timestamps
+ * @example Backfill Samples with Explicit Timestamps
  * ```typescript
  * yield* remoteWrite({
  *   timeseries: [{
@@ -63,8 +64,6 @@ export interface RemoteWriteRequest {
  *   }],
  * });
  * ```
- *
- * @binding
  */
 export interface RemoteWrite extends Binding.Service<
   RemoteWrite,

@@ -9,7 +9,7 @@
  *
  * @since 4.0.0
  */
-import type * as JsonSchema from "../../JsonSchema.ts"
+import * as JsonSchema from "../../JsonSchema.ts"
 import * as Rec from "../../Record.ts"
 import * as Schema from "../../Schema.ts"
 import * as InternalStructuredOutput from "./internal/structured-output.ts"
@@ -52,7 +52,7 @@ import * as InternalStructuredOutput from "./internal/structured-output.ts"
  * - Compatibility targets standard OpenAI models. Fine-tuned models support a
  *   smaller JSON Schema subset.
  *
- * @category transforming
+ * @category Codec Transformation
  * @since 4.0.0
  */
 export function toCodecOpenAI<T, E, RD, RE>(
@@ -62,11 +62,8 @@ export function toCodecOpenAI<T, E, RD, RE>(
   jsonSchema: JsonSchema.JsonSchema
 } {
   const codec = InternalStructuredOutput.toCodec(schema)
-  const document = InternalStructuredOutput.resolveTopLevelReference(
-    Schema.toJsonSchemaDocument(codec, {
-      generateDescriptions: true,
-      onExcessProperty: "error"
-    })
+  const document = JsonSchema.resolveTopLevel$ref(
+    Schema.toJsonSchemaDocument(codec, { generateDescriptions: true })
   )
   const jsonSchema = rewriteOpenAI(document.schema)
   if (jsonSchema.type !== "object" || jsonSchema.anyOf !== undefined) {

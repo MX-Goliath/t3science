@@ -9,12 +9,11 @@
 import {
   ChatAttachment,
   MessageId,
-  ModelSelection,
-  OrchestrationMessageContext,
   OrchestrationMessageRole,
   ThreadId,
   TurnId,
   IsoDateTime,
+  ModelSelection,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
@@ -31,7 +30,6 @@ export const ProjectionThreadMessage = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
-  context: Schema.optional(OrchestrationMessageContext),
   modelSelection: Schema.optional(ModelSelection),
   isStreaming: Schema.Boolean,
   createdAt: IsoDateTime,

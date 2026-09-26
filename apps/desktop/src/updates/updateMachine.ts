@@ -5,13 +5,13 @@ import type {
   DesktopUpdateState,
 } from "@t3tools/contracts";
 
-function nextStatusAfterDownloadFailure(
+export function nextStatusAfterDownloadFailure(
   currentState: DesktopUpdateState,
 ): DesktopUpdateState["status"] {
   return currentState.availableVersion ? "available" : "error";
 }
 
-function getCanRetryAfterDownloadFailure(currentState: DesktopUpdateState): boolean {
+export function getCanRetryAfterDownloadFailure(currentState: DesktopUpdateState): boolean {
   return currentState.availableVersion !== null;
 }
 

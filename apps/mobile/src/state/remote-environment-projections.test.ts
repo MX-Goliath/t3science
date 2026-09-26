@@ -29,7 +29,7 @@ function presentation(
   serverConfig: ServerConfig | null = null,
 ): EnvironmentPresentation {
   return {
-    entry: { target: target(environmentId, endpoint), profile: Option.none(), enabled: true },
+    entry: { target: target(environmentId, endpoint), profile: Option.none() },
     connection: { phase: "connected", error: null, traceId: null },
     serverConfig,
   };

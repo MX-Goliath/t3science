@@ -20,7 +20,7 @@ export class BucketEventSourceFunction extends Lambda.Function<BucketEventSource
 export default BucketEventSourceFunction.make(
   {
     main: import.meta.url,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const bucket = yield* S3.Bucket("EventSourceBucket", {

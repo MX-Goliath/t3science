@@ -39,7 +39,7 @@ const ALLOWED_PREVIEW_PERMISSIONS: ReadonlySet<string> = new Set([
   // picker runs in the main window session, which is unaffected by this list.
 ]);
 
-export class BrowserSessionPartitionDerivationError extends Schema.TaggedError<BrowserSessionPartitionDerivationError>()(
+export class BrowserSessionPartitionDerivationError extends Schema.TaggedErrorClass<BrowserSessionPartitionDerivationError>()(
   "BrowserSessionPartitionDerivationError",
   {
     scope: Schema.String,
@@ -51,7 +51,7 @@ export class BrowserSessionPartitionDerivationError extends Schema.TaggedError<B
   }
 }
 
-export class BrowserSessionCreationError extends Schema.TaggedError<BrowserSessionCreationError>()(
+export class BrowserSessionCreationError extends Schema.TaggedErrorClass<BrowserSessionCreationError>()(
   "BrowserSessionCreationError",
   {
     scope: Schema.String,
@@ -64,7 +64,7 @@ export class BrowserSessionCreationError extends Schema.TaggedError<BrowserSessi
   }
 }
 
-export class BrowserSessionStorageClearError extends Schema.TaggedError<BrowserSessionStorageClearError>()(
+export class BrowserSessionStorageClearError extends Schema.TaggedErrorClass<BrowserSessionStorageClearError>()(
   "BrowserSessionStorageClearError",
   {
     partition: Schema.String,
@@ -76,7 +76,7 @@ export class BrowserSessionStorageClearError extends Schema.TaggedError<BrowserS
   }
 }
 
-export class BrowserSessionCacheClearError extends Schema.TaggedError<BrowserSessionCacheClearError>()(
+export class BrowserSessionCacheClearError extends Schema.TaggedErrorClass<BrowserSessionCacheClearError>()(
   "BrowserSessionCacheClearError",
   {
     partition: Schema.String,
@@ -159,7 +159,6 @@ const encodeScopeForDigest = (scope: string): Uint8Array =>
       ),
   );
 
-/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* BrowserSessionMake() {
   const crypto = yield* Crypto.Crypto;
   const sessionsRef = yield* SynchronizedRef.make<ReadonlyMap<string, Session>>(new Map());
@@ -197,12 +196,11 @@ export const make = Effect.gen(function* BrowserSessionMake() {
       return Effect.try({
         try: () => {
           const browserSession = session.fromPartition(partition);
-          // The guest keeps Electron's native User-Agent. Rewriting it in any
-          // form — even variants that keep the Electron token — makes Cloudflare
-          // Turnstile fail its integrity check with error 600010 and recreate
-          // the challenge every few seconds, so logins behind it never complete
-          // (#5002). Re-setting the unchanged native string is harmless, so it
-          // is the rewritten string itself that trips the check.
+          const userAgent = browserSession
+            .getUserAgent()
+            .replace(/Electron\/[\d.]+ /, "")
+            .replace(/\s*t3code\/[\d.]+/, "");
+          browserSession.setUserAgent(userAgent);
           browserSession.setPermissionRequestHandler((_webContents, permission, callback) => {
             callback(ALLOWED_PREVIEW_PERMISSIONS.has(permission));
           });

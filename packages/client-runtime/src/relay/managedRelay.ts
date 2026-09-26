@@ -52,7 +52,7 @@ export interface ManagedRelayDpopProofInput {
   readonly accessToken?: string;
 }
 
-export class ManagedRelayDpopKeyLoadError extends Schema.TaggedError<ManagedRelayDpopKeyLoadError>()(
+export class ManagedRelayDpopKeyLoadError extends Schema.TaggedErrorClass<ManagedRelayDpopKeyLoadError>()(
   "ManagedRelayDpopKeyLoadError",
   {
     keyStore: Schema.Literals(["expo-secure-store", "indexed-db"]),
@@ -64,7 +64,7 @@ export class ManagedRelayDpopKeyLoadError extends Schema.TaggedError<ManagedRela
   }
 }
 
-export class ManagedRelayDpopProofCreationError extends Schema.TaggedError<ManagedRelayDpopProofCreationError>()(
+export class ManagedRelayDpopProofCreationError extends Schema.TaggedErrorClass<ManagedRelayDpopProofCreationError>()(
   "ManagedRelayDpopProofCreationError",
   {
     method: Schema.String,
@@ -115,7 +115,7 @@ export const ManagedRelayRequestActivity = Schema.Literals([
 ]);
 export type ManagedRelayRequestActivity = typeof ManagedRelayRequestActivity.Type;
 
-export class ManagedRelayRequestTimeoutError extends Schema.TaggedError<ManagedRelayRequestTimeoutError>()(
+export class ManagedRelayRequestTimeoutError extends Schema.TaggedErrorClass<ManagedRelayRequestTimeoutError>()(
   "ManagedRelayRequestTimeoutError",
   {
     activity: ManagedRelayRequestActivity,
@@ -131,7 +131,7 @@ export class ManagedRelayRequestTimeoutError extends Schema.TaggedError<ManagedR
   }
 }
 
-export class ManagedRelayUrlInvalidError extends Schema.TaggedError<ManagedRelayUrlInvalidError>()(
+export class ManagedRelayUrlInvalidError extends Schema.TaggedErrorClass<ManagedRelayUrlInvalidError>()(
   "ManagedRelayUrlInvalidError",
   {
     relayUrl: Schema.String,
@@ -142,7 +142,7 @@ export class ManagedRelayUrlInvalidError extends Schema.TaggedError<ManagedRelay
   }
 }
 
-export class ManagedRelayRequestFailedError extends Schema.TaggedError<ManagedRelayRequestFailedError>()(
+export class ManagedRelayRequestFailedError extends Schema.TaggedErrorClass<ManagedRelayRequestFailedError>()(
   "ManagedRelayRequestFailedError",
   {
     action: ManagedRelayRequestAction,
@@ -158,7 +158,7 @@ export class ManagedRelayRequestFailedError extends Schema.TaggedError<ManagedRe
   }
 }
 
-export class ManagedRelayAccessTokenScopesUnexpectedError extends Schema.TaggedError<ManagedRelayAccessTokenScopesUnexpectedError>()(
+export class ManagedRelayAccessTokenScopesUnexpectedError extends Schema.TaggedErrorClass<ManagedRelayAccessTokenScopesUnexpectedError>()(
   "ManagedRelayAccessTokenScopesUnexpectedError",
   {
     requestedScopes: Schema.Array(RelayDpopAccessTokenScope),
@@ -170,7 +170,7 @@ export class ManagedRelayAccessTokenScopesUnexpectedError extends Schema.TaggedE
   }
 }
 
-export class ManagedRelayTokenProofCreationError extends Schema.TaggedError<ManagedRelayTokenProofCreationError>()(
+export class ManagedRelayTokenProofCreationError extends Schema.TaggedErrorClass<ManagedRelayTokenProofCreationError>()(
   "ManagedRelayTokenProofCreationError",
   {
     method: Schema.String,
@@ -183,7 +183,7 @@ export class ManagedRelayTokenProofCreationError extends Schema.TaggedError<Mana
   }
 }
 
-export class ManagedRelayRequestProofCreationError extends Schema.TaggedError<ManagedRelayRequestProofCreationError>()(
+export class ManagedRelayRequestProofCreationError extends Schema.TaggedErrorClass<ManagedRelayRequestProofCreationError>()(
   "ManagedRelayRequestProofCreationError",
   {
     method: Schema.String,
@@ -729,7 +729,7 @@ export const make = Effect.fn("ManagedRelayClient.make")(function* (
     listDevices: Effect.fnUntraced(
       function* (input) {
         return yield* client.client
-          .listDevicesV2({
+          .listDevices({
             headers: bearerHeaders(input.clerkToken),
           })
           .pipe(

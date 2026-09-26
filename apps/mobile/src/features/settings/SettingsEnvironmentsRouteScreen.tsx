@@ -1,23 +1,19 @@
-import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
+import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { useNavigation } from "@react-navigation/native";
-import { useAtomValue } from "@effect/atom-react";
-import { managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
+import { SymbolView } from "../../components/AppSymbol";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useRef, useState } from "react";
-import { Platform, RefreshControl } from "react-native";
+import { useCallback, useState } from "react";
+import { Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SettingsScreen } from "./components/SettingsScreen";
-import { AndroidAnchoredMenu } from "../../components/AndroidAnchoredMenu";
-import { AndroidHeaderIconButton } from "../../components/AndroidScreenHeader";
+import { AppText as Text } from "../../components/AppText";
+import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { CloudEnvironmentRows } from "../connection/CloudEnvironmentRows";
-import { LocalEnvironmentList } from "../connection/LocalEnvironmentList";
-import { GitHubRoutingSettings } from "../connection/GitHubRoutingSettings";
+import { ConnectionEnvironmentRow } from "../connection/ConnectionEnvironmentRow";
 import { splitEnvironmentSections } from "../connection/environmentSections";
+import { cn } from "../../lib/cn";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { useRemoteConnections } from "../../state/use-remote-environment-registry";
-import { relayEnvironmentDiscovery } from "../../state/relay";
-import { useAtomCommand } from "../../state/use-atom-command";
 import {
   applyShowcaseLocalEnvironmentDisplayUrls,
   resolveShowcaseEnvironmentUpdateDisplayUrl,
@@ -32,7 +28,6 @@ export function SettingsEnvironmentsRouteScreen() {
     connectedEnvironments,
     onReconnectEnvironment,
     onRemoveEnvironmentPress,
-    onSetEnvironmentEnabled,
     onUpdateEnvironment,
   } = useRemoteConnections();
   const navigation = useNavigation();
@@ -47,26 +42,9 @@ export function SettingsEnvironmentsRouteScreen() {
   const connectedCloudEnvironments = SHOWCASE_ENABLED
     ? SHOWCASE_CONNECTED_CLOUD_ENVIRONMENTS
     : environmentSections.connectedCloudEnvironments;
+  const hasLocalEnvironments = localEnvironments.length > 0;
   const [expandedId, setExpandedId] = useState<EnvironmentId | null>(null);
   const headerIconColor = useUniwindTheme()["--color-icon"];
-  const relaySession = useAtomValue(managedRelaySessionAtom);
-  const refreshRelayEnvironments = useAtomCommand(
-    relayEnvironmentDiscovery.refresh,
-    "relay environment refresh",
-  );
-  const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
-  const cloudRefreshPendingRef = useRef(false);
-  async function refreshCloudEnvironments() {
-    if (!relaySession || cloudRefreshPendingRef.current) return;
-    cloudRefreshPendingRef.current = true;
-    setIsRefreshingCloud(true);
-    try {
-      await refreshRelayEnvironments();
-    } finally {
-      cloudRefreshPendingRef.current = false;
-      setIsRefreshingCloud(false);
-    }
-  }
 
   const handleToggle = useCallback((environmentId: EnvironmentId) => {
     setExpandedId((prev) => (prev === environmentId ? null : environmentId));
@@ -99,48 +77,43 @@ export function SettingsEnvironmentsRouteScreen() {
   );
 
   return (
-    <SettingsScreen
-      title="Environments"
-      trailing={
-        Platform.OS === "android" && relaySession ? (
-          <AndroidAnchoredMenu
-            title="Environment options"
+    <View collapsable={false} className="flex-1 bg-sheet">
+      {Platform.OS === "android" ? (
+        <>
+          {/* Android renders its own in-screen header instead of the native bar. */}
+          <NativeStackScreenOptions options={{ headerShown: false }} />
+          <AndroidScreenHeader
+            title="Environments"
+            onBack={() => navigation.goBack()}
             actions={[
               {
-                id: "refresh",
-                title: "Refresh cloud environments",
-                attributes: { disabled: isRefreshingCloud },
+                accessibilityLabel: "Add environment",
+                icon: "plus",
+                onPress: () =>
+                  navigation.navigate("SettingsSheet", {
+                    screen: "SettingsContent",
+                    params: { screen: "SettingsEnvironmentNew" },
+                  }),
               },
             ]}
-            onPressAction={({ nativeEvent }) => {
-              if (nativeEvent.event === "refresh") void refreshCloudEnvironments();
-            }}
-          >
-            {(open) => (
-              <AndroidHeaderIconButton
-                accessibilityLabel="Environment options"
-                icon="ellipsis"
-                onPress={open}
-              />
-            )}
-          </AndroidAnchoredMenu>
-        ) : undefined
-      }
-      actions={[
-        {
-          accessibilityLabel: "Add environment",
-          icon: "plus",
-          tintColor: headerIconColor,
-          onPress: () =>
-            navigation.navigate("SettingsSheet", {
-              screen: "SettingsContent",
-              params: { screen: "SettingsEnvironmentNew" },
-            }),
-        },
-      ]}
-    >
+          />
+        </>
+      ) : (
+        <NativeHeaderToolbar placement="right">
+          <NativeHeaderToolbar.Button
+            icon="plus"
+            onPress={() =>
+              navigation.navigate("SettingsSheet", {
+                screen: "SettingsContent",
+                params: { screen: "SettingsEnvironmentNew" },
+              })
+            }
+            separateBackground
+            tintColor={headerIconColor}
+          />
+        </NativeHeaderToolbar>
+      )}
       <ScrollView
-        alwaysBounceVertical
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
         className="flex-1"
@@ -148,32 +121,49 @@ export function SettingsEnvironmentsRouteScreen() {
         contentContainerStyle={{
           paddingBottom: Math.max(insets.bottom, 18) + 18,
         }}
-        refreshControl={
-          relaySession ? (
-            <RefreshControl
-              refreshing={isRefreshingCloud}
-              onRefresh={() => void refreshCloudEnvironments()}
-            />
-          ) : undefined
-        }
       >
-        <LocalEnvironmentList
-          environments={localEnvironments}
-          expandedId={expandedId}
-          onToggle={handleToggle}
-          onReconnect={onReconnectEnvironment}
-          onRemove={onRemoveEnvironmentPress}
-          onSetEnabled={onSetEnvironmentEnabled}
-          onUpdate={handleUpdateEnvironment}
-        />
+        {hasLocalEnvironments ? (
+          <View collapsable={false} className="overflow-hidden rounded-[24px] bg-card">
+            {localEnvironments.map((environment, index) => (
+              <View
+                key={environment.environmentId}
+                collapsable={false}
+                className={cn(index !== 0 && "border-t border-border")}
+              >
+                <ConnectionEnvironmentRow
+                  environment={environment}
+                  expanded={expandedId === environment.environmentId}
+                  onToggle={() => handleToggle(environment.environmentId)}
+                  onReconnect={onReconnectEnvironment}
+                  onRemove={onRemoveEnvironmentPress}
+                  onUpdate={handleUpdateEnvironment}
+                />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View collapsable={false} className="items-center gap-3 rounded-[24px] bg-card px-6 py-8">
+            <View className="h-12 w-12 items-center justify-center rounded-[16px] bg-subtle">
+              <SymbolView
+                name="point.3.connected.trianglepath.dotted"
+                size={20}
+                tintColorClassName={"accent-icon-muted"}
+                type="monochrome"
+              />
+            </View>
+            <Text className="text-center text-sm leading-normal text-foreground-muted">
+              No environments connected yet.{"\n"}Tap{" "}
+              <Text className="font-t3-bold text-foreground">+</Text> to add one.
+            </Text>
+          </View>
+        )}
 
         {/* Always mounted: already-connected relay environments must stay
             visible (and removable) even when cloud config is missing or the
             user is signed out — the component gates discovery itself. */}
         <CloudEnvironmentRows
           connectedCloudEnvironments={connectedCloudEnvironments}
-          onSetEnvironmentEnabled={onSetEnvironmentEnabled}
-          onRemoveEnvironment={onRemoveEnvironmentPress}
+          onReconnectEnvironment={onReconnectEnvironment}
           {...(SHOWCASE_ENABLED
             ? {
                 showcaseAvailableEnvironments: SHOWCASE_AVAILABLE_CLOUD_ENVIRONMENTS,
@@ -181,8 +171,7 @@ export function SettingsEnvironmentsRouteScreen() {
               }
             : {})}
         />
-        <GitHubRoutingSettings />
       </ScrollView>
-    </SettingsScreen>
+    </View>
   );
 }

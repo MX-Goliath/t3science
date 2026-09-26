@@ -19,7 +19,7 @@ export class AppIntegrationsTestFunction extends Lambda.Function<Lambda.Function
 export default AppIntegrationsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const application = yield* AppIntegrations.Application("BindingsApp", {

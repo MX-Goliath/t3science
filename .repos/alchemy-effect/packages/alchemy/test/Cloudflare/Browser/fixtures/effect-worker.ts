@@ -68,7 +68,7 @@ export default class BrowserEffectWorker extends Cloudflare.Worker<BrowserEffect
               .pipe(Effect.orDie);
             return yield* HttpServerResponse.json({
               title: snapshot.meta.title,
-              screenshotLength: snapshot.result.screenshot?.length ?? 0,
+              screenshotLength: snapshot.result.screenshot.length,
             });
           }
           case "/json": {

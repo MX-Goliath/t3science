@@ -16,8 +16,9 @@ export interface CopyObjectRequest extends Omit<
  * objects server-side — no download/re-upload round trip. `CopySource` names
  * the source as `"source-bucket/key"`. Provide the implementation with
  * `Effect.provide(AWS.S3.CopyObjectHttp)`.
- * ### Copying Objects
- * **Example:** Copy an Object Within a Bucket
+ * @binding
+ * @section Copying Objects
+ * @example Copy an Object Within a Bucket
  * ```typescript
  * // init — bind the operation to the destination bucket
  * const copyObject = yield* AWS.S3.CopyObject(bucket);
@@ -28,8 +29,6 @@ export interface CopyObjectRequest extends Omit<
  *   Key: "published/report.pdf",
  * });
  * ```
- *
- * @binding
  */
 export interface CopyObject extends Binding.Service<
   CopyObject,

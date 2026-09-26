@@ -30,9 +30,7 @@ export function parseT3ProjectFile(contents: string): T3ProjectFile | null {
  * editors get LSP support via a `$schema` reference.
  */
 export function buildT3ProjectFileJsonSchema(): Record<string, unknown> {
-  // Closed objects, as before effect rc.113 changed the generator default;
-  // editors then flag unknown keys in t3.json.
-  const document = Schema.toJsonSchemaDocument(T3ProjectFile, { onExcessProperty: "error" });
+  const document = Schema.toJsonSchemaDocument(T3ProjectFile);
   const jsonSchema: Record<string, unknown> = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: T3_PROJECT_FILE_SCHEMA_URL,

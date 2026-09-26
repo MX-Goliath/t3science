@@ -1,3 +1,4 @@
+import { NonNegativeInt } from "@t3tools/contracts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import * as Effect from "effect/Effect";
@@ -12,6 +13,10 @@ import {
   GetProjectionStateInput,
   ProjectionState,
 } from "../Services/ProjectionState.ts";
+
+const MinLastAppliedSequenceRowSchema = Schema.Struct({
+  minLastAppliedSequence: Schema.NullOr(NonNegativeInt),
+});
 
 const makeProjectionStateRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -85,6 +90,17 @@ const makeProjectionStateRepository = Effect.gen(function* () {
       `,
   });
 
+  const readMinLastAppliedSequence = SqlSchema.findOne({
+    Request: Schema.Void,
+    Result: MinLastAppliedSequenceRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          MIN(last_applied_sequence) AS "minLastAppliedSequence"
+        FROM projection_state
+      `,
+  });
+
   const upsert: ProjectionStateRepositoryShape["upsert"] = (row) =>
     upsertProjectionStateRow(row).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionStateRepository.upsert:query")),
@@ -105,11 +121,20 @@ const makeProjectionStateRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("ProjectionStateRepository.listAll:query")),
     );
 
+  const minLastAppliedSequence: ProjectionStateRepositoryShape["minLastAppliedSequence"] = () =>
+    readMinLastAppliedSequence(undefined).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("ProjectionStateRepository.minLastAppliedSequence:query"),
+      ),
+      Effect.map((row) => row.minLastAppliedSequence),
+    );
+
   return {
     upsert,
     upsertMany,
     getByProjector,
     listAll,
+    minLastAppliedSequence,
   } satisfies ProjectionStateRepositoryShape;
 });
 

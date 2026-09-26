@@ -59,7 +59,7 @@ export const BusAndQueuesLive = Layer.effect(
 export default EventBridgeTestFunction.make(
   {
     main: import.meta.url,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const { bus, customQueue, defaultQueue, toggleRule, archive } =

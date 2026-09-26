@@ -14,7 +14,7 @@ import {
   type ServiceLauncherParentMessage,
 } from "./serviceProtocol.ts";
 
-export class ServiceLauncherClientError extends Schema.TaggedError<ServiceLauncherClientError>()(
+export class ServiceLauncherClientError extends Schema.TaggedErrorClass<ServiceLauncherClientError>()(
   "ServiceLauncherClientError",
   {
     operation: Schema.Literals([
@@ -49,7 +49,7 @@ export class ServiceLauncherClientError extends Schema.TaggedError<ServiceLaunch
   }
 }
 
-export class ServiceLauncherRejectedError extends Schema.TaggedError<ServiceLauncherRejectedError>()(
+export class ServiceLauncherRejectedError extends Schema.TaggedErrorClass<ServiceLauncherRejectedError>()(
   "ServiceLauncherRejectedError",
   {
     targetVersion: Schema.String,

@@ -553,8 +553,6 @@ export const PreviewAutomationRecordingStatus = Schema.Struct({
 });
 export type PreviewAutomationRecordingStatus = typeof PreviewAutomationRecordingStatus.Type;
 
-export const PREVIEW_RECORDING_STOP_TIMEOUT_MS = 120_000;
-
 export const PreviewAutomationRecordingArtifact = Schema.Struct({
   id: Schema.String,
   tabId: PreviewTabId,
@@ -633,31 +631,14 @@ export const PreviewAutomationResponse = Schema.Struct({
 });
 export type PreviewAutomationResponse = typeof PreviewAutomationResponse.Type;
 
-const McpCapabilityErrorFields = {
-  environmentId: EnvironmentId,
-  threadId: ThreadId,
-  providerSessionId: TrimmedNonEmptyString,
-  providerInstanceId: ProviderInstanceId,
-};
-
-export class PreviewAutomationUnavailableError extends Schema.TaggedError<PreviewAutomationUnavailableError>()(
+export class PreviewAutomationUnavailableError extends Schema.TaggedErrorClass<PreviewAutomationUnavailableError>()(
   "PreviewAutomationUnavailableError",
   {
     capability: Schema.Literal("preview"),
-    ...McpCapabilityErrorFields,
-  },
-) {
-  override get message(): string {
-    return `MCP credential does not grant the ${this.capability} capability.`;
-  }
-}
-
-/** A `t3-code` MCP tool was called with a credential that does not carry its capability. */
-export class McpCapabilityUnavailableError extends Schema.TaggedError<McpCapabilityUnavailableError>()(
-  "McpCapabilityUnavailableError",
-  {
-    capability: TrimmedNonEmptyString,
-    ...McpCapabilityErrorFields,
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+    providerSessionId: TrimmedNonEmptyString,
+    providerInstanceId: ProviderInstanceId,
   },
 ) {
   override get message(): string {
@@ -700,7 +681,7 @@ const PreviewAutomationOptionalRemoteDiagnosticFields = {
   cause: Schema.optional(Schema.Defect()),
 };
 
-export class PreviewAutomationNoAvailableHostError extends Schema.TaggedError<PreviewAutomationNoAvailableHostError>()(
+export class PreviewAutomationNoAvailableHostError extends Schema.TaggedErrorClass<PreviewAutomationNoAvailableHostError>()(
   "PreviewAutomationNoAvailableHostError",
   {
     ...PreviewAutomationScopeErrorFields,
@@ -718,7 +699,7 @@ export class PreviewAutomationNoAvailableHostError extends Schema.TaggedError<Pr
   }
 }
 
-export class PreviewAutomationUnsupportedClientError extends Schema.TaggedError<PreviewAutomationUnsupportedClientError>()(
+export class PreviewAutomationUnsupportedClientError extends Schema.TaggedErrorClass<PreviewAutomationUnsupportedClientError>()(
   "PreviewAutomationUnsupportedClientError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -730,7 +711,7 @@ export class PreviewAutomationUnsupportedClientError extends Schema.TaggedError<
   }
 }
 
-export class PreviewAutomationTabNotFoundError extends Schema.TaggedError<PreviewAutomationTabNotFoundError>()(
+export class PreviewAutomationTabNotFoundError extends Schema.TaggedErrorClass<PreviewAutomationTabNotFoundError>()(
   "PreviewAutomationTabNotFoundError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -745,7 +726,7 @@ export class PreviewAutomationTabNotFoundError extends Schema.TaggedError<Previe
   }
 }
 
-export class PreviewAutomationTimeoutError extends Schema.TaggedError<PreviewAutomationTimeoutError>()(
+export class PreviewAutomationTimeoutError extends Schema.TaggedErrorClass<PreviewAutomationTimeoutError>()(
   "PreviewAutomationTimeoutError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -758,7 +739,7 @@ export class PreviewAutomationTimeoutError extends Schema.TaggedError<PreviewAut
   }
 }
 
-export class PreviewAutomationControlInterruptedError extends Schema.TaggedError<PreviewAutomationControlInterruptedError>()(
+export class PreviewAutomationControlInterruptedError extends Schema.TaggedErrorClass<PreviewAutomationControlInterruptedError>()(
   "PreviewAutomationControlInterruptedError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -770,7 +751,7 @@ export class PreviewAutomationControlInterruptedError extends Schema.TaggedError
   }
 }
 
-export class PreviewAutomationExecutionError extends Schema.TaggedError<PreviewAutomationExecutionError>()(
+export class PreviewAutomationExecutionError extends Schema.TaggedErrorClass<PreviewAutomationExecutionError>()(
   "PreviewAutomationExecutionError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -782,7 +763,7 @@ export class PreviewAutomationExecutionError extends Schema.TaggedError<PreviewA
   }
 }
 
-export class PreviewAutomationInvalidSelectorError extends Schema.TaggedError<PreviewAutomationInvalidSelectorError>()(
+export class PreviewAutomationInvalidSelectorError extends Schema.TaggedErrorClass<PreviewAutomationInvalidSelectorError>()(
   "PreviewAutomationInvalidSelectorError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -799,7 +780,7 @@ export class PreviewAutomationInvalidSelectorError extends Schema.TaggedError<Pr
   }
 }
 
-export class PreviewAutomationTargetNotEditableError extends Schema.TaggedError<PreviewAutomationTargetNotEditableError>()(
+export class PreviewAutomationTargetNotEditableError extends Schema.TaggedErrorClass<PreviewAutomationTargetNotEditableError>()(
   "PreviewAutomationTargetNotEditableError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -819,7 +800,7 @@ export class PreviewAutomationTargetNotEditableError extends Schema.TaggedError<
   }
 }
 
-export class PreviewAutomationResultTooLargeError extends Schema.TaggedError<PreviewAutomationResultTooLargeError>()(
+export class PreviewAutomationResultTooLargeError extends Schema.TaggedErrorClass<PreviewAutomationResultTooLargeError>()(
   "PreviewAutomationResultTooLargeError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -836,7 +817,7 @@ export class PreviewAutomationResultTooLargeError extends Schema.TaggedError<Pre
   }
 }
 
-export class PreviewAutomationClientDisconnectedError extends Schema.TaggedError<PreviewAutomationClientDisconnectedError>()(
+export class PreviewAutomationClientDisconnectedError extends Schema.TaggedErrorClass<PreviewAutomationClientDisconnectedError>()(
   "PreviewAutomationClientDisconnectedError",
   PreviewAutomationRequestErrorFields,
 ) {
@@ -845,7 +826,7 @@ export class PreviewAutomationClientDisconnectedError extends Schema.TaggedError
   }
 }
 
-export class PreviewAutomationRequestQueueClosedError extends Schema.TaggedError<PreviewAutomationRequestQueueClosedError>()(
+export class PreviewAutomationRequestQueueClosedError extends Schema.TaggedErrorClass<PreviewAutomationRequestQueueClosedError>()(
   "PreviewAutomationRequestQueueClosedError",
   PreviewAutomationRequestErrorFields,
 ) {
@@ -854,7 +835,7 @@ export class PreviewAutomationRequestQueueClosedError extends Schema.TaggedError
   }
 }
 
-export class PreviewAutomationRemoteUnavailableError extends Schema.TaggedError<PreviewAutomationRemoteUnavailableError>()(
+export class PreviewAutomationRemoteUnavailableError extends Schema.TaggedErrorClass<PreviewAutomationRemoteUnavailableError>()(
   "PreviewAutomationRemoteUnavailableError",
   {
     ...PreviewAutomationRequestErrorFields,
@@ -866,7 +847,7 @@ export class PreviewAutomationRemoteUnavailableError extends Schema.TaggedError<
   }
 }
 
-export class PreviewAutomationMalformedResponseError extends Schema.TaggedError<PreviewAutomationMalformedResponseError>()(
+export class PreviewAutomationMalformedResponseError extends Schema.TaggedErrorClass<PreviewAutomationMalformedResponseError>()(
   "PreviewAutomationMalformedResponseError",
   PreviewAutomationRequestErrorFields,
 ) {
@@ -875,50 +856,7 @@ export class PreviewAutomationMalformedResponseError extends Schema.TaggedError<
   }
 }
 
-export class PreviewAutomationRecordingTransferError extends Schema.TaggedError<PreviewAutomationRecordingTransferError>()(
-  "PreviewAutomationRecordingTransferError",
-  {
-    threadId: ThreadId,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {
-  override get message(): string {
-    return "Preview recording could not be saved to the agent environment. The saved copy remains on the desktop.";
-  }
-}
-
-export class PreviewAutomationRecordingDesktopUpdateRequiredError extends Schema.TaggedError<PreviewAutomationRecordingDesktopUpdateRequiredError>()(
-  "PreviewAutomationRecordingDesktopUpdateRequiredError",
-  { threadId: ThreadId, cause: Schema.optional(Schema.Defect()) },
-) {
-  override get message(): string {
-    return "Update the desktop app to transfer recordings. The recording remains on the desktop.";
-  }
-}
-
-export class PreviewAutomationRecordingTooLargeError extends Schema.TaggedError<PreviewAutomationRecordingTooLargeError>()(
-  "PreviewAutomationRecordingTooLargeError",
-  { threadId: ThreadId, cause: Schema.optional(Schema.Defect()) },
-) {
-  override get message(): string {
-    return "The recording exceeds 50 MiB. The saved copy remains on the desktop.";
-  }
-}
-
-export class PreviewAutomationRecordingDeadlineExpiredError extends Schema.TaggedError<PreviewAutomationRecordingDeadlineExpiredError>()(
-  "PreviewAutomationRecordingDeadlineExpiredError",
-  { threadId: ThreadId, cause: Schema.optional(Schema.Defect()) },
-) {
-  override get message(): string {
-    return "The recording transfer deadline expired. The saved copy remains on the desktop.";
-  }
-}
-
 export const PreviewAutomationError = Schema.Union([
-  PreviewAutomationRecordingTransferError,
-  PreviewAutomationRecordingDesktopUpdateRequiredError,
-  PreviewAutomationRecordingTooLargeError,
-  PreviewAutomationRecordingDeadlineExpiredError,
   PreviewAutomationUnavailableError,
   PreviewAutomationNoAvailableHostError,
   PreviewAutomationUnsupportedClientError,

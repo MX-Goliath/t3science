@@ -71,8 +71,9 @@ export interface WriteDomainClient {
  * domain's endpoint, made with the host Function's own credentials — the
  * domain's access policy must allow the function's role. Provide the
  * implementation with `Effect.provide(AWS.OpenSearch.DomainWriteHttp)`.
- * ### Writing Documents
- * **Example:** Index and Delete Documents
+ * @binding
+ * @section Writing Documents
+ * @example Index and Delete Documents
  * ```typescript
  * // init — grants es:ESHttpPut/Post/Delete/Patch on the domain
  * const writer = yield* AWS.OpenSearch.DomainWrite(domain);
@@ -85,8 +86,6 @@ export interface WriteDomainClient {
  * );
  * yield* writer.deleteDocument("songs", "1", { refresh: true });
  * ```
- *
- * @binding
  */
 export interface DomainWrite extends Binding.Service<
   DomainWrite,

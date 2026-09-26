@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 
-export class CopyTextClipboardWriteError extends Schema.TaggedError<CopyTextClipboardWriteError>()(
+export class CopyTextClipboardWriteError extends Schema.TaggedErrorClass<CopyTextClipboardWriteError>()(
   "CopyTextClipboardWriteError",
   {
     target: Schema.String,
@@ -14,7 +14,7 @@ export class CopyTextClipboardWriteError extends Schema.TaggedError<CopyTextClip
   }
 }
 
-export class CopyTextHapticFeedbackError extends Schema.TaggedError<CopyTextHapticFeedbackError>()(
+export class CopyTextHapticFeedbackError extends Schema.TaggedErrorClass<CopyTextHapticFeedbackError>()(
   "CopyTextHapticFeedbackError",
   {
     target: Schema.String,

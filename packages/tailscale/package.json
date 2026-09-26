@@ -9,7 +9,7 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test": "vp test run"
   },
   "dependencies": {

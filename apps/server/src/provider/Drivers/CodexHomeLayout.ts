@@ -70,7 +70,7 @@ const CodexShadowHomeContext = {
   effectiveHomePath: Schema.String,
 };
 
-export class CodexShadowHomeFileSystemError extends Schema.TaggedError<CodexShadowHomeFileSystemError>()(
+export class CodexShadowHomeFileSystemError extends Schema.TaggedErrorClass<CodexShadowHomeFileSystemError>()(
   "CodexShadowHomeFileSystemError",
   {
     ...CodexShadowHomeContext,
@@ -87,7 +87,7 @@ export class CodexShadowHomeFileSystemError extends Schema.TaggedError<CodexShad
   }
 }
 
-export class CodexShadowHomePathConflictError extends Schema.TaggedError<CodexShadowHomePathConflictError>()(
+export class CodexShadowHomePathConflictError extends Schema.TaggedErrorClass<CodexShadowHomePathConflictError>()(
   "CodexShadowHomePathConflictError",
   CodexShadowHomeContext,
 ) {
@@ -96,7 +96,7 @@ export class CodexShadowHomePathConflictError extends Schema.TaggedError<CodexSh
   }
 }
 
-export class CodexShadowHomeEntryConflictError extends Schema.TaggedError<CodexShadowHomeEntryConflictError>()(
+export class CodexShadowHomeEntryConflictError extends Schema.TaggedErrorClass<CodexShadowHomeEntryConflictError>()(
   "CodexShadowHomeEntryConflictError",
   {
     ...CodexShadowHomeContext,
@@ -110,7 +110,7 @@ export class CodexShadowHomeEntryConflictError extends Schema.TaggedError<CodexS
   }
 }
 
-export class CodexShadowHomePrivateEntrySymlinkError extends Schema.TaggedError<CodexShadowHomePrivateEntrySymlinkError>()(
+export class CodexShadowHomePrivateEntrySymlinkError extends Schema.TaggedErrorClass<CodexShadowHomePrivateEntrySymlinkError>()(
   "CodexShadowHomePrivateEntrySymlinkError",
   {
     ...CodexShadowHomeContext,

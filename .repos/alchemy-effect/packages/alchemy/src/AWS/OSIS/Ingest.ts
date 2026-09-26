@@ -18,8 +18,9 @@ export { PipelineIngestError } from "./BindingHttp.ts";
  * pass the source `path` configured on the pipeline's `http` source and the
  * batch of events. Provide the implementation with
  * `Effect.provide(AWS.OSIS.IngestHttp)`.
- * ### Ingesting Data
- * **Example:** Send a Batch of Log Events
+ * @binding
+ * @section Ingesting Data
+ * @example Send a Batch of Log Events
  * ```typescript
  * // init — bind the data plane to the pipeline
  * const ingest = yield* AWS.OSIS.Ingest(pipeline);
@@ -30,8 +31,6 @@ export { PipelineIngestError } from "./BindingHttp.ts";
  *   events: [{ message: "hello", level: "info" }],
  * });
  * ```
- *
- * @binding
  */
 export interface Ingest extends Binding.Service<
   Ingest,

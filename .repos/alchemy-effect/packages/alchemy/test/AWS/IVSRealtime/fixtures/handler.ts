@@ -29,7 +29,7 @@ export class IVSRealtimeTestFunction extends Lambda.Function<Lambda.Function>()(
 export default IVSRealtimeTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

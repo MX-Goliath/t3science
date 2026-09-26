@@ -34,7 +34,7 @@ export type AcpIncomingNotification =
     }
   | {
       readonly _tag: "ElicitationComplete";
-      readonly method: typeof CLIENT_METHODS.session_elicitation_complete | "elicitation/complete";
+      readonly method: typeof CLIENT_METHODS.session_elicitation_complete;
       readonly params: AcpSchema.ElicitationCompleteNotification;
     }
   | {
@@ -316,24 +316,20 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
           Effect.flatMap(dispatchNotification),
         );
       }
-      if (
-        message.tag === CLIENT_METHODS.session_elicitation_complete ||
-        message.tag === "elicitation/complete"
-      ) {
-        const method = message.tag;
+      if (message.tag === CLIENT_METHODS.session_elicitation_complete) {
         return decodeElicitationComplete(message.payload).pipe(
           Effect.map(
             (params) =>
               ({
                 _tag: "ElicitationComplete",
-                method,
+                method: CLIENT_METHODS.session_elicitation_complete,
                 params,
               }) satisfies AcpIncomingNotification,
           ),
           Effect.mapError((cause) =>
             AcpError.AcpProtocolParseError.fromSchemaError(
               "decode-notification-payload",
-              method,
+              CLIENT_METHODS.session_elicitation_complete,
               cause,
             ),
           ),
@@ -537,7 +533,6 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       ),
     supportsAck: true,
     supportsTransferables: false,
-    codecFor: parserFactory.codecFor,
   });
 
   const serverProtocol = RpcServer.Protocol.of({
@@ -553,13 +548,11 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     initialMessage: Effect.succeedNone,
     supportsAck: true,
     supportsTransferables: false,
-    codecFor: parserFactory.codecFor,
     supportsSpanPropagation: true,
-    supportsNotifications: true,
   });
 
-  // JSON-RPC notifications carry no `id`. Encoding a Request without `isNotification`
-  // emits an `id`, which real agents (Grok CLI) parse as a malformed request and silently drop.
+  // JSON-RPC notifications carry no `id`. The generic Request encoder emits `id: ""` plus
+  // `headers`, which real agents (Grok CLI) parse as a malformed request and silently drop.
   // That made `session/cancel` a no-op against Grok while the lenient mock agent accepted it.
   const sendNotification = Effect.fn("sendNotification")(function* (
     method: string,

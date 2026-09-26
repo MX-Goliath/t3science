@@ -8,11 +8,9 @@ import {
   type ModelPickerJumpKeybindingCommand,
   type ThreadJumpKeybindingCommand,
 } from "@t3tools/contracts";
-import { isElectron } from "./env";
 import { isMacPlatform } from "./lib/utils";
 
 export interface ShortcutEventLike {
-  getModifierState?: (key: "AltGraph") => boolean;
   type?: string;
   code?: string;
   key: string;
@@ -34,11 +32,6 @@ export interface ShortcutMatchContext {
   terminalOpen: boolean;
   previewFocus: boolean;
   previewOpen: boolean;
-  isWeb: boolean;
-  isDesktop: boolean;
-  /** A text field, textarea, select or rich-text editor owns the keyboard.
-      Optional: only chords that collide with native editing consult it. */
-  editableFocus?: boolean;
   [key: string]: boolean;
 }
 
@@ -56,41 +49,25 @@ const TERMINAL_WORD_FORWARD = "\u001bf";
 const TERMINAL_LINE_START = "\u0001";
 const TERMINAL_LINE_END = "\u0005";
 const TERMINAL_DELETE_TO_LINE_START = "\u0015";
-const EVENT_CODE_SHORTCUT_KEYS: Readonly<Record<string, string>> = {
-  Backquote: "`",
-  Backslash: "\\",
-  BracketLeft: "[",
-  BracketRight: "]",
-  Comma: ",",
-  Digit0: "0",
-  Digit1: "1",
-  Digit2: "2",
-  Digit3: "3",
-  Digit4: "4",
-  Digit5: "5",
-  Digit6: "6",
-  Digit7: "7",
-  Digit8: "8",
-  Digit9: "9",
-  Equal: "=",
-  Minus: "-",
-  Period: ".",
-  Quote: "'",
-  Semicolon: ";",
-  Slash: "/",
+const EVENT_CODE_KEY_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  BracketLeft: ["["],
+  BracketRight: ["]"],
+  Digit0: ["0"],
+  Digit1: ["1"],
+  Digit2: ["2"],
+  Digit3: ["3"],
+  Digit4: ["4"],
+  Digit5: ["5"],
+  Digit6: ["6"],
+  Digit7: ["7"],
+  Digit8: ["8"],
+  Digit9: ["9"],
 };
 
 function normalizeEventKey(key: string): string {
   const normalized = key.toLowerCase();
   if (normalized === "esc") return "escape";
   return normalized;
-}
-
-export function shortcutKeyFromEvent(event: Pick<ShortcutEventLike, "key" | "code">): string {
-  const layoutKey = normalizeEventKey(event.key);
-  if (/^[a-z]$/.test(layoutKey)) return layoutKey;
-  const physicalKey = event.code ? EVENT_CODE_SHORTCUT_KEYS[event.code] : undefined;
-  return physicalKey ?? layoutKey;
 }
 
 function resolveEventKeys(event: ShortcutEventLike): Set<string> {
@@ -105,7 +82,12 @@ function resolveEventKeys(event: ShortcutEventLike): Set<string> {
   if (letterCode && !/^[a-z]$/.test(layoutKey)) {
     keys.add(letterCode.toLowerCase());
   }
-  keys.add(shortcutKeyFromEvent(event));
+  const aliases = event.code ? EVENT_CODE_KEY_ALIASES[event.code] : undefined;
+  if (!aliases) return keys;
+
+  for (const alias of aliases) {
+    keys.add(alias);
+  }
   return keys;
 }
 
@@ -130,12 +112,6 @@ function matchesShortcut(
   shortcut: KeybindingShortcut,
   platform = navigator.platform,
 ): boolean {
-  if (
-    !isMacPlatform(platform) &&
-    event.getModifierState?.("AltGraph") &&
-    !/^[a-z0-9]$/i.test(event.key)
-  )
-    return false;
   if (!matchesShortcutModifiers(event, shortcut, platform)) return false;
   return resolveEventKeys(event).has(shortcut.key);
 }
@@ -150,9 +126,6 @@ function resolveContext(options: ShortcutMatchOptions | undefined): ShortcutMatc
     terminalOpen: false,
     previewFocus: false,
     previewOpen: false,
-    isWeb: !isElectron,
-    isDesktop: isElectron,
-    editableFocus: false,
     ...options?.context,
   };
 }
@@ -180,13 +153,11 @@ function matchesWhenClause(
   return evaluateWhenNode(whenAst, context);
 }
 
-export function shortcutConflictKey(
-  shortcut: KeybindingShortcut,
-  platform = navigator.platform,
-): string {
+function shortcutConflictKey(shortcut: KeybindingShortcut, platform = navigator.platform): string {
   const useMetaForMod = isMacPlatform(platform);
   const metaKey = shortcut.metaKey || (shortcut.modKey && useMetaForMod);
   const ctrlKey = shortcut.ctrlKey || (shortcut.modKey && !useMetaForMod);
+
   return [
     shortcut.key,
     metaKey ? "meta" : "",
@@ -251,7 +222,7 @@ export function resolveShortcutCommand(
   return null;
 }
 
-export function formatShortcutKeyLabel(key: string): string {
+function formatShortcutKeyLabel(key: string): string {
   if (key === " ") return "Space";
   if (key.length === 1) return key.toUpperCase();
   if (key === "escape") return "Esc";
@@ -413,23 +384,6 @@ export function isOpenFavoriteEditorShortcut(
   options?: ShortcutMatchOptions,
 ): boolean {
   return matchesCommandShortcut(event, keybindings, "editor.openFavorite", options);
-}
-
-/**
- * Whether the keypress is the rich-text bold chord (Mod+B without extra
- * modifiers). Tiptap binds the same chord, so app shortcuts captured ahead
- * of the editor must yield when the rich-text composer is focused.
- */
-export function isRichTextBoldShortcut(event: ShortcutEventLike): boolean {
-  if (event.type !== undefined && event.type !== "keydown") {
-    return false;
-  }
-  return (
-    event.key.toLowerCase() === "b" &&
-    (event.metaKey || event.ctrlKey) &&
-    !event.altKey &&
-    !event.shiftKey
-  );
 }
 
 export function isTerminalClearShortcut(

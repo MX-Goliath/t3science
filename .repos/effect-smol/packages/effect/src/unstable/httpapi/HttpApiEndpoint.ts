@@ -15,7 +15,7 @@ import * as Arr from "../../Array.ts"
 import type { Brand } from "../../Brand.ts"
 import * as Context from "../../Context.ts"
 import type { Effect } from "../../Effect.ts"
-import { identity, memoize } from "../../Function.ts"
+import { identity } from "../../Function.ts"
 import { type Pipeable, pipeArguments } from "../../Pipeable.ts"
 import * as Predicate from "../../Predicate.ts"
 import * as Schema from "../../Schema.ts"
@@ -23,7 +23,6 @@ import * as AST from "../../SchemaAST.ts"
 import type * as Stream from "../../Stream.ts"
 import type { Simplify } from "../../Struct.ts"
 import type * as Types from "../../Types.ts"
-import type * as Sse from "../encoding/Sse.ts"
 import type { HttpMethod } from "../http/HttpMethod.ts"
 import * as HttpRouter from "../http/HttpRouter.ts"
 import type { HttpServerRequest } from "../http/HttpServerRequest.ts"
@@ -45,15 +44,11 @@ const TypeId = "~effect/httpapi/HttpApiEndpoint"
  */
 export const isHttpApiEndpoint = (u: unknown): u is Top => Predicate.hasProperty(u, TypeId)
 
-type SuccessType<S> = S extends HttpApiSchema.WithHeaders<
-  infer _Inner,
-  infer _Headers
-> ? HttpApiSchema.withHeaders<SuccessType<_Inner>, _Headers["Type"]>
-  : S extends HttpApiSchema.StreamSse<
-    infer _Events,
-    infer _Error,
-    infer _Value
-  > ? Stream.Stream<_Value, _Error["Type"], never>
+type SuccessType<S> = S extends HttpApiSchema.StreamSse<
+  infer _Events,
+  infer _Error,
+  infer _Value
+> ? Stream.Stream<_Value, _Error["Type"], never>
   : S extends HttpApiSchema.StreamUint8Array ? Stream.Stream<Uint8Array, unknown, never>
   : S extends Schema.Constraint ? S["Type"]
   : never
@@ -80,24 +75,15 @@ type UnwrapReadonlyArray<S> = S extends ReadonlyArray<infer A> ? A : S
 
 type ExtractBufferedSuccess<S extends SuccessConstraint> = Exclude<
   Extract<UnwrapReadonlyArray<S>, Schema.Top>,
-  HttpApiSchema.StreamSchema | HttpApiSchema.WithHeaders<Schema.Top, Schema.Top>
+  HttpApiSchema.StreamSchema
 >
 
 type ExtractStreamSuccess<S extends SuccessConstraint> = UnwrapReadonlyArray<S> extends infer Success ?
   Success extends HttpApiSchema.StreamSchema ? Success : never
   : never
 
-type ExtractWithHeadersSuccess<S extends SuccessConstraint> = UnwrapReadonlyArray<S> extends infer Success ?
-  Success extends HttpApiSchema.WithHeaders<infer _Inner, infer _Headers> ? HttpApiSchema.WithHeaders<
-      _Inner extends HttpApiSchema.StreamSchema ? _Inner : Schema.toCodecJson<_Inner>,
-      Schema.toCodecStringTree<_Headers>
-    > :
-  never
-  : never
-
-type ToSuccessCodec<S extends SuccessConstraint> = [ExtractBufferedSuccess<S>] extends [never] ?
-  ExtractStreamSuccess<S> | ExtractWithHeadersSuccess<S>
-  : Schema.toCodecJson<ExtractBufferedSuccess<S>> | ExtractStreamSuccess<S> | ExtractWithHeadersSuccess<S>
+type ToSuccessCodec<S extends SuccessConstraint> = [ExtractBufferedSuccess<S>] extends [never] ? ExtractStreamSuccess<S>
+  : Schema.toCodecJson<ExtractBufferedSuccess<S>> | ExtractStreamSuccess<S>
 
 type ToJsonCodec<S> = [S] extends [never] ? never
   : [S] extends [Schema.Constraint] ? Schema.toCodecJson<S>
@@ -188,7 +174,6 @@ export interface HttpApiEndpoint<
   readonly error: ReadonlySet<Schema.Top>
   readonly annotations: Context.Context<never>
   readonly middlewares: ReadonlySet<Context.Key<Middleware, any>>
-  readonly disableCodecs: boolean
 
   /**
    * Add a prefix to the path of the endpoint.
@@ -284,11 +269,10 @@ export function getSuccessSchemas(endpoint: Top): [Schema.Top, ...Array<Schema.T
 /** @internal */
 export function getErrorSchemas(endpoint: Top): Array<Schema.Top> {
   const schemas = new Set<Schema.Top>(endpoint.error)
-  const transform = endpoint.disableCodecs ? identity : transformResponseSchema
   for (const middleware of endpoint.middlewares) {
     const key = middleware as any as HttpApiMiddleware.AnyService
     for (const schema of key.error) {
-      schemas.add(transform(schema))
+      schemas.add(schema)
     }
   }
   return Array.from(schemas)
@@ -350,7 +334,7 @@ export interface Top extends
 /**
  * Extracts the endpoint identifier literal from an `HttpApiEndpoint`.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Identifier<Endpoint> = Endpoint extends Constraint ? Endpoint["identifier"] : never
@@ -358,7 +342,7 @@ export type Identifier<Endpoint> = Endpoint extends Constraint ? Endpoint["ident
 /**
  * Extracts the success schema associated with an endpoint.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Success<Endpoint> = Endpoint extends Constraint ? Endpoint["~Success"] : never
@@ -366,7 +350,7 @@ export type Success<Endpoint> = Endpoint extends Constraint ? Endpoint["~Success
 /**
  * Extracts the error schema associated with an endpoint.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Error<Endpoint> = Endpoint extends Constraint ? Endpoint["~Error"] : never
@@ -374,7 +358,7 @@ export type Error<Endpoint> = Endpoint extends Constraint ? Endpoint["~Error"] :
 /**
  * Extracts the schema used for an endpoint's path parameters.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Params<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~Params"]
@@ -383,7 +367,7 @@ export type Params<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~P
 /**
  * Extracts the schema used for an endpoint's query parameters.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Query<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~Query"]
@@ -392,7 +376,7 @@ export type Query<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~Qu
 /**
  * Extracts the schema used for an endpoint's request payload.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Payload<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~Payload"]
@@ -401,7 +385,7 @@ export type Payload<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~
 /**
  * Extracts the schema used for an endpoint's request headers.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Headers<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~Headers"]
@@ -410,7 +394,7 @@ export type Headers<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~
 /**
  * Extracts the middleware identifiers attached to an endpoint.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Middleware<Endpoint> = Endpoint extends { readonly "~Middleware": infer M } ? M
@@ -419,7 +403,7 @@ export type Middleware<Endpoint> = Endpoint extends { readonly "~Middleware": in
 /**
  * Computes the services provided by the middleware attached to an endpoint.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type MiddlewareProvides<Endpoint> = HttpApiMiddleware.Provides<Middleware<Endpoint>>
@@ -427,7 +411,7 @@ export type MiddlewareProvides<Endpoint> = HttpApiMiddleware.Provides<Middleware
 /**
  * Computes the client-side middleware services required by an endpoint.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type MiddlewareClient<Endpoint> = HttpApiMiddleware.MiddlewareClient<Middleware<Endpoint>>
@@ -436,7 +420,7 @@ export type MiddlewareClient<Endpoint> = HttpApiMiddleware.MiddlewareClient<Midd
  * Computes the error types that can be produced by the middleware attached to an
  * endpoint.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type MiddlewareError<Endpoint> = HttpApiMiddleware.Error<Middleware<Endpoint>>
@@ -445,7 +429,7 @@ export type MiddlewareError<Endpoint> = HttpApiMiddleware.Error<Middleware<Endpo
  * Computes the full error value union for an endpoint, including the endpoint
  * error schema's type and errors introduced by middleware.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Errors<Endpoint> = Endpoint extends ConstraintRequest ?
@@ -456,7 +440,7 @@ export type Errors<Endpoint> = Endpoint extends ConstraintRequest ?
  * Computes the services required to encode an endpoint's error responses,
  * including services required by middleware error encoders.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ErrorServicesEncode<Endpoint> = Endpoint extends ConstraintRequest ?
@@ -469,7 +453,7 @@ export type ErrorServicesEncode<Endpoint> = Endpoint extends ConstraintRequest ?
  * available params, query, payload, headers, the raw request, endpoint, and group.
  * Multipart stream payloads are exposed as streams of parts.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Request<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~Request"]
@@ -480,19 +464,18 @@ export type Request<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~
  * params, query, and headers plus the raw request, endpoint, and group, while
  * leaving payload handling to the raw request.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type RequestRaw<Endpoint> = Endpoint extends ConstraintRequest ? Endpoint["~RequestRaw"]
   : {}
 
 /**
- * Builds the request object accepted by a generated client method, including the
- * params, query, headers, and payload required by the endpoint, plus optional
- * response mode and SSE decoding options. Multipart payloads are supplied as
- * `FormData`.
+ * Builds the request object accepted by a generated client method, including only
+ * the params, query, headers, payload, and response mode fields required by the
+ * endpoint. Multipart payloads are supplied as `FormData`.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ClientRequest<
@@ -511,14 +494,8 @@ export type ClientRequest<
         ? { readonly payload: FormData }
       : { readonly payload: Payload["Type"] }
     : { readonly payload: Payload["Type"] })
-) extends infer Req ? keyof Req extends never ? (void | {
-      readonly responseMode?: ResponseMode
-      readonly sseOptions?: Sse.DecodeOptions | undefined
-    }) :
-  Req & {
-    readonly responseMode?: ResponseMode
-    readonly sseOptions?: Sse.DecodeOptions | undefined
-  } :
+) extends infer Req ? keyof Req extends never ? (void | { readonly responseMode?: ResponseMode }) :
+  Req & { readonly responseMode?: ResponseMode } :
   void
 
 /**
@@ -534,7 +511,7 @@ export type ClientResponseMode = "decoded-only" | "decoded-and-response" | "resp
  * Computes the services required on the server to decode endpoint inputs and
  * encode endpoint success, error, and middleware error responses.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ServerServices<Endpoint> = Endpoint extends ConstraintRequest ?
@@ -551,7 +528,7 @@ export type ServerServices<Endpoint> = Endpoint extends ConstraintRequest ?
  * Computes the services required on the client to encode endpoint requests and
  * decode endpoint success or error responses.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ClientServices<Endpoint> = Endpoint extends ConstraintRequest ?
@@ -566,7 +543,7 @@ export type ClientServices<Endpoint> = Endpoint extends ConstraintRequest ?
 /**
  * Extracts the additional services required by middleware applied to an endpoint.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type MiddlewareServices<Endpoint> = Endpoint extends { readonly "~MiddlewareServices": infer R } ? R
@@ -576,7 +553,7 @@ export type MiddlewareServices<Endpoint> = Endpoint extends { readonly "~Middlew
  * Computes the services required to decode an endpoint's error responses,
  * including services required by middleware error decoders.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ErrorServicesDecode<Endpoint> = Endpoint extends ConstraintRequest ?
@@ -588,7 +565,7 @@ export type ErrorServicesDecode<Endpoint> = Endpoint extends ConstraintRequest ?
  * The normal server handler for an endpoint, accepting the decoded request shape
  * and returning either the endpoint success value or a custom `HttpServerResponse`.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type Handler<Endpoint extends Constraint, E, R> = (
@@ -599,7 +576,7 @@ export type Handler<Endpoint extends Constraint, E, R> = (
  * The raw server handler for an endpoint, receiving a request shape without a
  * decoded payload so the handler can read the raw `HttpServerRequest` directly.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type HandlerRaw<Endpoint extends Constraint, E, R> = (
@@ -609,7 +586,7 @@ export type HandlerRaw<Endpoint extends Constraint, E, R> = (
 /**
  * Selects the endpoint with the specified identifier from a union of endpoints.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type WithIdentifier<Endpoints, Identifier extends string> = Extract<
@@ -620,7 +597,7 @@ export type WithIdentifier<Endpoints, Identifier extends string> = Extract<
 /**
  * Removes endpoints with the specified identifier from a union of endpoints.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ExcludeIdentifier<Endpoints, Identifier extends string> = Exclude<
@@ -632,7 +609,7 @@ export type ExcludeIdentifier<Endpoints, Identifier extends string> = Exclude<
  * Derives the normal handler type for the endpoint with the specified identifier
  * in an endpoint union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type HandlerWithIdentifier<Endpoints extends Constraint, Identifier extends string, E, R> = Handler<
@@ -645,7 +622,7 @@ export type HandlerWithIdentifier<Endpoints extends Constraint, Identifier exten
  * Derives the raw handler type for the endpoint with the specified identifier in
  * an endpoint union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type HandlerRawWithIdentifier<Endpoints extends Constraint, Identifier extends string, E, R> = HandlerRaw<
@@ -658,7 +635,7 @@ export type HandlerRawWithIdentifier<Endpoints extends Constraint, Identifier ex
  * Extracts the decoded success value type for the endpoint with the specified
  * identifier in an endpoint union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type SuccessWithIdentifier<Endpoints extends Constraint, Identifier extends string> = Success<
@@ -669,7 +646,7 @@ export type SuccessWithIdentifier<Endpoints extends Constraint, Identifier exten
  * Computes the full error value union for the endpoint with the specified
  * identifier in an endpoint union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ErrorsWithIdentifier<Endpoints extends Constraint, Identifier extends string> = Errors<
@@ -680,7 +657,7 @@ export type ErrorsWithIdentifier<Endpoints extends Constraint, Identifier extend
  * Computes the server-side service requirements for the endpoint with the
  * specified identifier in an endpoint union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ServerServicesWithIdentifier<Endpoints extends Constraint, Identifier extends string> = ServerServices<
@@ -691,7 +668,7 @@ export type ServerServicesWithIdentifier<Endpoints extends Constraint, Identifie
  * Extracts the middleware identifiers for the endpoint with the specified
  * identifier in an endpoint union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type MiddlewareWithIdentifier<Endpoints extends Constraint, Identifier extends string> = Middleware<
@@ -702,7 +679,7 @@ export type MiddlewareWithIdentifier<Endpoints extends Constraint, Identifier ex
  * Extracts the middleware service requirements for the endpoint with the
  * specified identifier in an endpoint union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type MiddlewareServicesWithIdentifier<Endpoints extends Constraint, Identifier extends string> =
@@ -712,7 +689,7 @@ export type MiddlewareServicesWithIdentifier<Endpoints extends Constraint, Ident
  * Removes services provided by the HTTP router and the selected endpoint's
  * middleware from a service requirement union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ExcludeProvidedWithIdentifier<Endpoints extends Constraint, Identifier extends string, R> = ExcludeProvided<
@@ -724,7 +701,7 @@ export type ExcludeProvidedWithIdentifier<Endpoints extends Constraint, Identifi
  * Removes services provided by the HTTP router and endpoint middleware from a
  * service requirement union.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type ExcludeProvided<Endpoint extends Constraint, R> = Exclude<
@@ -737,7 +714,7 @@ export type ExcludeProvided<Endpoint extends Constraint, R> = Exclude<
  * Returns an endpoint type with the supplied path prefix prepended while
  * preserving the endpoint's schemas, method, errors, and middleware.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type AddPrefix<Endpoint, Prefix extends HttpRouter.PathInput> = Endpoint extends HttpApiEndpoint<
@@ -771,7 +748,7 @@ export type AddPrefix<Endpoint, Prefix extends HttpRouter.PathInput> = Endpoint 
  * Returns an endpoint type with additional middleware applied and the endpoint's
  * middleware service requirements updated accordingly.
  *
- * @category utility types
+ * @category models
  * @since 4.0.0
  */
 export type AddMiddleware<Endpoint, M extends HttpApiMiddleware.AnyId> = Endpoint extends HttpApiEndpoint<
@@ -843,8 +820,7 @@ const optionsFromEndpoint = (endpoint: Top) => ({
   success: endpoint.success,
   error: endpoint.error,
   annotations: endpoint.annotations,
-  middlewares: endpoint.middlewares,
-  disableCodecs: endpoint.disableCodecs
+  middlewares: endpoint.middlewares
 })
 
 function makeProto<
@@ -871,7 +847,6 @@ function makeProto<
   readonly error: ReadonlySet<Schema.Top>
   readonly annotations: Context.Context<never>
   readonly middlewares: ReadonlySet<Context.Key<Middleware, any>>
-  readonly disableCodecs: boolean
 }): HttpApiEndpoint<
   Identifier,
   Method,
@@ -894,7 +869,7 @@ function makeProto<
  * Constraint for path parameter schemas: each parameter must encode to
  * `string | undefined`, or the schema must encode to a record of those values.
  *
- * @category utility types
+ * @category constraints
  * @since 4.0.0
  */
 export type ParamsConstraint =
@@ -905,7 +880,7 @@ export type ParamsConstraint =
  * Constraint for header schemas: each header must encode to `string | undefined`,
  * or the schema must encode to a record of those values.
  *
- * @category utility types
+ * @category constraints
  * @since 4.0.0
  */
 export type HeadersConstraint =
@@ -916,7 +891,7 @@ export type HeadersConstraint =
  * Constraint for query schemas: each field must encode to `string`, an array of
  * strings, or `undefined`, or the schema must encode to a record of those values.
  *
- * @category utility types
+ * @category constraints
  * @since 4.0.0
  */
 export type QueryConstraint =
@@ -931,7 +906,7 @@ export type QueryConstraint =
  * - for body methods, payload may be any `Schema.Top` (or content-type keyed
  *   schemas) and OpenAPI uses `requestBody` instead of `parameters`
  *
- * @category utility types
+ * @category constraints
  * @since 4.0.0
  */
 export type PayloadConstraint<Method extends HttpMethod> = Method extends HttpMethod.NoBody ? Record<
@@ -945,7 +920,7 @@ export type PayloadConstraint<Method extends HttpMethod> = Method extends HttpMe
  * accept field records for query-style encoding, while body methods accept one or
  * more schemas.
  *
- * @category utility types
+ * @category constraints
  * @since 4.0.0
  */
 export type PayloadConstraintCodecs<Method extends HttpMethod> = Method extends HttpMethod.NoBody ?
@@ -956,7 +931,7 @@ export type PayloadConstraintCodecs<Method extends HttpMethod> = Method extends 
  * Constraint for success response schemas, allowing either a single schema or a
  * readonly array of schemas.
  *
- * @category utility types
+ * @category constraints
  * @since 4.0.0
  */
 export type SuccessConstraint = Schema.Top | ReadonlyArray<Schema.Top>
@@ -965,16 +940,14 @@ export type SuccessConstraint = Schema.Top | ReadonlyArray<Schema.Top>
  * Constraint for error response schemas, allowing either a single schema or a
  * readonly array of schemas.
  *
- * @category utility types
+ * @category constraints
  * @since 4.0.0
  */
 export type ErrorConstraint = Schema.Top | ReadonlyArray<Schema.Top>
 
-type ErrorSchema<S> = S extends HttpApiSchema.WithHeaders<infer Inner, Schema.Top> ? Inner : S
-
 type ErrorNoStream<S extends ErrorConstraint> = [
   Extract<
-    ErrorSchema<S extends ReadonlyArray<Schema.Constraint> ? S[number] : S>,
+    S extends ReadonlyArray<Schema.Constraint> ? S[number] : S,
     HttpApiSchema.StreamSchema
   >
 ] extends [never] ? S : never
@@ -1102,8 +1075,7 @@ export const make = <Method extends HttpMethod>(method: Method): {
     success: getSuccessResponse(options?.success, method, disableCodecs),
     error: getErrorResponse(options?.error, disableCodecs),
     annotations: Context.empty(),
-    middlewares: new Set(),
-    disableCodecs
+    middlewares: new Set()
   })
 }
 
@@ -1167,19 +1139,12 @@ function getSuccessResponse(
   if (success === undefined) return new Set()
   const schemas = Arr.ensure(success)
   validateSuccessResponse(schemas, method)
-  return new Set(disableCodecs ? schemas : schemas.map(transformResponseSchema))
+  return new Set(
+    disableCodecs ?
+      schemas :
+      schemas.map((schema) => HttpApiSchema.isStreamSchema(schema) ? schema : transformResponse(schema))
+  )
 }
-
-const transformResponseSchema = memoize((schema: Schema.Top): Schema.Top => {
-  if (HttpApiSchema.isStreamSchema(schema)) return schema
-  if (HttpApiSchema.isWithHeaders(schema)) {
-    const inner = HttpApiSchema.isStreamSchema(schema.schema)
-      ? schema.schema
-      : applyResponseEncoding(schema.schema, HttpApiSchema.getResponseEncodingSchema(schema))
-    return HttpApiSchema.rebuildWithHeaders(schema, inner, Schema.toCodecStringTree(schema.headers))
-  }
-  return transformResponse(schema)
-})
 
 function getErrorResponse(
   error: Schema.Top | ReadonlyArray<Schema.Top> | undefined,
@@ -1188,17 +1153,14 @@ function getErrorResponse(
   if (error === undefined) return new Set()
   const schemas = Arr.ensure(error)
   for (const schema of schemas) {
-    const body = HttpApiSchema.isWithHeaders(schema) ? schema.schema : schema
-    if (HttpApiSchema.isStreamSchema(body)) {
+    if (HttpApiSchema.isStreamSchema(schema)) {
       throw new Error("Streaming schemas are not supported in error responses")
     }
   }
-  validateResponseExclusivity(schemas, HttpApiSchema.getStatusErrorSchema)
-  return new Set(disableCodecs ? schemas : schemas.map(transformResponseSchema))
+  return new Set(disableCodecs ? schemas : schemas.map(transformResponse))
 }
 
 function validateSuccessResponse(schemas: ReadonlyArray<Schema.Constraint>, method: HttpMethod) {
-  let hasStream = false
   const statuses = new Map<number, {
     readonly stream?: HttpApiSchema.StreamSchema | undefined
     bufferedContentTypes: Set<string>
@@ -1206,32 +1168,31 @@ function validateSuccessResponse(schemas: ReadonlyArray<Schema.Constraint>, meth
   }>()
 
   for (const schema of schemas) {
-    const inner = HttpApiSchema.isWithHeaders(schema) ? schema.schema : schema
-    const status = HttpApiSchema.getStatusSuccessSchema(schema)
-    if (HttpApiSchema.isStreamSchema(inner)) {
-      validateStreamSuccess(inner, method)
-      if (hasStream) {
-        throw new Error("Multiple streaming success responses are not supported")
-      }
-      hasStream = true
+    if (HttpApiSchema.isStreamSchema(schema)) {
+      validateStreamSuccess(schema, method)
+      const status = HttpApiSchema.getStatusStream(schema)
       const entry = getStatusEntry(statuses, status)
+      if (entry.stream !== undefined) {
+        throw new Error(`Multiple streaming success responses for status: ${status}`)
+      }
       if (entry.noContent) {
         throw new Error(`Cannot combine no-content and streaming success responses for status: ${status}`)
       }
-      if (entry.bufferedContentTypes.has(MediaType.normalize(inner.contentType))) {
+      if (entry.bufferedContentTypes.has(MediaType.normalize(schema.contentType))) {
         throw new Error(
-          `Cannot combine buffered and streaming success responses for status ${status} and content-type: ${inner.contentType}`
+          `Cannot combine buffered and streaming success responses for status ${status} and content-type: ${schema.contentType}`
         )
       }
-      statuses.set(status, { ...entry, stream: inner })
+      statuses.set(status, { ...entry, stream: schema })
     } else {
+      const status = HttpApiSchema.getStatusSuccess(schema.ast)
       const entry = getStatusEntry(statuses, status)
-      const noContent = HttpApiSchema.isNoContent(inner.ast)
+      const noContent = HttpApiSchema.isNoContent(schema.ast)
       if (entry.stream !== undefined) {
         if (noContent) {
           throw new Error(`Cannot combine no-content and streaming success responses for status: ${status}`)
         }
-        const encoding = HttpApiSchema.getResponseEncodingSchema(schema)
+        const encoding = HttpApiSchema.getResponseEncoding(schema.ast)
         if (
           MediaType.normalize(encoding.contentType) === MediaType.normalize(entry.stream.contentType)
         ) {
@@ -1242,14 +1203,12 @@ function validateSuccessResponse(schemas: ReadonlyArray<Schema.Constraint>, meth
       }
       if (!noContent) {
         entry.bufferedContentTypes.add(
-          MediaType.normalize(HttpApiSchema.getResponseEncodingSchema(schema).contentType)
+          MediaType.normalize(HttpApiSchema.getResponseEncoding(schema.ast).contentType)
         )
       }
       entry.noContent = entry.noContent || noContent
     }
   }
-
-  validateResponseExclusivity(schemas, HttpApiSchema.getStatusSuccessSchema)
 }
 
 function getStatusEntry(
@@ -1266,49 +1225,6 @@ function getStatusEntry(
     statuses.set(status, entry)
   }
   return entry
-}
-
-function validateResponseExclusivity(
-  schemas: ReadonlyArray<Schema.Constraint>,
-  getStatus: (schema: Schema.Constraint) => number
-) {
-  const statuses = new Map<number, {
-    headerContentType: string | undefined
-    readonly plainContentTypes: Set<string>
-  }>()
-  for (const schema of schemas) {
-    const status = getStatus(schema)
-    const withHeadersAnnotation = HttpApiSchema.getWithHeadersAnnotation(schema.ast)
-    const body = HttpApiSchema.isWithHeaders(schema) ? schema.schema : withHeadersAnnotation?.body ?? schema
-    const contentType = HttpApiSchema.isNoContent(body.ast)
-      ? ""
-      : MediaType.normalize(
-        HttpApiSchema.isStreamSchema(body)
-          ? body.contentType
-          : HttpApiSchema.getResponseEncodingSchema(schema).contentType
-      )
-    let entry = statuses.get(status)
-    if (entry === undefined) {
-      entry = { headerContentType: undefined, plainContentTypes: new Set() }
-      statuses.set(status, entry)
-    }
-    const combineError = () =>
-      new Error(
-        `Cannot combine a response with headers with another response for status ${status} and content-type: ${
-          contentType || "<no content>"
-        }`
-      )
-    if (HttpApiSchema.isWithHeaders(schema) || withHeadersAnnotation !== undefined) {
-      if (entry.headerContentType !== undefined) {
-        throw new Error(`Cannot declare multiple responses with headers for status ${status}`)
-      }
-      if (entry.plainContentTypes.has(contentType)) throw combineError()
-      entry.headerContentType = contentType
-    } else {
-      if (entry.headerContentType === contentType) throw combineError()
-      entry.plainContentTypes.add(contentType)
-    }
-  }
 }
 
 function validateStreamSuccess(schema: HttpApiSchema.StreamSchema, method: HttpMethod) {
@@ -1359,23 +1275,6 @@ function hasReservedEventLiteral(ast: AST.AST, seen: Set<AST.AST>): boolean {
 
 function transformResponse(schema: Schema.Top): Schema.Top {
   const encoding = HttpApiSchema.getResponseEncoding(schema.ast)
-  const withHeaders = HttpApiSchema.getWithHeadersAnnotation(schema.ast)
-  if (withHeaders === undefined) {
-    return applyResponseEncoding(schema, encoding)
-  }
-  const headers = Schema.toEncoded(withHeaders.headers)
-  return Schema.Struct({
-    body: applyResponseEncoding(Schema.toEncoded(withHeaders.body), encoding),
-    headers
-  }).pipe(Schema.decodeTo(schema)).annotate({
-    "~httpApiWithHeaders": {
-      ...withHeaders,
-      headersCodec: Schema.toCodecStringTree(headers)
-    }
-  })
-}
-
-function applyResponseEncoding(schema: Schema.Top, encoding: HttpApiSchema.ResponseEncoding): Schema.Top {
   switch (encoding._tag) {
     case "Json":
       return Schema.toCodecJson(schema)

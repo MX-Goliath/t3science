@@ -71,7 +71,7 @@ export const make: (
     headers: options.headers,
     maxBatchSize: options.maxBatchSize ?? 1000,
     exportInterval: options.exportInterval ?? Duration.seconds(1),
-    body: (data) => [
+    body: (data) =>
       serialization.logs({
         resourceLogs: [{
           resource: otelResource,
@@ -81,8 +81,6 @@ export const make: (
           }]
         }]
       }),
-      Effect.void
-    ],
     shutdownTimeout: options.shutdownTimeout ?? Duration.seconds(3)
   })
 
@@ -141,7 +139,7 @@ export const layerFromConfig = (options?: {
 }): Layer.Layer<Exporter.Flusher, never, HttpClient.HttpClient | OtlpSerialization> =>
   Effect.gen(function*() {
     const { disabled, endpoint, exporters } = yield* Config.all({
-      disabled: Config.Boolean("OTEL_SDK_DISABLED").pipe(Config.withDefault(false)),
+      disabled: Config.boolean("OTEL_SDK_DISABLED").pipe(Config.withDefault(false)),
       endpoint: OtlpEnv.endpoint("LOGS"),
       exporters: OtlpEnv.exporters("LOGS")
     })
@@ -151,11 +149,11 @@ export const layerFromConfig = (options?: {
     }
 
     const { baseTimeout, logsTimeout, exportTimeout, scheduleDelay, maxBatchSize } = yield* Config.all({
-      baseTimeout: Config.option(Config.Int("OTEL_EXPORTER_OTLP_TIMEOUT")),
-      logsTimeout: Config.option(Config.Int("OTEL_EXPORTER_OTLP_LOGS_TIMEOUT")),
-      exportTimeout: Config.option(Config.Int("OTEL_BLRP_EXPORT_TIMEOUT")),
-      scheduleDelay: Config.option(Config.Int("OTEL_BLRP_SCHEDULE_DELAY")),
-      maxBatchSize: Config.option(Config.Int("OTEL_BLRP_MAX_EXPORT_BATCH_SIZE"))
+      baseTimeout: Config.option(Config.int("OTEL_EXPORTER_OTLP_TIMEOUT")),
+      logsTimeout: Config.option(Config.int("OTEL_EXPORTER_OTLP_LOGS_TIMEOUT")),
+      exportTimeout: Config.option(Config.int("OTEL_BLRP_EXPORT_TIMEOUT")),
+      scheduleDelay: Config.option(Config.int("OTEL_BLRP_SCHEDULE_DELAY")),
+      maxBatchSize: Config.option(Config.int("OTEL_BLRP_MAX_EXPORT_BATCH_SIZE"))
     })
 
     const shutdownTimeout = Option.firstSomeOf([logsTimeout, baseTimeout, exportTimeout]).pipe(
@@ -227,9 +225,9 @@ const makeLogRecord = (options: Logger.Options<unknown>, opts: {
     droppedAttributesCount: 0
   }
 
-  if (options.fiber.cache.span) {
-    logRecord.traceId = options.fiber.cache.span.traceId
-    logRecord.spanId = options.fiber.cache.span.spanId
+  if (options.fiber.currentSpan) {
+    logRecord.traceId = options.fiber.currentSpan.traceId
+    logRecord.spanId = options.fiber.currentSpan.spanId
   }
 
   return logRecord

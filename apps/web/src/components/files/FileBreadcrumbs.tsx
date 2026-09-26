@@ -78,7 +78,7 @@ function BreadcrumbMenuContent(props: {
   readonly rootPath: string;
   readonly workspaceMutationId: string | null;
 }) {
-  const entriesQuery = useProjectEntriesQuery(props.environmentId, props.cwd, props.directoryPath);
+  const entriesQuery = useProjectEntriesQuery(props.environmentId, props.cwd);
   useWorkspaceMutationRefresh({
     mutationId: props.workspaceMutationId,
     refresh: entriesQuery.refresh,
@@ -91,7 +91,9 @@ function BreadcrumbMenuContent(props: {
     () => fileBreadcrumbChildren(entries, props.directoryPath),
     [entries, props.directoryPath],
   );
-  const directoryAvailable = entriesQuery.data !== null;
+  const directoryAvailable =
+    props.directoryPath === "" ||
+    entries.some((entry) => entry.kind === "directory" && entry.path === props.directoryPath);
   const parentPath = fileBreadcrumbParent(props.directoryPath);
   const canGoBack =
     props.directoryPath !== props.rootPath &&
@@ -148,10 +150,7 @@ function BreadcrumbMenuContent(props: {
                 key={entry.path}
                 closeOnClick={entry.kind === "file"}
                 aria-current={isCurrentFile ? "page" : undefined}
-                className={cn(
-                  isCurrentFile && "bg-foreground/[0.08]",
-                  entry.ignored && "text-muted-foreground",
-                )}
+                className={cn(isCurrentFile && "bg-foreground/[0.08]")}
                 onClick={() => {
                   if (entry.kind === "directory") {
                     props.onDirectoryChange(entry.path);

@@ -17,21 +17,18 @@ const NativeControls = requireNativeModule<{
 function NativeFilePreview(props: {
   readonly source: ResolvedFilePreviewSource;
   readonly onRequestClose: () => void;
-  readonly onOpenError?: (error: unknown) => void;
 }) {
   const { uri, name, sourceIdentifier } = props.source;
   const identifier = useId();
   const onRequestClose = useEffectEvent(props.onRequestClose);
-  const onOpenError = useEffectEvent((error: unknown) => {
-    if (props.onOpenError) props.onOpenError(error);
-    else Alert.alert("Could not open preview", "The file could not be loaded. Please try again.");
-  });
 
   useEffect(() => {
     let canceled = false;
     void NativeControls.presentFile(uri, name ?? "Preview", sourceIdentifier ?? "", identifier)
-      .catch((error: unknown) => {
-        if (!canceled) onOpenError(error);
+      .catch(() => {
+        if (!canceled) {
+          Alert.alert("Could not open preview", "The file could not be loaded. Please try again.");
+        }
       })
       .finally(() => {
         if (!canceled) onRequestClose();
@@ -48,7 +45,6 @@ function NativeFilePreview(props: {
 export function FilePreview(props: {
   readonly source: ResolvedFilePreviewSource;
   readonly onRequestClose: () => void;
-  readonly onOpenError?: (error: unknown) => void;
 }) {
   return <NativeFilePreview {...props} />;
 }

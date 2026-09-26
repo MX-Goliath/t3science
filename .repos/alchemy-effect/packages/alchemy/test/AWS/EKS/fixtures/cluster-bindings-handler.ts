@@ -36,7 +36,7 @@ export class EKSClusterTestFunction extends Lambda.Function<Lambda.Function>()(
 export default EKSClusterTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const cluster = yield* EKS.Cluster("BindingsCluster", {

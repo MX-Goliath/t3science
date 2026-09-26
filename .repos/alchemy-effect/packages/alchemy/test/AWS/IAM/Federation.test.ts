@@ -12,6 +12,7 @@ import {
   testOidcUrl,
   testSamlMetadataDocument,
   testSamlMetadataDocumentUpdated,
+  testSamlProviderName,
 } from "./fixtures.ts";
 
 const { test } = Test.make({ providers: AWS.providers() });
@@ -186,6 +187,7 @@ describe("AWS.IAM federation resources", () => {
       const provider = yield* stack.deploy(
         Effect.gen(function* () {
           return yield* SAMLProvider("SamlProvider", {
+            name: testSamlProviderName,
             samlMetadataDocument: testSamlMetadataDocument,
             tags: {
               env: "test",
@@ -202,6 +204,7 @@ describe("AWS.IAM federation resources", () => {
       yield* stack.deploy(
         Effect.gen(function* () {
           return yield* SAMLProvider("SamlProvider", {
+            name: testSamlProviderName,
             samlMetadataDocument: testSamlMetadataDocumentUpdated,
             tags: {
               env: "prod",

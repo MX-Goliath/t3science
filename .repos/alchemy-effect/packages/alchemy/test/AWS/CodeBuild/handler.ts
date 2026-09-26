@@ -45,7 +45,7 @@ const errorTagged = <A, E extends { _tag: string }, R>(
 export default CodeBuildTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     // Build start/stop fan out SDK calls — AWS's 3s default intermittently
     // times out under cold starts.
     timeout: Duration.seconds(30),

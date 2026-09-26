@@ -67,10 +67,9 @@ export const ApplyPatch = Tool.providerDefined({
  *
  * **Details**
  *
- * The tool is configured with a `container` argument. Results include `status`
- * and `outputs`: logs, generated images, or `null` when unavailable. A `completed`
- * status indicates success; omitted statuses default to it. Other statuses
- * produce failure results that preserve any outputs.
+ * The tool is configured with a `container` argument. Successful tool calls
+ * expose `outputs`, which may contain logs or generated images, or `null` when
+ * no outputs are available.
  *
  * @category tools
  * @since 4.0.0
@@ -87,13 +86,6 @@ export const CodeInterpreter = Tool.providerDefined({
     container_id: Generated.CodeInterpreterToolCall.fields.container_id
   }),
   success: Schema.Struct({
-    status: Schema.Literal("completed"),
-    outputs: Generated.CodeInterpreterToolCall.fields.outputs
-  }),
-  failure: Schema.Struct({
-    status: Schema.Literals(
-      Generated.CodeInterpreterToolCall.fields.status.literals.filter((status) => status !== "completed")
-    ),
     outputs: Generated.CodeInterpreterToolCall.fields.outputs
   })
 })
@@ -110,10 +102,8 @@ export const CodeInterpreter = Tool.providerDefined({
  * **Details**
  *
  * The tool requires `vector_store_ids` and accepts optional `filters`,
- * `max_num_results`, and `ranking_options`. Results include `queries` and a
- * required `results` field containing matches or `null`. Only `completed` is
- * successful; all other statuses produce failure results, preserving partial
- * matches.
+ * `max_num_results`, and `ranking_options`. Successful tool calls expose the
+ * search `status`, generated `queries`, and optional `results`.
  *
  * @category tools
  * @since 4.0.0
@@ -129,16 +119,9 @@ export const FileSearch = Tool.providerDefined({
     vector_store_ids: Generated.FileSearchTool.fields.vector_store_ids
   }),
   success: Schema.Struct({
-    status: Schema.Literal("completed"),
+    status: Generated.FileSearchToolCall.fields.status,
     queries: Generated.FileSearchToolCall.fields.queries,
-    results: Generated.FileSearchToolCall.fields.results.schema
-  }),
-  failure: Schema.Struct({
-    status: Schema.Literals(
-      Generated.FileSearchToolCall.fields.status.literals.filter((status) => status !== "completed")
-    ),
-    queries: Generated.FileSearchToolCall.fields.queries,
-    results: Generated.FileSearchToolCall.fields.results.schema
+    results: Generated.FileSearchToolCall.fields.results
   })
 })
 
@@ -155,10 +138,8 @@ export const FileSearch = Tool.providerDefined({
  *
  * The tool configures the `image_generation` provider tool, including model,
  * size, quality, output format, moderation, background, input-image options,
- * and partial image settings. Successful calls expose `result` as base64 image
- * data or `null`. Partial images are preliminary success results. Final results
- * with a status other than `completed` are failures that include `status`.
- * Omitted statuses default to `completed`.
+ * and partial image settings. Successful tool calls expose `result` as base64
+ * image data or `null`.
  *
  * @category tools
  * @since 4.0.0
@@ -180,12 +161,6 @@ export const ImageGeneration = Tool.providerDefined({
     size: Generated.ImageGenTool.fields.size
   }),
   success: Schema.Struct({
-    result: Generated.ImageGenToolCall.fields.result
-  }),
-  failure: Schema.Struct({
-    status: Schema.Literals(
-      Generated.ImageGenToolCall.fields.status.literals.filter((status) => status !== "completed")
-    ),
     result: Generated.ImageGenToolCall.fields.result
   })
 })
@@ -222,14 +197,6 @@ export const LocalShell = Tool.providerDefined({
   })
 })
 
-const McpResultFields = {
-  type: Generated.MCPToolCall.fields.type,
-  name: Generated.MCPToolCall.fields.name,
-  arguments: Generated.MCPToolCall.fields.arguments,
-  output: Generated.MCPToolCall.fields.output,
-  server_label: Generated.MCPToolCall.fields.server_label
-}
-
 /**
  * Defines the OpenAI MCP tool that gives the model access to additional tools via remote
  * Model Context Protocol (MCP) servers.
@@ -243,8 +210,7 @@ const McpResultFields = {
  * The tool accepts MCP server configuration such as allowed tools,
  * authorization, connector id, approval requirements, server metadata, and
  * server URL. Tool call results include the called tool name, arguments, output,
- * and server label. Calls that report an `error` produce failure results that
- * include it; successful results omit `error`.
+ * error, and server label.
  *
  * **Gotchas**
  *
@@ -268,10 +234,13 @@ export const Mcp = Tool.providerDefined({
     server_url: Generated.MCPTool.fields.server_url
   }),
   parameters: Schema.Unknown,
-  success: Schema.Struct(McpResultFields),
-  failure: Schema.Struct({
-    ...McpResultFields,
-    error: Schema.String
+  success: Schema.Struct({
+    type: Generated.MCPToolCall.fields.type,
+    name: Generated.MCPToolCall.fields.name,
+    arguments: Generated.MCPToolCall.fields.arguments,
+    output: Generated.MCPToolCall.fields.output,
+    error: Generated.MCPToolCall.fields.error,
+    server_label: Generated.MCPToolCall.fields.server_label
   })
 })
 
@@ -305,16 +274,6 @@ export const Shell = Tool.providerDefined({
   })
 })
 
-const WebSearchSuccess = Schema.Struct({
-  action: Generated.WebSearchToolCall.fields.action,
-  status: Schema.Literal("completed")
-})
-
-const WebSearchFailure = Schema.Struct({
-  action: Generated.WebSearchToolCall.fields.action,
-  status: Schema.Literals(Generated.WebSearchToolCall.fields.status.literals.filter((status) => status !== "completed"))
-})
-
 /**
  * Defines the OpenAI Web Search tool that enables the model to search the web for
  * information.
@@ -326,8 +285,7 @@ const WebSearchFailure = Schema.Struct({
  * **Details**
  *
  * The tool accepts optional filters, user location, and search context size.
- * Results preserve the action and status. Only `completed` is successful;
- * all other statuses produce failure results.
+ * Successful calls expose the performed search action and status.
  *
  * @see {@link WebSearchPreview} for the preview web search provider tool
  *
@@ -346,8 +304,10 @@ export const WebSearch = Tool.providerDefined({
   parameters: Schema.Struct({
     action: Generated.WebSearchToolCall.fields.action
   }),
-  success: WebSearchSuccess,
-  failure: WebSearchFailure
+  success: Schema.Struct({
+    action: Generated.WebSearchToolCall.fields.action,
+    status: Generated.WebSearchToolCall.fields.status
+  })
 })
 
 /**
@@ -359,9 +319,8 @@ export const WebSearch = Tool.providerDefined({
  *
  * **Details**
  *
- * The preview tool accepts optional user location and search context size.
- * Results preserve the action and status. Only `completed` is successful;
- * all other statuses produce failure results.
+ * The preview tool accepts optional user location and search context size, then
+ * exposes the performed search action and status in successful calls.
  *
  * @see {@link WebSearch} for the stable web search provider tool
  *
@@ -376,6 +335,8 @@ export const WebSearchPreview = Tool.providerDefined({
     user_location: Generated.WebSearchPreviewTool.fields.user_location,
     search_context_size: Generated.WebSearchPreviewTool.fields.search_context_size
   }),
-  success: WebSearchSuccess,
-  failure: WebSearchFailure
+  success: Schema.Struct({
+    action: Generated.WebSearchToolCall.fields.action,
+    status: Generated.WebSearchToolCall.fields.status
+  })
 })

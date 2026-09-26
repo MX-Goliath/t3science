@@ -19,7 +19,7 @@ import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 export const SqliteStateOperation = Schema.Literals(["query", "exec"]);
 export type SqliteStateOperation = typeof SqliteStateOperation.Type;
 
-export class SqliteStateMultipleSqlSourcesError extends Schema.TaggedError<SqliteStateMultipleSqlSourcesError>()(
+export class SqliteStateMultipleSqlSourcesError extends Schema.TaggedErrorClass<SqliteStateMultipleSqlSourcesError>()(
   "SqliteStateMultipleSqlSourcesError",
   {},
 ) {
@@ -28,7 +28,7 @@ export class SqliteStateMultipleSqlSourcesError extends Schema.TaggedError<Sqlit
   }
 }
 
-export class SqliteStateMissingSqlSourceError extends Schema.TaggedError<SqliteStateMissingSqlSourceError>()(
+export class SqliteStateMissingSqlSourceError extends Schema.TaggedErrorClass<SqliteStateMissingSqlSourceError>()(
   "SqliteStateMissingSqlSourceError",
   {},
 ) {
@@ -37,7 +37,7 @@ export class SqliteStateMissingSqlSourceError extends Schema.TaggedError<SqliteS
   }
 }
 
-export class SqliteStateEmptySqlError extends Schema.TaggedError<SqliteStateEmptySqlError>()(
+export class SqliteStateEmptySqlError extends Schema.TaggedErrorClass<SqliteStateEmptySqlError>()(
   "SqliteStateEmptySqlError",
   {},
 ) {
@@ -46,7 +46,7 @@ export class SqliteStateEmptySqlError extends Schema.TaggedError<SqliteStateEmpt
   }
 }
 
-export class SqliteStateDatabaseMissingError extends Schema.TaggedError<SqliteStateDatabaseMissingError>()(
+export class SqliteStateDatabaseMissingError extends Schema.TaggedErrorClass<SqliteStateDatabaseMissingError>()(
   "SqliteStateDatabaseMissingError",
   {
     databasePath: Schema.String,
@@ -57,7 +57,7 @@ export class SqliteStateDatabaseMissingError extends Schema.TaggedError<SqliteSt
   }
 }
 
-export class SqliteStateSharedHomeMutationError extends Schema.TaggedError<SqliteStateSharedHomeMutationError>()(
+export class SqliteStateSharedHomeMutationError extends Schema.TaggedErrorClass<SqliteStateSharedHomeMutationError>()(
   "SqliteStateSharedHomeMutationError",
   {},
 ) {
@@ -66,7 +66,7 @@ export class SqliteStateSharedHomeMutationError extends Schema.TaggedError<Sqlit
   }
 }
 
-export class SqliteStateSqlFileError extends Schema.TaggedError<SqliteStateSqlFileError>()(
+export class SqliteStateSqlFileError extends Schema.TaggedErrorClass<SqliteStateSqlFileError>()(
   "SqliteStateSqlFileError",
   {
     filePath: Schema.String,
@@ -78,7 +78,7 @@ export class SqliteStateSqlFileError extends Schema.TaggedError<SqliteStateSqlFi
   }
 }
 
-export class SqliteStateDatabaseError extends Schema.TaggedError<SqliteStateDatabaseError>()(
+export class SqliteStateDatabaseError extends Schema.TaggedErrorClass<SqliteStateDatabaseError>()(
   "SqliteStateDatabaseError",
   {
     operation: SqliteStateOperation,
@@ -245,20 +245,20 @@ export const runSqliteState = Effect.fn("runSqliteState")(function* (
   );
 });
 
-const t3SqliteStateCommand = Command.make(
+export const t3SqliteStateCommand = Command.make(
   "t3-sqlite-state",
   {
-    operation: Argument.Literals("operation", SqliteStateOperation.literals).pipe(
+    operation: Argument.choice("operation", SqliteStateOperation.literals).pipe(
       Argument.withDescription("Run a read-only query or a backed-up fixture mutation."),
     ),
-    baseDir: Flag.String("base-dir").pipe(
+    baseDir: Flag.string("base-dir").pipe(
       Flag.withDescription("Explicit T3 base directory containing userdata/state.sqlite."),
     ),
-    sql: Flag.String("sql").pipe(
+    sql: Flag.string("sql").pipe(
       Flag.optional,
       Flag.withDescription("SQL source supplied directly on the command line."),
     ),
-    file: Flag.String("file").pipe(
+    file: Flag.string("file").pipe(
       Flag.optional,
       Flag.withDescription("Path to a SQL source file."),
     ),

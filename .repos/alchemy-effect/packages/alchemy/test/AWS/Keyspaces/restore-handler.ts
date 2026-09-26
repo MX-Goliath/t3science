@@ -15,7 +15,7 @@ export class KeyspacesRestoreTestFunction extends Lambda.Function<Lambda.Functio
 export default KeyspacesRestoreTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(60),
   },
   Effect.gen(function* () {

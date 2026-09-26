@@ -12,16 +12,13 @@ import type * as Completions from "../../Completions.ts"
 // Helpers
 // ---------------------------------------------------------------------------
 
-const escapeFishString = (s: string): string => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
-
-/** Escape choices for Fish's second expansion of `complete -a`. */
-const escapeFishChoice = (s: string): string => escapeFishString(s.replace(/[^A-Za-z0-9_.,/@%+-]/gu, "\\$&"))
+const escapeFishString = (s: string): string => s.replace(/'/g, "\\'")
 
 /**
  * Build a Fish condition that checks the current subcommand context.
  *
  * For root-level completions with subcommands: `__fish_use_subcommand`
- * For nested commands: verify the full parent path is active AND none of its
+ * For nested commands: verify the parent subcommand is active AND none of its
  * child subcommands have been entered yet.
  */
 const subcommandCondition = (
@@ -34,12 +31,14 @@ const subcommandCondition = (
     }
     return ``
   }
-  const parentCondition = parentPath.map((parent) => `__fish_seen_subcommand_from ${parent}`).join("; and ")
+  const parent = parentPath[parentPath.length - 1]
   if (childSubcommandNames.length > 0) {
-    // Show only when the parent path is active but no child subcommand has been entered
-    return `${parentCondition}; and not __fish_seen_subcommand_from ${childSubcommandNames.join(" ")}`
+    // Show only when parent is active but no child subcommand has been entered
+    return `__fish_seen_subcommand_from ${parent}; and not __fish_seen_subcommand_from ${
+      childSubcommandNames.join(" ")
+    }`
   }
-  return parentCondition
+  return `__fish_seen_subcommand_from ${parent}`
 }
 
 /**
@@ -67,15 +66,6 @@ const flagContainsOptCondition = (flag: Completions.FlagDescriptor): string => {
   return `not __fish_contains_opt ${optArgs.join(" ")}`
 }
 
-/** Hide used value flags without suppressing their value completions. */
-const valueFlagDedupCondition = (flag: Completions.FlagDescriptor): string => {
-  const forms = [`--${flag.name}`]
-  for (const alias of flag.aliases) {
-    forms.push(alias.length === 1 ? `-${alias}` : `--${alias}`)
-  }
-  return `begin; ${flagContainsOptCondition(flag)}; or contains -- (commandline -poc)[-1] ${forms.join(" ")}; end`
-}
-
 const flagCompletionArgs = (flag: Completions.FlagDescriptor): Array<string> => {
   const args: Array<string> = [`-l ${flag.name}`]
   for (const alias of flag.aliases) {
@@ -100,7 +90,7 @@ const flagValueArgs = (type: Completions.FlagType): string | undefined => {
     case "Boolean":
       return undefined
     case "Choice":
-      return `-r -f -a '${type.values.map(escapeFishChoice).join(" ")}'`
+      return `-r -f -a '${type.values.join(" ")}'`
     case "Path":
       if (type.pathType === "directory") return `-r -F`
       return `-r -F`
@@ -113,7 +103,7 @@ const flagValueArgs = (type: Completions.FlagType): string | undefined => {
 const argValueArgs = (type: Completions.ArgumentType): string | undefined => {
   switch (type._tag) {
     case "Choice":
-      return `-r -f -a '${type.values.map(escapeFishChoice).join(" ")}'`
+      return `-r -f -a '${type.values.join(" ")}'`
     case "Path":
       return `-r -F`
     default:
@@ -159,9 +149,13 @@ const generateCompletions = (
 
   // Flag completions
   for (const flag of descriptor.flags) {
+    // Only apply __fish_contains_opt dedup for boolean flags. For value-taking
+    // flags, the dedup condition would suppress the entry while fish is waiting
+    // for a value (e.g. typing `--env <TAB>` wouldn't show choices).
     const isBoolean = flag.type._tag === "Boolean"
-    const dedup = isBoolean ? flagContainsOptCondition(flag) : valueFlagDedupCondition(flag)
-    const flagCondition = condition ? `${condition}; and ${dedup}` : dedup
+    const flagCondition = isBoolean
+      ? (condition ? `${condition}; and ${flagContainsOptCondition(flag)}` : flagContainsOptCondition(flag))
+      : condition
     const flagCondArg = flagCondition ? `-n '${flagCondition}'` : ``
 
     const parts = [`complete -c ${executableName}`]

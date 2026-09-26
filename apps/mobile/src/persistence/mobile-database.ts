@@ -61,7 +61,7 @@ const MobileDatabaseOperation = Schema.Literals([
   "save-preferences",
 ]);
 
-export class MobileDatabaseError extends Schema.TaggedError<MobileDatabaseError>()(
+export class MobileDatabaseError extends Schema.TaggedErrorClass<MobileDatabaseError>()(
   "MobileDatabaseError",
   {
     operation: MobileDatabaseOperation,

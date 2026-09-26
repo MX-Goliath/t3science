@@ -52,7 +52,7 @@ const MAX_RESTART_DELAY = Duration.seconds(10);
 const FAILURE_WINDOW_MS = 60_000;
 const MAX_FAILURES_PER_WINDOW = 5;
 
-export class NativeTelemetrySpawnFailed extends Schema.TaggedError<NativeTelemetrySpawnFailed>()(
+export class NativeTelemetrySpawnFailed extends Schema.TaggedErrorClass<NativeTelemetrySpawnFailed>()(
   "NativeTelemetrySpawnFailed",
   {
     path: Schema.String,
@@ -64,7 +64,7 @@ export class NativeTelemetrySpawnFailed extends Schema.TaggedError<NativeTelemet
   }
 }
 
-export class NativeTelemetryHandshakeTimedOut extends Schema.TaggedError<NativeTelemetryHandshakeTimedOut>()(
+export class NativeTelemetryHandshakeTimedOut extends Schema.TaggedErrorClass<NativeTelemetryHandshakeTimedOut>()(
   "NativeTelemetryHandshakeTimedOut",
   {
     timeoutMs: Schema.Number,
@@ -75,7 +75,7 @@ export class NativeTelemetryHandshakeTimedOut extends Schema.TaggedError<NativeT
   }
 }
 
-class NativeTelemetryRequestTimedOut extends Schema.TaggedError<NativeTelemetryRequestTimedOut>()(
+class NativeTelemetryRequestTimedOut extends Schema.TaggedErrorClass<NativeTelemetryRequestTimedOut>()(
   "NativeTelemetryRequestTimedOut",
   {
     operation: Schema.Literals(["processTable", "readHistory", "sampleNow"]),
@@ -87,7 +87,7 @@ class NativeTelemetryRequestTimedOut extends Schema.TaggedError<NativeTelemetryR
   }
 }
 
-export class NativeTelemetryProtocolMismatch extends Schema.TaggedError<NativeTelemetryProtocolMismatch>()(
+export class NativeTelemetryProtocolMismatch extends Schema.TaggedErrorClass<NativeTelemetryProtocolMismatch>()(
   "NativeTelemetryProtocolMismatch",
   {
     expectedVersion: Schema.Number,
@@ -99,7 +99,7 @@ export class NativeTelemetryProtocolMismatch extends Schema.TaggedError<NativeTe
   }
 }
 
-export class NativeTelemetryDecodeFailed extends Schema.TaggedError<NativeTelemetryDecodeFailed>()(
+export class NativeTelemetryDecodeFailed extends Schema.TaggedErrorClass<NativeTelemetryDecodeFailed>()(
   "NativeTelemetryDecodeFailed",
   {
     cause: Schema.Defect(),
@@ -110,7 +110,7 @@ export class NativeTelemetryDecodeFailed extends Schema.TaggedError<NativeTeleme
   }
 }
 
-export class NativeTelemetryCommandFailed extends Schema.TaggedError<NativeTelemetryCommandFailed>()(
+export class NativeTelemetryCommandFailed extends Schema.TaggedErrorClass<NativeTelemetryCommandFailed>()(
   "NativeTelemetryCommandFailed",
   {
     operation: Schema.String,
@@ -122,7 +122,7 @@ export class NativeTelemetryCommandFailed extends Schema.TaggedError<NativeTelem
   }
 }
 
-export class NativeTelemetryExited extends Schema.TaggedError<NativeTelemetryExited>()(
+export class NativeTelemetryExited extends Schema.TaggedErrorClass<NativeTelemetryExited>()(
   "NativeTelemetryExited",
   {
     exitCode: Schema.Number,
@@ -133,7 +133,7 @@ export class NativeTelemetryExited extends Schema.TaggedError<NativeTelemetryExi
   }
 }
 
-class NativeTelemetryStreamClosed extends Schema.TaggedError<NativeTelemetryStreamClosed>()(
+class NativeTelemetryStreamClosed extends Schema.TaggedErrorClass<NativeTelemetryStreamClosed>()(
   "NativeTelemetryStreamClosed",
   {},
 ) {
@@ -142,7 +142,7 @@ class NativeTelemetryStreamClosed extends Schema.TaggedError<NativeTelemetryStre
   }
 }
 
-export class NativeTelemetryUnavailable extends Schema.TaggedError<NativeTelemetryUnavailable>()(
+export class NativeTelemetryUnavailable extends Schema.TaggedErrorClass<NativeTelemetryUnavailable>()(
   "NativeTelemetryUnavailable",
   {
     reason: Schema.String,
@@ -360,7 +360,6 @@ export function canCommandNativeTelemetrySidecar(
   return hasHandle && (status === "healthy" || status === "degraded");
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(function* () {
   const binary = yield* ResourceMonitorBinary.ResourceMonitorBinary;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;

@@ -19,12 +19,11 @@ import * as InternalRecord from "../../internal/record.ts"
 import * as Layer from "../../Layer.ts"
 import * as Predicate from "../../Predicate.ts"
 import * as Queue from "../../Queue.ts"
-import * as Result from "../../Result.ts"
 import * as Schema from "../../Schema.ts"
 import type * as Scope from "../../Scope.ts"
 import * as Stream from "../../Stream.ts"
 import * as AiError from "./AiError.ts"
-import * as Tool from "./Tool.ts"
+import type * as Tool from "./Tool.ts"
 
 const TypeId = "~effect/ai/Toolkit" as const
 
@@ -34,8 +33,8 @@ const TypeId = "~effect/ai/Toolkit" as const
  *
  * **Example** (Defining AI toolkits)
  *
- * ```ts import.meta.vitest
- * import { Effect, Schema } from "effect"
+ * ```ts
+ * import { Schema } from "effect"
  * import { Tool, Toolkit } from "effect/unstable/ai"
  *
  * const SearchDocs = Tool.make("SearchDocs", {
@@ -52,12 +51,8 @@ const TypeId = "~effect/ai/Toolkit" as const
  *
  * const AiToolkit = Toolkit.make(SearchDocs, SummarizeText)
  *
- * const ready = AiToolkit.pipe(Effect.provide(AiToolkit.toLayer({
- *   SearchDocs: ({ query }) => Effect.succeed([query]),
- *   SummarizeText: ({ text }) => Effect.succeed(text)
- * })))
- *
- * Object.keys((await Effect.runPromise(ready)).tools) // => ["SearchDocs", "SummarizeText"]
+ * console.log(Object.keys(AiToolkit.tools))
+ * // ["SearchDocs", "SummarizeText"]
  * ```
  *
  * @category models
@@ -207,9 +202,9 @@ export interface WithHandler<in out Tools extends Record<string, Tool.Any>> {
      */
     name: Name,
     /**
-     * Encoded parameters to decode and pass to the tool handler.
+     * Parameters to pass to the tool handler.
      */
-    params: Tool.ParametersEncoded<Tools[Name]>,
+    params: Tool.Parameters<Tools[Name]>,
     /**
      * The unique identifier of the tool call.
      */
@@ -243,23 +238,27 @@ const Proto = {
         readonly context: Context.Context<never>
         readonly handler: Tool.Handler<any>["handler"]
         readonly decodeParameters: (u: unknown) => Effect.Effect<unknown, Schema.SchemaError>
-        readonly encodeResult: (u: unknown, isFailure: boolean) => Effect.Effect<unknown, Schema.SchemaError>
+        readonly decodeResult: (u: unknown) => Effect.Effect<unknown, Schema.SchemaError>
+        readonly encodeResult: (u: unknown) => Effect.Effect<unknown, Schema.SchemaError>
       }>()
 
       const getSchemas = (tool: Tool.Any) => {
         let schemas = schemasCache.get(tool)
         if (Predicate.isUndefined(schemas)) {
           const handler = services.mapUnsafe.get(tool.id)! as Tool.Handler<any>
+          const resultSchema = tool.failureMode === "return"
+            ? Schema.Union([tool.successSchema, tool.failureSchema, AiError.AiError])
+            : tool.successSchema
           const decodeParameters = Schema.isSchema(tool.parametersSchema)
             ? Schema.decodeUnknownEffect(tool.parametersSchema) as any
             : (u: unknown) => Effect.succeed(u)
-          const encodeSuccess = Schema.encodeUnknownEffect(tool.successSchema) as any
-          const encodeFailure = Schema.encodeUnknownEffect(Tool.failureResultSchema(tool)) as any
-          const encodeResult = (u: unknown, isFailure: boolean) => isFailure ? encodeFailure(u) : encodeSuccess(u)
+          const decodeResult = Schema.decodeUnknownEffect(resultSchema) as any
+          const encodeResult = Schema.encodeUnknownEffect(resultSchema) as any
           schemas = {
             context: handler.context,
             handler: handler.handler,
             decodeParameters,
+            decodeResult,
             encodeResult
           }
           schemasCache.set(tool, schemas)
@@ -290,44 +289,20 @@ const Proto = {
         // Fetch cached schemas / handlers for the tool
         const schemas = getSchemas(tool)
 
-        const encodeResult = (result: any, isFailure: boolean) =>
-          schemas.encodeResult(result, isFailure).pipe(
-            Effect.mapError((cause) =>
-              AiError.make({
-                module: "Toolkit",
-                method: `${name}.handle`,
-                reason: new AiError.ToolResultEncodingError({
-                  toolName: name,
-                  toolResult: result,
-                  description: cause.message
-                })
+        // Decode the tool call parameters which will be passed to the handler
+        const decodedParams = yield* schemas.decodeParameters(params).pipe(
+          Effect.mapError((cause) =>
+            AiError.make({
+              module: "Toolkit",
+              method: `${name}.handle`,
+              reason: new AiError.ToolParameterValidationError({
+                toolName: name,
+                toolParams: params,
+                description: cause.message
               })
-            )
-          )
-
-        const decodedParamsResult = yield* Effect.result(schemas.decodeParameters(params))
-        if (Result.isFailure(decodedParamsResult)) {
-          const error = AiError.make({
-            module: "Toolkit",
-            method: `${name}.handle`,
-            reason: new AiError.ToolParameterValidationError({
-              toolName: name,
-              description: decodedParamsResult.failure.message
             })
-          })
-          if (tool.failureMode === "error") {
-            return yield* error
-          }
-          return Stream.fromEffect(
-            Effect.map(encodeResult(error, true), (encodedResult) => ({
-              result: error,
-              isFailure: true,
-              preliminary: false,
-              encodedResult
-            }))
-          ) satisfies Stream.Stream<Tool.HandlerResult<any>, any>
-        }
-        const decodedParams = decodedParamsResult.success
+          )
+        )
 
         // Setup the handler context
         const queue = yield* Queue.make<{
@@ -354,6 +329,21 @@ const Proto = {
           }),
           Effect.forkChild
         )
+
+        const encodeResult = (result: any) =>
+          schemas.encodeResult(result).pipe(
+            Effect.mapError((cause) =>
+              AiError.make({
+                module: "Toolkit",
+                method: `${name}.handle`,
+                reason: new AiError.ToolResultEncodingError({
+                  toolName: name,
+                  toolResult: result,
+                  description: cause.message
+                })
+              })
+            )
+          )
 
         const normalizeError = (error: unknown) => {
           // Schema errors indicate handler returned invalid data
@@ -386,7 +376,7 @@ const Proto = {
               : Stream.succeed({ result: normalizedError, isFailure: true, preliminary: false })
           }),
           Stream.mapEffect(Effect.fnUntraced(function*(output) {
-            const encodedResult = yield* encodeResult(output.result, output.isFailure)
+            const encodedResult = yield* encodeResult(output.result)
             return { ...output, encodedResult }
           })),
           Stream.onEnd(Fiber.interrupt(fiber))
@@ -469,8 +459,8 @@ export const empty: Toolkit<{}> = makeProto({})
  *
  * **Example** (Creating a toolkit)
  *
- * ```ts import.meta.vitest
- * import { Effect, Schema } from "effect"
+ * ```ts
+ * import { Schema } from "effect"
  * import { Tool, Toolkit } from "effect/unstable/ai"
  *
  * const GetCurrentTime = Tool.make("GetCurrentTime", {
@@ -488,12 +478,6 @@ export const empty: Toolkit<{}> = makeProto({})
  * })
  *
  * const toolkit = Toolkit.make(GetCurrentTime, GetWeather)
- * const ready = toolkit.pipe(Effect.provide(toolkit.toLayer({
- *   GetCurrentTime: () => Effect.succeed(0),
- *   get_weather: () => Effect.succeed({ temperature: 20, condition: "clear" })
- * })))
- *
- * Object.keys((await Effect.runPromise(ready)).tools) // => ["GetCurrentTime", "get_weather"]
  * ```
  *
  * @category constructors
@@ -546,8 +530,8 @@ export type MergedTools<Toolkits extends ReadonlyArray<Any>> = SimplifyRecord<
  *
  * **Example** (Merging toolkits)
  *
- * ```ts import.meta.vitest
- * import { Effect, Schema } from "effect"
+ * ```ts
+ * import { Schema } from "effect"
  * import { Tool, Toolkit } from "effect/unstable/ai"
  *
  * const mathToolkit = Toolkit.make(
@@ -561,14 +545,6 @@ export type MergedTools<Toolkits extends ReadonlyArray<Any>> = SimplifyRecord<
  * )
  *
  * const combined = Toolkit.merge(mathToolkit, utilityToolkit)
- * const ready = combined.pipe(Effect.provide(combined.toLayer({
- *   add: () => Effect.succeed(1),
- *   subtract: () => Effect.succeed(0),
- *   get_time: () => Effect.succeed(0),
- *   get_weather: () => Effect.succeed("clear")
- * })))
- *
- * Object.keys((await Effect.runPromise(ready)).tools) // => ["add", "subtract", "get_time", "get_weather"]
  * ```
  *
  * @category constructors

@@ -40,9 +40,6 @@ export function ComposerAttachmentButton(props: {
 
   return (
     <ControlPillMenu
-      accessible
-      accessibilityLabel="Add attachment"
-      accessibilityRole="button"
       actions={ATTACHMENT_MENU_ACTIONS}
       onPressAction={({ nativeEvent }) => {
         if (nativeEvent.event === "photos") {

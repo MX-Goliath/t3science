@@ -103,7 +103,7 @@ const INSTALL_LOCK_RETRY_DELAY = "100 millis";
 const INSTALL_LOCK_STALE_MS = 5 * 60 * 1_000;
 
 const trimmedString = (name: string) =>
-  Config.String(name).pipe(
+  Config.string(name).pipe(
     Config.option,
     Config.map(
       Option.flatMap((value) => {

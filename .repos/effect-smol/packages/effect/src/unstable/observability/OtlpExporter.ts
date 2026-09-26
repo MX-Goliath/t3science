@@ -26,24 +26,6 @@ import * as HttpClientError from "../../unstable/http/HttpClientError.ts"
 import * as HttpClientRequest from "../../unstable/http/HttpClientRequest.ts"
 import type { HttpBody } from "../http/HttpBody.ts"
 
-const retryAfterDelay = (value: string | undefined): Effect.Effect<Duration.Duration> => {
-  const seconds = Option.fromUndefinedOr(value).pipe(Option.flatMap(Num.parse))
-  if (Option.isSome(seconds)) {
-    return Effect.succeed(Duration.seconds(seconds.value))
-  }
-  if (value === undefined) {
-    return Effect.succeed(Duration.seconds(5))
-  }
-  const timestamp = Date.parse(value)
-  if (Number.isNaN(timestamp)) {
-    return Effect.succeed(Duration.seconds(5))
-  }
-  return Effect.map(
-    Clock,
-    (clock) => Duration.millis(Math.max(timestamp - clock.currentTimeMillisUnsafe(), 1))
-  )
-}
-
 const policy = Schedule.forever.pipe(
   Schedule.passthrough,
   Schedule.addDelay(({ output: error }) => {
@@ -52,7 +34,11 @@ const policy = Schedule.forever.pipe(
       && error.reason._tag === "StatusCodeError"
       && error.reason.response.status === 429
     ) {
-      return retryAfterDelay(error.reason.response.headers["retry-after"])
+      const retryAfter = Option.fromUndefinedOr(error.reason.response.headers["retry-after"]).pipe(
+        Option.flatMap(Num.parse),
+        Option.getOrElse(() => 5)
+      )
+      return Effect.succeed(Duration.seconds(retryAfter))
     }
     return Effect.succeed(Duration.seconds(1))
   })
@@ -70,7 +56,7 @@ const policy = Schedule.forever.pipe(
  * exporter's temporary-disable window. Wrap it with `Effect.timeoutOption` to
  * bound its duration at the call site.
  *
- * @category services
+ * @category flushing
  * @since 4.0.0
  */
 export class Flusher extends Context.Service<Flusher, {
@@ -82,19 +68,21 @@ export class Flusher extends Context.Service<Flusher, {
    * There is no built-in timeout; use `Effect.timeoutOption` to bound the
    * operation. Exporters in their 60-second `disabledUntil` window are skipped.
    *
-   * **Example** (Flushing exporters)
+   * **Example** (Flushing from a Cloudflare Worker)
    *
-   * ```ts import.meta.vitest
-   * import { Effect } from "effect"
-   * import { OtlpExporter } from "effect/unstable/observability"
+   * ```ts
+   * import { Effect, ManagedRuntime } from "effect"
+   * import { OtlpExporter, OtlpTracer } from "effect/unstable/observability"
    *
-   * const program = Effect.gen(function*() {
-   *   const flusher = yield* OtlpExporter.Flusher
-   *   yield* flusher.flush
-   *   return "flushed"
-   * }).pipe(Effect.provide(OtlpExporter.layerFlusher))
+   * const layer = OtlpTracer.layerFromConfig()
+   * const runtime = ManagedRuntime.make(layer)
    *
-   * await Effect.runPromise(program) // => "flushed"
+   * // In the request handler:
+   * ctx.waitUntil(
+   *   runtime.runPromise(
+   *     Effect.flatMap(OtlpExporter.Flusher, (flusher) => flusher.flush)
+   *   )
+   * )
    * ```
    */
   readonly flush: Effect.Effect<void>
@@ -121,7 +109,7 @@ export class Flusher extends Context.Service<Flusher, {
  * was called (for example one started by the export interval); it only waits
  * for the exports it initiates.
  *
- * @category layers
+ * @category flushing
  * @since 4.0.0
  */
 export const layerFlusher: Layer.Layer<Flusher> = Layer.sync(Flusher, () => {
@@ -167,8 +155,7 @@ export const make: (
     readonly label: string
     readonly exportInterval: Duration.Input
     readonly maxBatchSize: number | "disabled"
-    readonly exportEmpty?: boolean | undefined
-    readonly body: (data: Array<any>) => readonly [body: HttpBody, onSuccess: Effect.Effect<void>]
+    readonly body: (data: Array<any>) => HttpBody
     readonly shutdownTimeout: Duration.Input
   }
 ) => Effect.Effect<
@@ -202,16 +189,16 @@ export const make: (
     } else if (disabledUntil !== undefined) {
       disabledUntil = undefined
     }
-    if (buffer.length === 0 && (options.maxBatchSize !== "disabled" || options.exportEmpty !== true)) {
-      return Effect.void
-    }
     const items = buffer
-    buffer = []
-    const [body, onSuccess] = options.body(items)
+    if (options.maxBatchSize !== "disabled") {
+      if (buffer.length === 0) {
+        return Effect.void
+      }
+      buffer = []
+    }
     return client.execute(
-      HttpClientRequest.setBody(request, body)
+      HttpClientRequest.setBody(request, options.body(items))
     ).pipe(
-      Effect.andThen(onSuccess),
       Effect.asVoid,
       Effect.withTracerEnabled(false)
     )

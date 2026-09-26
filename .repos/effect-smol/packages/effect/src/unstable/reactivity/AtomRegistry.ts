@@ -435,15 +435,7 @@ class RegistryImpl implements AtomRegistry {
       const encoded = this.preloadedSerializable.get(key)
       this.preloadedSerializable.delete(key)
       const decoded = (atom as any as Atom.Serializable<any>)[SerializableTypeId].decode(encoded)
-      let target = atom
-      while (target.initialValueTarget) {
-        target = target.initialValueTarget
-      }
-      if (target === atom) {
-        node.setValue(decoded)
-      } else {
-        this.ensureNode(target).setInitialValue(decoded)
-      }
+      node.setValue(decoded)
     }
     return node
   }
@@ -606,8 +598,6 @@ class NodeImpl<A> {
   children = new Set<NodeImpl<any>>()
   listeners = new Set<() => void>()
   skipInvalidation = false
-  building = false
-  invalidatedDuringBuild = false
 
   currentState() {
     switch (this.state) {
@@ -630,9 +620,7 @@ class NodeImpl<A> {
   value(): A {
     if ((this.state & NodeFlags.waitingForValue) !== 0) {
       this.lifetime = makeLifetime(this)
-      this.building = true
       const value = this.atom.read(this.lifetime)
-      this.building = false
       if ((this.state & NodeFlags.waitingForValue) !== 0) {
         if (this.preserveInitialValueOnBuild) {
           this.preserveInitialValueOnBuild = false
@@ -739,9 +727,6 @@ class NodeImpl<A> {
   }
 
   invalidate(): void {
-    if (this.building && batchState.phase === BatchPhase.collect) {
-      this.invalidatedDuringBuild = true
-    }
     if (this.state === NodeState.valid) {
       this.state = NodeState.stale
       this.disposeLifetime()
@@ -793,9 +778,11 @@ class NodeImpl<A> {
     this.state = NodeState.removed
     this.listeners.clear()
 
-    if (this.lifetime !== undefined) {
-      this.disposeLifetime()
+    if (this.lifetime === undefined) {
+      return
     }
+
+    this.disposeLifetime()
 
     if (this.previousParents === undefined) {
       return
@@ -865,9 +852,8 @@ const LifetimeProto: Omit<Lifetime<any>, "node" | "finalizers" | "disposed" | "i
       return this.node.registry.get(atom)
     }
     const parent = this.node.registry.ensureNode(atom)
-    const value = parent.value()
     this.node.addParent(parent)
-    return value
+    return parent.value()
   },
 
   result<A, E>(this: Lifetime<any>, atom: Atom.Atom<Result.AsyncResult<A, E>>, options?: {
@@ -1116,12 +1102,7 @@ export function batch(f: () => void): void {
 
 function batchRebuildNode(node: NodeImpl<any>) {
   if (node.state === NodeState.valid) {
-    if (!node.invalidatedDuringBuild) {
-      return
-    }
-    node.invalidatedDuringBuild = false
-    node.state = NodeState.stale
-    node.disposeLifetime()
+    return
   }
 
   for (const parent of node.parents) {

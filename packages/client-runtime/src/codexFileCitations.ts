@@ -44,7 +44,6 @@ function markdownLabel(value: string): string {
 
 function markdownDestination(value: string): string {
   return value
-    .replaceAll("\\", "%5C")
     .replaceAll("<", "%3C")
     .replaceAll(">", "%3E")
     .replaceAll("\r", "%0D")

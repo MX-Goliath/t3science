@@ -1,34 +1,28 @@
 import {
-  type AssetCreateUrlInput,
   type AssetCreateUrlResult,
   type AssetImageDimensions,
   AssetResource,
   EnvironmentId,
   WS_METHODS,
 } from "@t3tools/contracts";
-import { mediaMimeTypeFromExtension } from "@t3tools/shared/filePreview";
-import { isWindowsAbsolutePath } from "@t3tools/shared/path";
 import {
   getProjectFaviconResourceKey,
   isProjectFaviconFallbackUrl,
 } from "@t3tools/shared/projectFavicon";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
-import * as EnvironmentRegistry from "../connection/registry.ts";
-import * as EnvironmentSupervisor from "../connection/supervisor.ts";
-import { request } from "../rpc/client.ts";
+import type { EnvironmentRegistry } from "../connection/registry.ts";
 import type { ProjectFaviconCache, ProjectFaviconTarget } from "../projectFaviconCache.ts";
-import { createEnvironmentQueryAtomFamily } from "./runtime.ts";
+import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
 
 const ASSET_URL_REFRESH_INTERVAL_MS = 30 * 60_000;
 const ASSET_URL_STALE_TIME_MS = 5 * 60_000;
 const ASSET_URL_IDLE_TTL_MS = 60 * 60_000;
 
-export class InvalidAssetCollectionKeyError extends Schema.TaggedError<InvalidAssetCollectionKeyError>()(
+export class InvalidAssetCollectionKeyError extends Schema.TaggedErrorClass<InvalidAssetCollectionKeyError>()(
   "InvalidAssetCollectionKeyError",
   {
     key: Schema.String,
@@ -97,50 +91,14 @@ export function assetUrlStateFromResult(
 }
 
 export function createAssetEnvironmentAtoms<R, E>(
-  runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
-  localMediaEnvironment?: Atom.Atom<{
-    readonly environmentId: EnvironmentId;
-    readonly httpBaseUrl: string;
-  } | null>,
+  runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
 ) {
-  const execute = Effect.fn("assets.createUrl")(function* (input: AssetCreateUrlInput) {
-    const result = yield* request(WS_METHODS.assetsCreateUrl, input).pipe(Effect.result);
-    if (Result.isSuccess(result)) return result.success;
-    const error = result.failure;
-    const resource = input.resource;
-    const local = localMediaEnvironment
-      ? (yield* AtomRegistry.AtomRegistry).get(localMediaEnvironment)
-      : null;
-    const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
-    if (
-      !local ||
-      local.environmentId === supervisor.target.environmentId ||
-      !(
-        error._tag === "AssetWorkspaceAssetNotFoundError" ||
-        error._tag === "AssetWorkspaceAssetInspectionError" ||
-        error._tag === "AssetWorkspaceContextNotFoundError"
-      ) ||
-      resource._tag !== "media-file" ||
-      !(resource.path.startsWith("/") || isWindowsAbsolutePath(resource.path)) ||
-      mediaMimeTypeFromExtension(resource.path.slice(resource.path.lastIndexOf("."))) === null
-    )
-      return yield* error;
-    const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
-    const asset = yield* registry.run(
-      local.environmentId,
-      request(WS_METHODS.assetsCreateUrl, input),
-    );
-    // Callers resolve against the thread's server, so preserve the local server's origin.
-    return { ...asset, relativeUrl: new URL(asset.relativeUrl, local.httpBaseUrl).href };
-  });
-  const createUrl = createEnvironmentQueryAtomFamily(runtime, {
+  const createUrl = createEnvironmentRpcQueryAtomFamily(runtime, {
     label: "environment-data:assets:create-url",
-    execute,
+    tag: WS_METHODS.assetsCreateUrl,
     staleTimeMs: ASSET_URL_STALE_TIME_MS,
     idleTtlMs: ASSET_URL_IDLE_TTL_MS,
     refreshIntervalMs: ASSET_URL_REFRESH_INTERVAL_MS,
-    refreshTrigger: ({ input }) =>
-      input.resource._tag === "media-file" ? localMediaEnvironment : undefined,
   });
   const createUrlsFamily = Atom.family((key: string) => {
     const [environmentId, resources] = parseAssetCollectionKey(key);

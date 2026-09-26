@@ -266,7 +266,7 @@ function maxIsoTimestamp(a: string | null, b: string | null): string | null {
 
 export interface TimelineDurationMessage {
   id: string;
-  role: "user" | "assistant" | "system" | "reasoning";
+  role: "user" | "assistant" | "system";
   createdAt: string;
   updatedAt: string;
   streaming: boolean;
@@ -310,7 +310,7 @@ export type MessagesTimelineRow =
       summaryKind: ToolGroupSummaryKind;
       toolSurface?: WorkLogEntry["toolSurface"];
       toolIcon?: WorkLogEntry["toolIcon"];
-      summaryToolIcon?: "browser" | "device" | "pull-request" | "t3-code";
+      summaryToolIcon?: "browser" | "t3-code";
       hasFailure: boolean;
     }
   | {

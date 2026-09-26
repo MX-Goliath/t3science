@@ -18,7 +18,7 @@ export class BudgetsTestFunction extends Lambda.Function<Lambda.Function>()(
 export default BudgetsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const execRole = yield* IAM.Role("BindingsExecRole", {

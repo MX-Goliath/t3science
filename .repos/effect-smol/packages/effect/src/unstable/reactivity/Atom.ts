@@ -22,7 +22,6 @@ import type { LazyArg } from "../../Function.ts"
 import { constant, constTrue, constVoid, dual, pipe } from "../../Function.ts"
 import type * as Inspectable from "../../Inspectable.ts"
 import { PipeInspectableProto } from "../../internal/core.ts"
-import { getStackTraceLimit } from "../../internal/stackTraceLimit.ts"
 import * as Layer from "../../Layer.ts"
 import * as MutableHashMap from "../../MutableHashMap.ts"
 import * as Option from "../../Option.ts"
@@ -356,7 +355,7 @@ const WritableProto = {
 /**
  * Returns `true` when an atom is writable.
  *
- * @category guards
+ * @category refinements
  * @since 4.0.0
  */
 export const isWritable = <R, W>(atom: Atom<R>): atom is Writable<R, W> => WritableTypeId in atom
@@ -546,14 +545,14 @@ function makeEffect<A, E>(
   ctx.addFinalizer(() => {
     Effect.runForkWith(services)(Scope.close(scope, Exit.void))
   })
+  const servicesMap = new Map(services.mapUnsafe)
+  servicesMap.set(Scope.Scope.key, scope)
+  servicesMap.set(AtomRegistry.key, ctx.registry)
+  servicesMap.set(Scheduler.Scheduler.key, ctx.registry.scheduler)
   let syncResult: AsyncResult.AsyncResult<A, E> | undefined
   let isAsync = false
   const cancel = runCallbackSync(
-    services.pipe(
-      Context.add(Scope.Scope, scope),
-      Context.add(AtomRegistry, ctx.registry),
-      Context.add(Scheduler.Scheduler, ctx.registry.scheduler)
-    ),
+    Context.makeUnsafe<Scope.Scope | AtomRegistry>(servicesMap),
     effect,
     function(exit) {
       syncResult = AsyncResult.fromExitWithPrevious(exit, previous)
@@ -695,7 +694,7 @@ export interface AtomRuntime<R, ER = never> extends Atom<AsyncResult.AsyncResult
 }
 
 /**
- * Factory for `AtomRuntime` values that share a set of global layers.
+ * Factory for `AtomRuntime` values that share a `Layer.MemoMap` and a set of global layers.
  *
  * @category models
  * @since 4.0.0
@@ -706,6 +705,7 @@ export interface RuntimeFactory {
       | Layer.Layer<R, E, AtomRegistry | Reactivity.Reactivity>
       | ((get: AtomContext) => Layer.Layer<R, E, AtomRegistry | Reactivity.Reactivity>)
   ): AtomRuntime<R, E>
+  readonly memoMap: Layer.MemoMap
   readonly addGlobalLayer: <A, E>(layer: Layer.Layer<A, E, AtomRegistry | Reactivity.Reactivity>) => void
 
   /**
@@ -718,40 +718,14 @@ export interface RuntimeFactory {
 }
 
 /**
- * A `RuntimeFactory` backed by an atom whose memo map is scoped to each registry.
- *
- * @category models
- * @since 4.0.0
- */
-export interface RegistryRuntimeFactory extends RuntimeFactory {
-  readonly memoMap: Atom<Layer.MemoMap>
-}
-
-/**
- * A `RuntimeFactory` backed by a concrete memo map shared across registries.
- *
- * @category models
- * @since 4.0.0
- */
-export interface SharedRuntimeFactory extends RuntimeFactory {
-  readonly memoMap: Layer.MemoMap
-}
-
-/**
- * Creates a `RuntimeFactory` backed by a registry-scoped memo map by default,
- * or by the supplied atom or concrete `Layer.MemoMap`.
+ * Creates a `RuntimeFactory` backed by the supplied `Layer.MemoMap`.
  *
  * @category constructors
  * @since 4.0.0
  */
-export function context(): RegistryRuntimeFactory
-export function context(options: { readonly memoMap: Atom<Layer.MemoMap> }): RegistryRuntimeFactory
-export function context(options: { readonly memoMap: Layer.MemoMap }): SharedRuntimeFactory
-export function context(options?: {
-  readonly memoMap: Atom<Layer.MemoMap> | Layer.MemoMap
-}): RegistryRuntimeFactory | SharedRuntimeFactory {
-  const memoMap = options?.memoMap ?? removeTtl(make(() => Layer.makeMemoMapUnsafe()))
-  const resolveMemoMap = (get: AtomContext): Layer.MemoMap => isAtom(memoMap) ? get(memoMap) : memoMap
+export const context: (options: {
+  readonly memoMap: Layer.MemoMap
+}) => RuntimeFactory = (options) => {
   let globalLayer: Layer.Layer<any, any, AtomRegistry> = Reactivity.layer
   function factory<E, R>(
     create:
@@ -773,25 +747,23 @@ export function context(options?: {
 
     self.read = function read(get: AtomContext) {
       const layer = get(layerAtom)
-      const build = Effect.flatMap(Effect.scope, (scope) => Layer.buildWithMemoMap(layer, resolveMemoMap(get), scope))
+      const build = Effect.flatMap(Effect.scope, (scope) => Layer.buildWithMemoMap(layer, options.memoMap, scope))
       return effect(get, build, { uninterruptible: true })
     }
 
     return self
   }
-  factory.memoMap = memoMap
+  factory.memoMap = options.memoMap
   factory.addGlobalLayer = (layer: Layer.Layer<any, any, AtomRegistry | Reactivity.Reactivity>) => {
     globalLayer = Layer.provideMerge(globalLayer, Layer.provide(layer, Reactivity.layer))
   }
-  const reactivityAtom = removeTtl(
-    make((get) =>
-      Effect.contextWith((services: Context.Context<Scope.Scope>) =>
-        Layer.buildWithMemoMap(Reactivity.layer, resolveMemoMap(get), Context.get(services, Scope.Scope))
-      ).pipe(
-        Effect.map(Context.get(Reactivity.Reactivity))
-      )
+  const reactivityAtom = removeTtl(make(
+    Effect.contextWith((services: Context.Context<Scope.Scope>) =>
+      Layer.buildWithMemoMap(Reactivity.layer, options.memoMap, Context.get(services, Scope.Scope))
+    ).pipe(
+      Effect.map(Context.get(Reactivity.Reactivity))
     )
-  )
+  ))
   factory.withReactivity =
     (keys: ReadonlyArray<unknown> | ReadonlyRecord<string, ReadonlyArray<unknown>>) =>
     <A extends Atom<any>>(atom: A): A =>
@@ -803,16 +775,24 @@ export function context(options?: {
         get.subscribe(atom, (value) => get.setSelf(value))
         return get.once(atom)
       }, { initialValueTarget: atom }) as any as A
-  return factory as any
+  return factory
 }
 
 /**
- * Default registry-scoped `RuntimeFactory`.
+ * Default `Layer.MemoMap` used by the module-level `runtime` factory.
  *
  * @category context
  * @since 4.0.0
  */
-export const runtime: RegistryRuntimeFactory = context()
+export const defaultMemoMap: Layer.MemoMap = Layer.makeMemoMapUnsafe()
+
+/**
+ * Default `RuntimeFactory` created with `defaultMemoMap`.
+ *
+ * @category context
+ * @since 4.0.0
+ */
+export const runtime: RuntimeFactory = context({ memoMap: defaultMemoMap })
 
 /**
  * Returns `Rx.runtime.withReactivity` for refreshing an atom whenever the
@@ -892,12 +872,12 @@ function makeStream<A, E>(
       return Effect.void
     })
   )
+  const servicesMap = new Map(services.mapUnsafe)
+  servicesMap.set(AtomRegistry.key, ctx.registry)
+  servicesMap.set(Scheduler.Scheduler.key, ctx.registry.scheduler)
 
   const cancel = runCallbackSync(
-    services.pipe(
-      Context.add(AtomRegistry, ctx.registry),
-      Context.add(Scheduler.Scheduler, ctx.registry.scheduler)
-    ),
+    Context.makeUnsafe<AtomRegistry>(servicesMap),
     run,
     constVoid,
     false
@@ -1466,9 +1446,7 @@ export const withFallback: {
   return isWritable(self)
     ? writable(
       withFallback,
-      function(ctx, value) {
-        ctx.set(self, value)
-      },
+      self.write,
       self.refresh ?? function(refresh) {
         refresh(self)
       }
@@ -1544,13 +1522,12 @@ export const setLazy: {
  *
  * **Example** (Comparing values structurally)
  *
- * ```ts import.meta.vitest
+ * ```ts
  * import { Atom } from "effect/unstable/reactivity"
  *
  * const point = Atom.make({ x: 0, y: 0 }).pipe(
  *   Atom.withEquality<{ x: number; y: number }>((a, b) => a.x === b.x && a.y === b.y)
  * )
- * point.equals({ x: 1, y: 2 }, { x: 1, y: 2 }) // => true
  * ```
  *
  * @category combinators
@@ -1588,7 +1565,7 @@ export const withLabel: {
 >(2, (self, name) =>
   Object.assign(Object.create(Object.getPrototypeOf(self)), {
     ...self,
-    label: [name, getStackTraceLimit() === 0 ? "" : new Error().stack?.split("\n")[5] ?? ""]
+    label: [name, new Error().stack?.split("\n")[5] ?? ""]
   }))
 
 /**
@@ -1912,7 +1889,7 @@ const shouldRevalidateSWR = <A, E>(result: AsyncResult.AsyncResult<A, E>, staleT
  * transitions finish, the source atom is refreshed, and failures roll the value
  * back to the latest source value.
  *
- * @category constructors
+ * @category Optimistic
  * @since 4.0.0
  */
 export const optimistic = <A>(self: Atom<A>): Writable<A, Atom<AsyncResult.AsyncResult<A, unknown>>> => {
@@ -2015,7 +1992,7 @@ export const optimistic = <A>(self: Atom<A>): Writable<A, Atom<AsyncResult.Async
  * input. The wrapped function result then completes the transition or updates the
  * optimistic value through the provided setter callback.
  *
- * @category combinators
+ * @category Optimistic
  * @since 4.0.0
  */
 export const optimisticFn: {
@@ -2099,7 +2076,7 @@ export const batch: (f: () => void) => void = Registry.batch
  * It listens for `visibilitychange` events on `window` and removes the listener
  * when the atom is disposed.
  *
- * @category constants
+ * @category Focus
  * @since 4.0.0
  */
 export const windowFocusSignal: Atom<number> = readable((get) => {
@@ -2125,7 +2102,7 @@ export const windowFocusSignal: Atom<number> = readable((get) => {
  * The derived atom also subscribes to the source atom so normal source updates are
  * forwarded to its own value.
  *
- * @category constructors
+ * @category Focus
  * @since 4.0.0
  */
 export const makeRefreshOnSignal = <_>(signal: Atom<_>) => <A extends Atom<any>>(self: A): WithoutSerializable<A> =>
@@ -2144,7 +2121,7 @@ export const makeRefreshOnSignal = <_>(signal: Atom<_>) => <A extends Atom<any>>
  * This helper is browser-only because `windowFocusSignal` depends on `window` and
  * `document.visibilityState`.
  *
- * @category combinators
+ * @category Focus
  * @since 4.0.0
  */
 export const refreshOnWindowFocus: <A extends Atom<any>>(self: A) => WithoutSerializable<A> = makeRefreshOnSignal(
@@ -2164,7 +2141,7 @@ export const refreshOnWindowFocus: <A extends Atom<any>>(self: A) => WithoutSeri
  * exposes the decoded value and writes the default value when the key is missing;
  * in async mode it exposes an `AsyncResult` of the decoded value.
  *
- * @category constructors
+ * @category KeyValueStore
  * @since 4.0.0
  */
 export const kvs = <S extends Schema.ConstraintCodec<any, any>, const Mode extends "sync" | "async" = never>(options: {
@@ -2229,7 +2206,7 @@ export const kvs = <S extends Schema.ConstraintCodec<any, any>, const Mode exten
  *
  * If you pass a schema, it has to be synchronous and have no context.
  *
- * @category constructors
+ * @category search params
  * @since 4.0.0
  */
 export const searchParam = <S extends Schema.ConstraintCodec<any, string> = never>(
@@ -2472,7 +2449,7 @@ export type SerializableTypeId = "~effect-atom/atom/Atom/Serializable"
  * The key identifies the atom in dehydrated state, and the encode/decode
  * functions convert between the atom value and the schema encoded value.
  *
- * @category models
+ * @category Serializable
  * @since 4.0.0
  */
 export interface Serializable<S extends Schema.Constraint> {
@@ -2486,7 +2463,7 @@ export interface Serializable<S extends Schema.Constraint> {
 /**
  * Returns `true` when an atom carries `Serializable` metadata.
  *
- * @category guards
+ * @category Serializable
  * @since 4.0.0
  */
 export const isSerializable = (self: Atom<any>): self is Atom<any> & Serializable<any> => SerializableTypeId in self
@@ -2518,7 +2495,7 @@ export const serializable: {
   const codecJson = Schema.toCodecJson(options.schema)
   return Object.assign(Object.create(Object.getPrototypeOf(self)), {
     ...self,
-    label: self.label ?? [options.key, getStackTraceLimit() === 0 ? "" : new Error().stack?.split("\n")[5] ?? ""],
+    label: self.label ?? [options.key, new Error().stack?.split("\n")[5] ?? ""],
     [SerializableTypeId]: {
       key: options.key,
       encode: Schema.encodeSync(codecJson),
@@ -2538,7 +2515,7 @@ export const ServerValueTypeId = "~effect-atom/atom/Atom/ServerValue" as const
 /**
  * Sets the value of an Atom when read on the server.
  *
- * @category transforming
+ * @category ServerValue
  * @since 4.0.0
  */
 export const withServerValue: {
@@ -2557,7 +2534,7 @@ export const withServerValue: {
  * Sets an `AsyncResult` atom's server-side value to
  * `AsyncResult.initial(true)`.
  *
- * @category transforming
+ * @category ServerValue
  * @since 4.0.0
  */
 export const withServerValueInitial = <A extends Atom<AsyncResult.AsyncResult<any, any>>>(self: A): A =>
@@ -2571,7 +2548,7 @@ export const withServerValueInitial = <A extends Atom<AsyncResult.AsyncResult<an
  *
  * Nested reads performed by the override are resolved against the same registry.
  *
- * @category getters
+ * @category ServerValue
  * @since 4.0.0
  */
 export const getServerValue: {

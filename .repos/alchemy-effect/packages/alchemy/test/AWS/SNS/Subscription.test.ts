@@ -59,9 +59,7 @@ test.provider(
       yield* stack.destroy();
       yield* assertSubscriptionDeleted(deployed.subscription.subscriptionArn);
     }),
-  // ~60s in isolation (Lambda bundling + role propagation + SNS eventual
-  // consistency); budget headroom for full-suite contention.
-  { timeout: 180_000 },
+  { timeout: 120_000 },
 );
 
 // Canonical `list()` test (AWS account/region-scoped collection): deploy a

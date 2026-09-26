@@ -13,7 +13,7 @@ import * as Schema from "effect/Schema";
 
 import { ServerConfig } from "../config.ts";
 
-export class ResourceMonitorBinaryUnsupported extends Schema.TaggedError<ResourceMonitorBinaryUnsupported>()(
+export class ResourceMonitorBinaryUnsupported extends Schema.TaggedErrorClass<ResourceMonitorBinaryUnsupported>()(
   "ResourceMonitorBinaryUnsupported",
   {
     platform: Schema.String,
@@ -25,7 +25,7 @@ export class ResourceMonitorBinaryUnsupported extends Schema.TaggedError<Resourc
   }
 }
 
-export class ResourceMonitorBinaryNotFound extends Schema.TaggedError<ResourceMonitorBinaryNotFound>()(
+export class ResourceMonitorBinaryNotFound extends Schema.TaggedErrorClass<ResourceMonitorBinaryNotFound>()(
   "ResourceMonitorBinaryNotFound",
   {
     platform: Schema.String,
@@ -38,7 +38,7 @@ export class ResourceMonitorBinaryNotFound extends Schema.TaggedError<ResourceMo
   }
 }
 
-export class ResourceMonitorBinaryNotExecutable extends Schema.TaggedError<ResourceMonitorBinaryNotExecutable>()(
+export class ResourceMonitorBinaryNotExecutable extends Schema.TaggedErrorClass<ResourceMonitorBinaryNotExecutable>()(
   "ResourceMonitorBinaryNotExecutable",
   {
     path: Schema.String,
@@ -90,7 +90,7 @@ export const ResourceMonitorHostLinuxLibc = Context.Reference<ResourceMonitorLin
   },
 );
 
-function resourceMonitorPlatformKey(
+export function resourceMonitorPlatformKey(
   platform: NodeJS.Platform,
   architecture: NodeJS.Architecture,
 ): string | undefined {
@@ -103,7 +103,7 @@ function resourceMonitorPlatformKey(
   return `${platform}-${architecture}`;
 }
 
-function resourceMonitorRustTarget(
+export function resourceMonitorRustTarget(
   platform: NodeJS.Platform,
   architecture: NodeJS.Architecture,
   linuxLibc?: ResourceMonitorLinuxLibc,

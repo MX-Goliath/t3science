@@ -92,7 +92,7 @@ test.provider(
             main: resolverHandlerPath,
             handler: "handler",
             isExternal: true,
-            functionUrl: false,
+            url: false,
           });
           const api = yield* AWS.AppSync.GraphqlApi("E2EApi", {
             schema: SCHEMA,

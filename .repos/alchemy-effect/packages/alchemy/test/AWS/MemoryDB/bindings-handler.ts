@@ -28,7 +28,7 @@ export class MemoryDBBindingsTestFunction extends Lambda.Function<Lambda.Functio
 export default MemoryDBBindingsTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const describeClusters = yield* MemoryDB.DescribeClusters();

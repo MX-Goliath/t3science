@@ -1,8 +1,4 @@
-import type {
-  EnvironmentId,
-  ResourceTelemetryHistoryInput,
-  ResourceTelemetrySnapshot,
-} from "@t3tools/contracts";
+import type { ResourceTelemetryHistoryInput, ResourceTelemetrySnapshot } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { useCallback } from "react";
 
@@ -19,14 +15,9 @@ export interface ResourceTelemetryState {
   readonly retry: () => Promise<ResourceTelemetrySnapshot>;
 }
 
-export function useResourceTelemetry(
-  targetEnvironmentId?: EnvironmentId | null,
-): ResourceTelemetryState {
+export function useResourceTelemetry(): ResourceTelemetryState {
   const primaryEnvironment = usePrimaryEnvironment();
-  const environmentId =
-    targetEnvironmentId === undefined
-      ? (primaryEnvironment?.environmentId ?? null)
-      : targetEnvironmentId;
+  const environmentId = primaryEnvironment?.environmentId ?? null;
   const query = useEnvironmentQuery(
     environmentId === null
       ? null
@@ -49,15 +40,9 @@ export function useResourceTelemetry(
   return { ...query, retry };
 }
 
-export function useResourceTelemetryHistory(
-  input: ResourceTelemetryHistoryInput,
-  targetEnvironmentId?: EnvironmentId | null,
-) {
+export function useResourceTelemetryHistory(input: ResourceTelemetryHistoryInput) {
   const primaryEnvironment = usePrimaryEnvironment();
-  const environmentId =
-    targetEnvironmentId === undefined
-      ? (primaryEnvironment?.environmentId ?? null)
-      : targetEnvironmentId;
+  const environmentId = primaryEnvironment?.environmentId ?? null;
   return useEnvironmentQuery(
     environmentId === null
       ? null

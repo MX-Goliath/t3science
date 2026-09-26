@@ -17,7 +17,7 @@ export class Wafv2BindingsFunction extends Lambda.Function<Lambda.Function>()(
 export default Wafv2BindingsFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(120),
   },
   Effect.gen(function* () {

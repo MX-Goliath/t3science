@@ -54,10 +54,7 @@ class T3TerminalModule : Module() {
         view.mutedForegroundColorHex = mutedForegroundColor
       }
 
-      Prop("captureRequest") { view: T3TerminalView, request: Double ->
-        view.captureRequest = request
-      }
-      Events("onInput", "onResize", "onCapture")
+      Events("onInput", "onResize")
 
       OnViewDestroys { view: T3TerminalView ->
         view.cleanup()

@@ -13,7 +13,9 @@ import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-const sessionEnv = {
+const sampleEnv: RpcServerEnvironment = {
+  profile: undefined,
+  envFile: undefined,
   alchemyContext: {
     dotAlchemy: "/tmp/.alchemy",
     dev: true,
@@ -25,12 +27,6 @@ const sessionEnv = {
   },
 };
 
-const sampleEnv: RpcServerEnvironment = {
-  profile: undefined,
-  envFile: undefined,
-  ...sessionEnv,
-};
-
 describe("Local.RpcServerEnvironment", () => {
   it.effect("layer() provides Stack, Stage, and AlchemyContext", () =>
     Effect.gen(function* () {
@@ -40,12 +36,7 @@ describe("Local.RpcServerEnvironment", () => {
         const ctx = yield* AlchemyContext;
         return { stack, stage, ctx };
       }).pipe(
-        Effect.provide(
-          Layer.provide(
-            layer({ profile: undefined, envFile: undefined, ...sessionEnv }),
-            PlatformServices,
-          ),
-        ),
+        Effect.provide(Layer.provide(layer(sampleEnv), PlatformServices)),
       );
 
       expect(observed.stack.name).toBe("my-stack");
@@ -73,8 +64,8 @@ describe("Local.RpcServerEnvironment", () => {
           ),
         ),
       );
-      expect(stack.name).toBe(sessionEnv.stack.name);
-      expect(stack.stage).toBe(sessionEnv.stack.stage);
+      expect(stack.name).toBe(sampleEnv.stack.name);
+      expect(stack.stage).toBe(sampleEnv.stack.stage);
     }),
   );
 

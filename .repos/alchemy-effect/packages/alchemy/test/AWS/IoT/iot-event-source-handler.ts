@@ -38,7 +38,7 @@ export const ResultQueueLive = Layer.effect(
 export default IoTEventSourceFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const { result } = yield* ResultQueue;

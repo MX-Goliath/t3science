@@ -29,7 +29,7 @@ export class AuditManagerTestFunction extends Lambda.Function<Lambda.Function>()
 export default AuditManagerTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const getAccountStatus = yield* AuditManager.GetAccountStatus();

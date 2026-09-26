@@ -30,7 +30,7 @@
  * dispatched skill are always the same set.
  */
 const SKILL_MENTION_PATTERN =
-  /(^|\s)\p{Sc}(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))(?=[a-zA-Z0-9:_-]*[a-zA-Z])([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s|$)/gu;
+  /(^|\s)\$(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))(?=[a-zA-Z0-9:_-]*[a-zA-Z])([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s|$)/g;
 
 export interface ClaudeSkillDispatch {
   /** Text before the dispatched mention, or `undefined` when it opens the prompt. */
@@ -54,7 +54,7 @@ export function planClaudeSkillDispatch(
     const name = match[2] ?? "";
     if (!skillNames.has(name)) return [];
     const start = (match.index ?? 0) + (match[1]?.length ?? 0);
-    return [{ name, start, end: (match.index ?? 0) + match[0].length }];
+    return [{ name, start, end: start + name.length + 1 }];
   });
   const last = mentions.at(-1);
   if (!last) {
@@ -66,8 +66,7 @@ export function planClaudeSkillDispatch(
   const leadingWithInlineSlashes = mentions
     .slice(0, -1)
     .reduceRight(
-      (text, mention) =>
-        `${text.slice(0, mention.start)}/${mention.name}${text.slice(mention.end)}`,
+      (text, mention) => `${text.slice(0, mention.start)}/${text.slice(mention.start + 1)}`,
       leading,
     )
     .trimEnd();

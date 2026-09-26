@@ -49,7 +49,7 @@ const TRIAGE_AGENTS: ReadonlyArray<TriageAgent> = [
   { id: "codex", command: "codex", label: "Codex" },
 ];
 
-export class TriageAgentUnavailableError extends Schema.TaggedError<TriageAgentUnavailableError>()(
+export class TriageAgentUnavailableError extends Schema.TaggedErrorClass<TriageAgentUnavailableError>()(
   "TriageAgentUnavailableError",
   { agent: Schema.String },
 ) {
@@ -58,7 +58,7 @@ export class TriageAgentUnavailableError extends Schema.TaggedError<TriageAgentU
   }
 }
 
-export class TriageAgentChoiceRequiredError extends Schema.TaggedError<TriageAgentChoiceRequiredError>()(
+export class TriageAgentChoiceRequiredError extends Schema.TaggedErrorClass<TriageAgentChoiceRequiredError>()(
   "TriageAgentChoiceRequiredError",
   {},
 ) {
@@ -67,7 +67,7 @@ export class TriageAgentChoiceRequiredError extends Schema.TaggedError<TriageAge
   }
 }
 
-export class TriageAgentSpawnError extends Schema.TaggedError<TriageAgentSpawnError>()(
+export class TriageAgentSpawnError extends Schema.TaggedErrorClass<TriageAgentSpawnError>()(
   "TriageAgentSpawnError",
   { command: Schema.String, cause: Schema.Defect() },
 ) {
@@ -142,12 +142,12 @@ const runInteractiveSession = (input: {
     child.once("exit", (code, signal) => resume(Effect.succeed(code ?? (signal === null ? 0 : 1))));
   });
 
-const agentFlag = Flag.Literals("agent", ["claude", "codex"]).pipe(
+const agentFlag = Flag.choice("agent", ["claude", "codex"]).pipe(
   Flag.withDescription("Agent CLI to use. Default: ask when both are installed."),
   Flag.optional,
 );
 
-const modelFlag = Flag.String("model").pipe(
+const modelFlag = Flag.string("model").pipe(
   Flag.withDescription("Model passed through to the agent CLI. Default: the agent's default."),
   Flag.optional,
 );
@@ -169,7 +169,7 @@ export const triageCommand = Command.make("triage", {
       // --base-dir wins; T3CODE_HOME is its documented env equivalent (same
       // precedence as `t3 pair`).
       const explicitBaseDir = Option.getOrUndefined(flags.baseDir);
-      const envHome = yield* Config.String("T3CODE_HOME").pipe(Config.option);
+      const envHome = yield* Config.string("T3CODE_HOME").pipe(Config.option);
       const baseDir = yield* resolveBaseDir(explicitBaseDir ?? Option.getOrUndefined(envHome));
       const paths = yield* ServerConfig.deriveServerPaths(baseDir, undefined, {});
 
@@ -189,8 +189,8 @@ export const triageCommand = Command.make("triage", {
         buildTriageContext({
           generatedAt: DateTime.formatIso(now),
           version,
-          releaseTag: /^[^-+]+-(?:nightly|preview)\./.test(version)
-            ? `v${version} (prerelease build; if this tag does not exist, clone main)`
+          releaseTag: version.includes("-nightly.")
+            ? `v${version} (nightly build; if this tag does not exist, clone main)`
             : `v${version}`,
           os: `${yield* HostProcessPlatform} ${yield* HostProcessArchitecture} (${NodeOS.release()})`,
           nodeVersion: process.version,

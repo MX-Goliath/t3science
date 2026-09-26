@@ -44,9 +44,7 @@ const getSippy = (accountId: string, bucketName: string) =>
 
 const program = (opts: { sippy: boolean }) =>
   Effect.gen(function* () {
-    const bucket = yield* Cloudflare.R2.Bucket("SippyBucket", {
-      forceDestroy: true,
-    });
+    const bucket = yield* Cloudflare.R2.Bucket("SippyBucket");
     const sippy = opts.sippy
       ? yield* Cloudflare.R2.BucketSippy("Sippy", {
           bucketName: bucket.bucketName,

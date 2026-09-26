@@ -14,8 +14,9 @@ import type { S3EventType } from "./S3Event.ts";
  * `consumeBucketEvents` helper, which provisions the bucket-notification
  * subscription at deploy time and registers the stream handler at runtime.
  * Provide the implementation with `Effect.provide(Lambda.BucketEventSource)`.
- * ### Consuming Bucket Events
- * **Example:** Process Object-Created Events
+ * @binding
+ * @section Consuming Bucket Events
+ * @example Process Object-Created Events
  * ```typescript
  * export default MyFunction.make(
  *   { main: import.meta.url },
@@ -49,8 +50,6 @@ import type { S3EventType } from "./S3Event.ts";
  *   ),
  * );
  * ```
- *
- * @binding
  */
 export interface BucketEventSource extends Binding.Service<
   BucketEventSource,

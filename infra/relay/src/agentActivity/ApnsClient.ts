@@ -9,7 +9,7 @@ import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import { ApnsEnvironment as ApnsEnvironmentSchema, type ApnsCredentials } from "../Config.ts";
 import type { ApnsLiveActivityAlert, ApnsNotificationPayload } from "./apnsDeliveryJobs.ts";
-import type { ApnsJwtEncodingError, ApnsJwtSigningError } from "./apnsJwt.ts";
+import { ApnsJwtEncodingError, ApnsJwtSigningError } from "./apnsJwt.ts";
 import * as ApnsProviderTokens from "./ApnsProviderTokens.ts";
 
 export { ApnsJwtEncodingError, ApnsJwtSigningError } from "./apnsJwt.ts";
@@ -53,7 +53,7 @@ export interface ApnsDeliveryResult {
   readonly apnsId: string | null;
 }
 
-export class ApnsHttpRequestError extends Schema.TaggedError<ApnsHttpRequestError>()(
+export class ApnsHttpRequestError extends Schema.TaggedErrorClass<ApnsHttpRequestError>()(
   "ApnsHttpRequestError",
   {
     requestKind: ApnsRequestKindSchema,
@@ -71,7 +71,12 @@ export class ApnsHttpRequestError extends Schema.TaggedError<ApnsHttpRequestErro
   }
 }
 
-export type ApnsError = ApnsJwtEncodingError | ApnsJwtSigningError | ApnsHttpRequestError;
+export const ApnsError = Schema.Union([
+  ApnsJwtEncodingError,
+  ApnsJwtSigningError,
+  ApnsHttpRequestError,
+]);
+export type ApnsError = typeof ApnsError.Type;
 
 const decodeApnsErrorResponseJson = Schema.decodeUnknownOption(
   Schema.fromJsonString(

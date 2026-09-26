@@ -14,7 +14,7 @@ import { useAtomCommand } from "./state/use-atom-command";
 
 const LAST_EDITOR_KEY = "t3code:last-editor";
 
-export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedError<PreferredEditorEnvironmentRequiredError>()(
+export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedErrorClass<PreferredEditorEnvironmentRequiredError>()(
   "PreferredEditorEnvironmentRequiredError",
   {
     targetPath: Schema.String,
@@ -25,7 +25,7 @@ export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedError<
   }
 }
 
-export class PreferredEditorUnavailableError extends Schema.TaggedError<PreferredEditorUnavailableError>()(
+export class PreferredEditorUnavailableError extends Schema.TaggedErrorClass<PreferredEditorUnavailableError>()(
   "PreferredEditorUnavailableError",
   {
     environmentId: EnvironmentId,

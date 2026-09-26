@@ -54,7 +54,7 @@ const respond = <A, E extends { readonly _tag: string }>(
 export default LexTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
     timeout: Duration.seconds(30),
   },
   Effect.gen(function* () {

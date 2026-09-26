@@ -24,7 +24,7 @@ export const ProjectConversationStorageState = Schema.Struct({
 });
 export type ProjectConversationStorageState = typeof ProjectConversationStorageState.Type;
 
-export class ProjectConversationStorageError extends Schema.TaggedError<ProjectConversationStorageError>()(
+export class ProjectConversationStorageError extends Schema.TaggedErrorClass<ProjectConversationStorageError>()(
   "ProjectConversationStorageError",
   {
     message: TrimmedNonEmptyString,

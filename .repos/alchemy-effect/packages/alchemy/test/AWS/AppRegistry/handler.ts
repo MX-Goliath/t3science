@@ -19,7 +19,7 @@ export class AppRegistryTestFunction extends Lambda.Function<Lambda.Function>()(
 export default AppRegistryTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const app = yield* AppRegistry.Application("BindingsApp", {

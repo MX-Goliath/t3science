@@ -17,7 +17,7 @@ const PLAYWRIGHT_SOURCE_EVALUATION_TIMEOUT_MS = 1_000;
 const PLAYWRIGHT_SDK_LANGUAGE = "javascript";
 const PLAYWRIGHT_BROWSER_NAME = "chromium";
 
-export class PlaywrightPackageResolveError extends Schema.TaggedError<PlaywrightPackageResolveError>()(
+export class PlaywrightPackageResolveError extends Schema.TaggedErrorClass<PlaywrightPackageResolveError>()(
   "PlaywrightPackageResolveError",
   {
     specifier: Schema.String,
@@ -29,7 +29,7 @@ export class PlaywrightPackageResolveError extends Schema.TaggedError<Playwright
   }
 }
 
-export class PlaywrightCoreBundleReadError extends Schema.TaggedError<PlaywrightCoreBundleReadError>()(
+export class PlaywrightCoreBundleReadError extends Schema.TaggedErrorClass<PlaywrightCoreBundleReadError>()(
   "PlaywrightCoreBundleReadError",
   {
     bundlePath: Schema.String,
@@ -41,7 +41,7 @@ export class PlaywrightCoreBundleReadError extends Schema.TaggedError<Playwright
   }
 }
 
-export class PlaywrightSourceMarkerNotFoundError extends Schema.TaggedError<PlaywrightSourceMarkerNotFoundError>()(
+export class PlaywrightSourceMarkerNotFoundError extends Schema.TaggedErrorClass<PlaywrightSourceMarkerNotFoundError>()(
   "PlaywrightSourceMarkerNotFoundError",
   {
     bundlePath: Schema.String,
@@ -53,7 +53,7 @@ export class PlaywrightSourceMarkerNotFoundError extends Schema.TaggedError<Play
   }
 }
 
-export class PlaywrightSourceTerminatorNotFoundError extends Schema.TaggedError<PlaywrightSourceTerminatorNotFoundError>()(
+export class PlaywrightSourceTerminatorNotFoundError extends Schema.TaggedErrorClass<PlaywrightSourceTerminatorNotFoundError>()(
   "PlaywrightSourceTerminatorNotFoundError",
   {
     bundlePath: Schema.String,
@@ -65,7 +65,7 @@ export class PlaywrightSourceTerminatorNotFoundError extends Schema.TaggedError<
   }
 }
 
-export class PlaywrightSourceEvaluationError extends Schema.TaggedError<PlaywrightSourceEvaluationError>()(
+export class PlaywrightSourceEvaluationError extends Schema.TaggedErrorClass<PlaywrightSourceEvaluationError>()(
   "PlaywrightSourceEvaluationError",
   {
     bundlePath: Schema.String,
@@ -78,7 +78,7 @@ export class PlaywrightSourceEvaluationError extends Schema.TaggedError<Playwrig
   }
 }
 
-export class PlaywrightSourceValidationError extends Schema.TaggedError<PlaywrightSourceValidationError>()(
+export class PlaywrightSourceValidationError extends Schema.TaggedErrorClass<PlaywrightSourceValidationError>()(
   "PlaywrightSourceValidationError",
   {
     bundlePath: Schema.String,
@@ -96,7 +96,7 @@ export class PlaywrightSourceValidationError extends Schema.TaggedError<Playwrig
   }
 }
 
-export class PlaywrightOptionsEncodeError extends Schema.TaggedError<PlaywrightOptionsEncodeError>()(
+export class PlaywrightOptionsEncodeError extends Schema.TaggedErrorClass<PlaywrightOptionsEncodeError>()(
   "PlaywrightOptionsEncodeError",
   {
     sdkLanguage: Schema.String,

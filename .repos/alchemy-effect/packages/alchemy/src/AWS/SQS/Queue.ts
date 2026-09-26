@@ -176,15 +176,16 @@ class QueueStillExists extends Data.TaggedError("QueueStillExists")<{
  * `Queue` owns the lifecycle of a standard or FIFO SQS queue. A queue name
  * is auto-generated from the app, stage, and logical ID unless you provide
  * one explicitly. FIFO queues automatically append the `.fifo` suffix.
- * ### Creating Queues
- * **Example:** Standard Queue
+ * @resource
+ * @section Creating Queues
+ * @example Standard Queue
  * ```typescript
  * import * as SQS from "alchemy/AWS/SQS";
  *
  * const queue = yield* SQS.Queue("OrdersQueue");
  * ```
  *
- * **Example:** FIFO Queue
+ * @example FIFO Queue
  * ```typescript
  * const queue = yield* SQS.Queue("OrdersFifoQueue", {
  *   fifo: true,
@@ -192,7 +193,7 @@ class QueueStillExists extends Data.TaggedError("QueueStillExists")<{
  * });
  * ```
  *
- * **Example:** Queue with Custom Settings
+ * @example Queue with Custom Settings
  * ```typescript
  * const queue = yield* SQS.Queue("ProcessingQueue", {
  *   visibilityTimeout: "2 minutes",
@@ -201,8 +202,8 @@ class QueueStillExists extends Data.TaggedError("QueueStillExists")<{
  * });
  * ```
  *
- * ### Dead-Letter Queues
- * **Example:** Route failures to a dead-letter queue
+ * @section Dead-Letter Queues
+ * @example Route failures to a dead-letter queue
  * ```typescript
  * const dlq = yield* SQS.Queue("OrdersDLQ");
  * const orders = yield* SQS.Queue("Orders", {
@@ -213,7 +214,7 @@ class QueueStillExists extends Data.TaggedError("QueueStillExists")<{
  * });
  * ```
  *
- * **Example:** Authorize source queues on the dead-letter queue
+ * @example Authorize source queues on the dead-letter queue
  * ```typescript
  * const dlq = yield* SQS.Queue("OrdersDLQ", {
  *   redriveAllowPolicy: {
@@ -223,15 +224,15 @@ class QueueStillExists extends Data.TaggedError("QueueStillExists")<{
  * });
  * ```
  *
- * ### Encryption
- * **Example:** SSE-SQS (SQS-managed keys)
+ * @section Encryption
+ * @example SSE-SQS (SQS-managed keys)
  * ```typescript
  * const queue = yield* SQS.Queue("SecureQueue", {
  *   sqsManagedSseEnabled: true,
  * });
  * ```
  *
- * **Example:** SSE-KMS (AWS-managed key)
+ * @example SSE-KMS (AWS-managed key)
  * ```typescript
  * const queue = yield* SQS.Queue("KmsQueue", {
  *   kmsMasterKeyId: "alias/aws/sqs",
@@ -239,11 +240,11 @@ class QueueStillExists extends Data.TaggedError("QueueStillExists")<{
  * });
  * ```
  *
- * ### Sending Messages
+ * @section Sending Messages
  * Bind send operations in the init phase and use them in runtime
  * handlers.
  *
- * **Example:** Send a message from a handler
+ * @example Send a message from a handler
  * ```typescript
  * // init
  * const sendMessage = yield* SQS.SendMessage(queue);
@@ -259,11 +260,11 @@ class QueueStillExists extends Data.TaggedError("QueueStillExists")<{
  * };
  * ```
  *
- * ### Event Sources
+ * @section Event Sources
  * Process messages from a queue using a Lambda event source mapping.
  * Messages are automatically deleted after successful processing.
  *
- * **Example:** Process queue messages
+ * @example Process queue messages
  * ```typescript
  * // init
  * yield* SQS.consumeQueueMessages(queue,
@@ -272,8 +273,6 @@ class QueueStillExists extends Data.TaggedError("QueueStillExists")<{
  *   }),
  * );
  * ```
- *
- * @resource
  */
 export const Queue = Resource<Queue>("AWS.SQS.Queue");
 

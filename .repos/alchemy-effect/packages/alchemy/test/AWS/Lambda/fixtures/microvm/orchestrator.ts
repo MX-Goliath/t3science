@@ -22,7 +22,7 @@ export default class Orchestrator extends AWS.Lambda.Function<Orchestrator>()(
   {
     main: import.meta.filename,
     timeout: Duration.seconds(120),
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     const runMicrovm = yield* AWS.Lambda.RunMicrovm(Sandbox);

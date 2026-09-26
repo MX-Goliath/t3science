@@ -9,7 +9,7 @@ export type AsyncWorkflowEnv = Cloudflare.InferEnv<typeof AsyncWorkflowWorker>;
 // it through `env` using the props-only `Cloudflare.Workflow` reference form.
 export const AsyncWorkflowWorker = Cloudflare.Worker("AsyncWorkflowWorker", {
   main: path.resolve(import.meta.dirname, "worker.ts"),
-  workersDev: true,
+  url: true,
   env: {
     MY_WORKFLOW: Cloudflare.Workflow<{ value: string }>("MyWorkflow", {
       className: "MyWorkflow",

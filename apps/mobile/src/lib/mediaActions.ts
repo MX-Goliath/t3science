@@ -8,7 +8,7 @@ import { Alert } from "react-native";
 
 import { useRefreshAssetUrl } from "../state/assets";
 import { downloadAndShareAttachment, shareLocalAttachment } from "./attachmentDownload";
-import type { FileBackedComposerAttachment } from "./composerImages";
+import type { DraftComposerFileAttachment } from "./composerImages";
 import { copyTextWithHaptic } from "./copyTextWithHaptic";
 import { loadLocalAttachmentPreview } from "./localAttachmentPreview";
 
@@ -21,7 +21,7 @@ export type MediaActionsSource = {
   readonly sourceIdentifier?: string;
 } & (
   | { readonly uri: string }
-  | { readonly attachment: FileBackedComposerAttachment }
+  | { readonly attachment: DraftComposerFileAttachment }
   | {
       readonly environmentId: EnvironmentId;
       readonly threadId?: ThreadId;

@@ -22,7 +22,7 @@ export class CloudWatchTestFunction extends Lambda.Function<Lambda.Function>()(
 export default CloudWatchTestFunction.make(
   {
     main,
-    functionUrl: true,
+    url: true,
   },
   Effect.gen(function* () {
     // A metric alarm on a custom metric. Threshold is unreachably high and

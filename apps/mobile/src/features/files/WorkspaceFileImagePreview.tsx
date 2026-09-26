@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from "react";
-import { Image, Pressable, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, View } from "react-native";
 
-import { FilePreviewLoading } from "./FilePreviewFeedback";
+import { AppText as Text } from "../../components/AppText";
 import { EmptyState } from "../../components/EmptyState";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
 import { PresentationSource } from "../../components/NativePresentation";
@@ -76,7 +76,14 @@ export function WorkspaceFileImagePreview(props: {
   readonly actionsSource?: MediaActionsSource;
 }) {
   if (props.uri === null) {
-    return <FilePreviewLoading message="Preparing image preview..." background="card" />;
+    return (
+      <View className="flex-1 items-center justify-center gap-3 bg-card px-6">
+        <ActivityIndicator />
+        <Text className="text-center text-sm text-foreground-muted">
+          Preparing image preview...
+        </Text>
+      </View>
+    );
   }
 
   return (

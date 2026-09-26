@@ -94,17 +94,10 @@ export const makeAcmCertificateHttpBinding = <Req extends object, Out, Err>(
         // `Omit<Req, "CertificateArn"> & { CertificateArn: string }` is exactly
         // `Req & { CertificateArn: string }`. TypeScript cannot prove this for
         // an unresolved type parameter, hence the precise assertion.
-        //
-        // The region must be pinned HERE, at the call site: the yield-time
-        // snapshot is only a fallback — the calling fiber's ambient Region
-        // (the host Function's own region) wins over it, so pinning only at
-        // the yield would silently route the call to the wrong region.
-        return yield* withAcmRegion(
-          op({
-            ...request,
-            CertificateArn: yield* CertificateArn,
-          } as Req & { CertificateArn: string }),
-        );
+        return yield* op({
+          ...(request ?? {}),
+          CertificateArn: yield* CertificateArn,
+        } as Req & { CertificateArn: string });
       });
     });
   });
@@ -158,8 +151,7 @@ export const makeAcmAccountHttpBinding = <Req extends object, Out, Err>(
       return Effect.fn(`AWS.ACM.${config.capability}`)(function* (
         request?: Req,
       ) {
-        // Call-site pin — see makeAcmCertificateHttpBinding above.
-        return yield* withAcmRegion(op(request ?? ({} as Req)));
+        return yield* op(request ?? ({} as Req));
       });
     });
   });
