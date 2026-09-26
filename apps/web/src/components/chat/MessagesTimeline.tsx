@@ -32,6 +32,7 @@ import {
   workEntryViewedImagePath,
   summarizeToolGroup,
   omitSupersededLifecycleMarkers,
+  countCompletedWorkCommands,
 } from "@t3tools/client-runtime/work-log/presentation";
 import { resolveWorkGroupScrollAnchor } from "@t3tools/client-runtime/work-log/scroll-anchor";
 import type {
@@ -2765,6 +2766,7 @@ function ActivityGroupTimelineRow({
       >
         <LiveActivityRow
           label={label}
+          additionalCommandCount={row.active ? countCompletedWorkCommands(work, liveWork) : 0}
           iconName={iconWork ? workEntryIconName(iconWork) : "brain"}
           toolIcon={iconWork?.toolIcon ?? iconWork?.toolSource?.icon}
           failed={failed}
@@ -3236,6 +3238,7 @@ function toolIconAcceptsTint(
 
 function LiveActivityRow({
   label,
+  additionalCommandCount = 0,
   iconName,
   toolIcon,
   failed = false,
@@ -3243,6 +3246,7 @@ function LiveActivityRow({
   shimmer = false,
 }: {
   label: ReactNode;
+  additionalCommandCount?: number;
   iconName?: WorkEntryIconName;
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean;
@@ -3254,7 +3258,7 @@ function LiveActivityRow({
   return (
     <div
       ref={animated ? observeVisibleAnimation : undefined}
-      className="relative min-h-6 w-fit max-w-full min-w-0 overflow-hidden rounded-md text-sm leading-relaxed"
+      className="relative flex min-h-6 w-fit max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md text-sm leading-relaxed"
     >
       <LiveActivityContent
         label={label}
@@ -3264,6 +3268,11 @@ function LiveActivityRow({
         announceFailure={failed}
         active={animated && !shimmer}
       />
+      {additionalCommandCount > 0 ? (
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          +{additionalCommandCount} {additionalCommandCount === 1 ? "command" : "commands"}
+        </span>
+      ) : null}
       {showShimmer ? (
         <ActivityShimmerOverlay>
           <LiveActivityContent label={label} iconName={iconName} toolIcon={toolIcon} highlighted />
@@ -3349,6 +3358,9 @@ function LiveWorkEntryTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "
       onClick={() => ctx.onToggleWorkGroup(row.groupId, row.id)}
     >
       <LiveActivityRow
+        additionalCommandCount={
+          row.active ? countCompletedWorkCommands(row.groupedEntries, row.entry) : 0
+        }
         label={
           row.entry.questionAnswer ? (
             <span className="flex min-w-0 gap-1.5">

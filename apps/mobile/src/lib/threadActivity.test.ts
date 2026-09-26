@@ -3748,3 +3748,85 @@ it("keeps attachment-only question answers expandable outside mobile work groups
   expect(running[1]).toBe(group);
   expect(running[2]?.type).toBe("work-toggle");
 });
+
+describe("live command counts", () => {
+  it.each([false, true])(
+    "counts commands across reasoning and resets after assistant text: %s",
+    (withReasoning) => {
+      const turnId = TurnId.make("count-turn");
+      const latestTurn = {
+        turnId,
+        state: "running" as const,
+        requestedAt: "2026-04-01T00:00:00Z",
+        startedAt: "2026-04-01T00:00:00Z",
+        completedAt: null,
+        assistantMessageId: null,
+      };
+      const message = (id: string, role: "assistant" | "reasoning", second: number) => ({
+        id: MessageId.make(id),
+        role,
+        text: "Progress",
+        turnId,
+        streaming: false,
+        createdAt: `2026-04-01T00:00:0${second}Z`,
+        updatedAt: `2026-04-01T00:00:0${second}Z`,
+      });
+      const tool = (id: string, second: number) =>
+        makeActivity({
+          id: EventId.make(id),
+          kind: "tool.completed",
+          summary: "Run command",
+          tone: "tool",
+          turnId,
+          createdAt: `2026-04-01T00:00:0${second}Z`,
+          payload: {
+            toolCallId: id,
+            itemType: "command_execution",
+            status: "completed",
+            command: "pwd",
+          },
+        });
+      const thread = makeThread({
+        id: ThreadId.make("count-thread"),
+        projectId: ProjectId.make("project-1"),
+        title: "Count",
+        latestTurn,
+        messages: [
+          message("answer", "assistant", 3),
+          ...(withReasoning ? [message("thought", "reasoning", 5)] : []),
+        ],
+        activities: [
+          tool("before-1", 1),
+          tool("before-2", 2),
+          tool("after-1", 4),
+          tool("after-2", 6),
+        ],
+      });
+      const rows = deriveThreadFeedPresentation(
+        buildThreadFeed(thread),
+        latestTurn,
+        new Set(),
+        new Set(),
+        "now",
+      );
+      expect(rows.find((row) => row.id === "live-activity-row")).toMatchObject({
+        additionalCommandCount: 1,
+      });
+      const next = {
+        ...thread,
+        messages: [...thread.messages, message("next-answer", "assistant", 7)],
+        activities: [...thread.activities, tool("next-tool", 8)],
+      };
+      const nextRows = deriveThreadFeedPresentation(
+        buildThreadFeed(next),
+        latestTurn,
+        new Set(),
+        new Set(),
+        "now",
+      );
+      expect(nextRows.find((row) => row.id === "live-activity-row")).toMatchObject({
+        additionalCommandCount: 0,
+      });
+    },
+  );
+});

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { ThreadId } from "@t3tools/contracts";
 
 import {
+  countCompletedWorkCommands,
   commandDetailRepeatsCommand,
   extractCommandOutputText,
   resolveViewedImageAsset,
@@ -708,5 +709,51 @@ describe("device group summaries", () => {
         },
       ]),
     ).toBe("Used 1 tool");
+  });
+});
+
+describe("countCompletedWorkCommands", () => {
+  const call = (id: string, status = "completed") => ({
+    id,
+    label: "Run command",
+    tone: "tool" as const,
+    turnId: "turn-1",
+    toolCallId: id,
+    toolLifecycleStatus: status,
+    sourceActivityKind: "tool.completed",
+  });
+  it("counts finished calls once and excludes the displayed call", () => {
+    const current = call("current", "inProgress");
+    expect(
+      countCompletedWorkCommands(
+        [call("read", "inProgress"), call("read"), call("edit"), current],
+        current,
+      ),
+    ).toBe(2);
+    expect(countCompletedWorkCommands([call("read"), call("edit")], call("edit"))).toBe(1);
+  });
+  it("counts failed executions but not pending, declined, stopped or non-tool activity", () => {
+    expect(
+      countCompletedWorkCommands([
+        call("failed", "failed"),
+        call("pending", "inProgress"),
+        call("declined", "declined"),
+        call("stopped", "stopped"),
+        { ...call("approval"), sourceActivityKind: "approval.resolved" },
+        { id: "info", label: "Session ready", tone: "info" },
+        { id: "started", label: "Run", tone: "tool", sourceActivityKind: "tool.started" },
+      ]),
+    ).toBe(1);
+  });
+  it("counts separate legacy calls and scopes reused provider IDs to their turns", () => {
+    expect(
+      countCompletedWorkCommands([
+        { id: "first", label: "Run", tone: "tool" },
+        { id: "second", label: "Run", tone: "tool" },
+        call("provider-id"),
+        { ...call("provider-id"), turnId: "turn-2" },
+      ]),
+    ).toBe(4);
+    expect(countCompletedWorkCommands([])).toBe(0);
   });
 });

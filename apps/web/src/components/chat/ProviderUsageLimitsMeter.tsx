@@ -1,7 +1,17 @@
-import type { ServerProviderUsageLimits, ServerProviderUsageWindow } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ProviderInstanceId,
+  ServerProviderResetCredits,
+  ServerProviderUsageLimits,
+  ServerProviderUsageWindow,
+} from "@t3tools/contracts";
 import { remainingPercent } from "@t3tools/shared/usageLimits";
+import { useEffect, useState } from "react";
 
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Button } from "../ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import { toastManager } from "../ui/toast";
+import { ResetCreditDialog, resetCreditsSummary, useResetCredit } from "../usage/UsageLimits";
 
 export function providerUsageLimitColor(remainingPercent: number): string {
   if (remainingPercent > 50) return "var(--color-success)";
@@ -9,7 +19,27 @@ export function providerUsageLimitColor(remainingPercent: number): string {
   return "var(--color-error)";
 }
 
-function UsageWindow(props: { window: ServerProviderUsageWindow; providerLabel: string }) {
+export function canResetLowWeeklyLimit(
+  window: ServerProviderUsageWindow,
+  credits: ServerProviderResetCredits | undefined,
+): boolean {
+  return window.kind === "weekly" && window.usedPercent > 90 && (credits?.availableCount ?? 0) > 0;
+}
+
+function UsageWindow(props: {
+  window: ServerProviderUsageWindow;
+  providerLabel: string;
+  environmentId: EnvironmentId;
+  instanceId: ProviderInstanceId;
+  credits: ServerProviderResetCredits | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  const redeem = useResetCredit(props.environmentId, { instanceId: props.instanceId });
+  const showReset = canResetLowWeeklyLimit(props.window, props.credits);
+  useEffect(() => {
+    if (redeem.status) toastManager.add({ type: "info", title: redeem.status });
+  }, [redeem.status]);
   const remaining = remainingPercent(props.window);
   const radius = 7.5;
   const circumference = 2 * Math.PI * radius;
@@ -20,12 +50,19 @@ function UsageWindow(props: { window: ServerProviderUsageWindow; providerLabel: 
     : null;
 
   return (
-    <Tooltip>
-      <TooltipTrigger
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) setNow(Date.now());
+      }}
+    >
+      <PopoverTrigger
+        openOnHover
         render={
-          <span
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1 text-2xs text-muted-foreground tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-            tabIndex={0}
+          <button
+            type="button"
+            className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-md px-1 text-2xs text-muted-foreground tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={`${props.window.label} ${props.providerLabel} limit: ${remaining}% remaining`}
           />
         }
@@ -54,20 +91,50 @@ function UsageWindow(props: { window: ServerProviderUsageWindow; providerLabel: 
         </svg>
         <span>{props.window.label}</span>
         <span className="font-medium text-foreground">{remaining}%</span>
-      </TooltipTrigger>
-      <TooltipPopup side="top">
-        <span className="flex flex-col gap-0.5">
+      </PopoverTrigger>
+      <PopoverPopup
+        side="top"
+        padding="compact"
+        width={showReset ? "md" : "auto"}
+        tooltipStyle={!showReset}
+      >
+        <div className="flex flex-col gap-0.5 text-xs">
           <span>{remaining}% remaining</span>
           {resetTime ? <span className="text-secondary-label">Resets {resetTime}</span> : null}
-        </span>
-      </TooltipPopup>
-    </Tooltip>
+          {showReset && props.credits ? (
+            <div className="mt-2 flex flex-col items-start gap-2 border-t border-border/60 pt-2">
+              <span className="text-muted-foreground tabular-nums">
+                {resetCreditsSummary(props.credits, now)}
+              </span>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={redeem.busy}
+                onClick={() => {
+                  setOpen(false);
+                  redeem.setConfirming(true);
+                }}
+              >
+                {redeem.busy ? "Using…" : "Use reset"}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </PopoverPopup>
+      <ResetCreditDialog
+        open={redeem.confirming}
+        onOpenChange={redeem.setConfirming}
+        onConfirm={() => void redeem.redeem()}
+      />
+    </Popover>
   );
 }
 
 export function ProviderUsageLimitsMeter(props: {
   limits: ServerProviderUsageLimits;
   providerLabel: string;
+  environmentId: EnvironmentId;
+  instanceId: ProviderInstanceId;
 }) {
   if (props.limits.unavailable || props.limits.windows.length === 0) return null;
   return (
@@ -76,7 +143,14 @@ export function ProviderUsageLimitsMeter(props: {
       aria-label={`${props.providerLabel} limits`}
     >
       {props.limits.windows.slice(0, 2).map((window) => (
-        <UsageWindow key={window.id} window={window} providerLabel={props.providerLabel} />
+        <UsageWindow
+          key={JSON.stringify([props.environmentId, props.instanceId, window.id])}
+          window={window}
+          providerLabel={props.providerLabel}
+          environmentId={props.environmentId}
+          instanceId={props.instanceId}
+          credits={props.limits.resetCredits}
+        />
       ))}
     </div>
   );

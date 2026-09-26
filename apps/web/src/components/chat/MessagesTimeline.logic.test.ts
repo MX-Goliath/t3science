@@ -1,3 +1,4 @@
+import { countCompletedWorkCommands } from "@t3tools/client-runtime/work-log/presentation";
 import { describe, expect, it } from "vite-plus/test";
 import {
   ApprovalRequestId,
@@ -2032,6 +2033,60 @@ describe("deriveMessagesTimelineRows", () => {
       tone: "tool" as const,
     },
   });
+
+  it.each([false, true])(
+    "resets command counts after assistant text, with reasoning: %s",
+    (withReasoning) => {
+      const before = [
+        toolEntry("before-1", "2026-01-01T00:00:01Z", "turn-1"),
+        toolEntry("before-2", "2026-01-01T00:00:02Z", "turn-1"),
+      ];
+      const after = [
+        toolEntry("after-1", "2026-01-01T00:00:04Z", "turn-1"),
+        toolEntry("after-2", "2026-01-01T00:00:06Z", "turn-1"),
+      ];
+      const timelineEntries = [
+        ...before,
+        answerEntry("answer", "2026-01-01T00:00:03Z", "turn-1"),
+        after[0]!,
+        ...(withReasoning ? [reasoningEntry("thought", "2026-01-01T00:00:05Z", "turn-1")] : []),
+        after[1]!,
+      ];
+      const rows = deriveMessagesTimelineRows({
+        timelineEntries,
+        runningTurnId: TurnId.make("turn-1"),
+        isWorking: true,
+        activeTurnStartedAt: "2026-01-01T00:00:00Z",
+        turnDiffSummaries: [],
+        supportsConversationRollback: false,
+      });
+      const live = rows.find((row) => row.id === "live-activity-row");
+      const work =
+        live?.kind === "activity-group"
+          ? live.entries.flatMap((entry) => (entry.kind === "work" ? [entry.entry] : []))
+          : live?.kind === "work-live"
+            ? live.groupedEntries
+            : [];
+      expect(work.map((entry) => entry.id)).toEqual(["after-1", "after-2"]);
+      expect(countCompletedWorkCommands(work, after[1]!.entry)).toBe(1);
+      const resetRows = deriveMessagesTimelineRows({
+        timelineEntries: [
+          ...timelineEntries,
+          answerEntry("next-answer", "2026-01-01T00:00:07Z", "turn-1"),
+          toolEntry("next-tool", "2026-01-01T00:00:08Z", "turn-1"),
+        ],
+        runningTurnId: TurnId.make("turn-1"),
+        isWorking: true,
+        activeTurnStartedAt: "2026-01-01T00:00:00Z",
+        turnDiffSummaries: [],
+        supportsConversationRollback: false,
+      });
+      const nextLive = resetRows.find((row) => row.kind === "work-live" && row.active);
+      expect(nextLive?.kind).toBe("work-live");
+      if (nextLive?.kind === "work-live")
+        expect(countCompletedWorkCommands(nextLive.groupedEntries, nextLive.entry)).toBe(0);
+    },
+  );
 
   it("keeps all thoughts in one activity row as current and earlier traces stream", () => {
     const entries = [1, 2, 3, 4].map((second) => {

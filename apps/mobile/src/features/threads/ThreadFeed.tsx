@@ -1446,6 +1446,7 @@ function renderFeedEntry(
         rowSizing={props.workRowSizing}
         expanded={entry.expanded}
         hiddenCount={entry.hiddenCount}
+        additionalCommandCount={entry.additionalCommandCount}
         iconSubtleColor={iconSubtleColor}
         summary={entry.summary}
         summaryKind={entry.summaryKind}

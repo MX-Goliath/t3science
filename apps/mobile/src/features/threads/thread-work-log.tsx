@@ -919,6 +919,7 @@ export function ThreadWorkGroupToggle(props: {
   readonly rowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
   readonly expanded: boolean;
   readonly hiddenCount: number;
+  readonly additionalCommandCount: number;
   readonly iconSubtleColor: import("react-native").ColorValue;
   readonly summary: string;
   readonly summaryKind: ToolGroupSummaryKind;
@@ -930,9 +931,12 @@ export function ThreadWorkGroupToggle(props: {
   readonly shimmer: boolean;
   readonly onToggle: () => void;
 }) {
-  const accessibilityLabel = props.hasFailure
-    ? `${props.summary}, tool call failed`
-    : props.summary;
+  const commandCountLabel =
+    props.additionalCommandCount > 0
+      ? `+${props.additionalCommandCount} ${props.additionalCommandCount === 1 ? "command" : "commands"}`
+      : null;
+  const summaryLabel = commandCountLabel ? `${props.summary}, ${commandCountLabel}` : props.summary;
+  const accessibilityLabel = props.hasFailure ? `${summaryLabel}, tool call failed` : summaryLabel;
   const icon =
     props.summaryToolIcon ??
     (props.toolSurface
@@ -985,6 +989,11 @@ export function ThreadWorkGroupToggle(props: {
             </Text>
           </>
         )}
+        {commandCountLabel ? (
+          <Text className="shrink-0 text-xs text-foreground-subtle tabular-nums">
+            {commandCountLabel}
+          </Text>
+        ) : null}
         <ThreadDisclosureChevron
           expanded={props.expanded}
           collapsedDirection="down"

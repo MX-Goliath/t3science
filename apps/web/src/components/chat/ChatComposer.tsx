@@ -1208,6 +1208,8 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   compact: boolean;
   providerUsageLimits: ServerProviderUsageLimits | null;
   providerLabel: string;
+  environmentId: EnvironmentId;
+  providerInstanceId: ProviderInstanceId | null;
   activeContextWindow: ContextWindowSnapshot | null;
   reserveContextWindowMeter: boolean;
   activeThreadModelDisplayName: string | null;
@@ -1241,10 +1243,12 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 }) {
   return (
     <>
-      {props.providerUsageLimits ? (
+      {props.providerUsageLimits && props.providerInstanceId ? (
         <ProviderUsageLimitsMeter
           limits={props.providerUsageLimits}
           providerLabel={props.providerLabel}
+          environmentId={props.environmentId}
+          instanceId={props.providerInstanceId}
         />
       ) : null}
       {props.activeContextWindow ? (
@@ -7293,6 +7297,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
                     providerUsageLimits={selectedProviderStatus?.usageLimits ?? null}
                     providerLabel={selectedProviderStatus?.displayName?.trim() || "Provider"}
+                    environmentId={routeThreadRef.environmentId}
+                    providerInstanceId={selectedProviderStatus?.instanceId ?? null}
                     activeContextWindow={
                       settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }

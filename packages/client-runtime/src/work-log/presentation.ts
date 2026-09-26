@@ -367,6 +367,35 @@ export function workLogEntryIsToolLike(entry: WorkLogPresentationEntry): boolean
   return entry.itemType !== undefined && isToolLifecycleItemType(entry.itemType);
 }
 
+/** Counts finished calls in one activity run, excluding the call shown in its live label. */
+export function countCompletedWorkCommands(
+  entries: ReadonlyArray<WorkLogPresentationEntry & { readonly id: string }>,
+  current?: WorkLogPresentationEntry & { readonly id: string },
+): number {
+  const identity = (entry: WorkLogPresentationEntry & { readonly id: string }) =>
+    JSON.stringify([entry.turnId ?? null, entry.toolCallId ?? entry.id]);
+  const currentId = current === undefined ? undefined : identity(current);
+  const calls = new Map(entries.map((entry) => [identity(entry), entry]));
+  let count = 0;
+  for (const [id, entry] of calls) {
+    if (id === currentId || !workLogEntryIsToolLike(entry)) continue;
+    if (entry.sourceActivityKind && !entry.sourceActivityKind.startsWith("tool.")) continue;
+    if (
+      entry.toolLifecycleStatus === "inProgress" ||
+      entry.toolLifecycleStatus === "stopped" ||
+      entry.toolLifecycleStatus === "declined"
+    )
+      continue;
+    if (
+      entry.toolLifecycleStatus === undefined &&
+      (entry.sourceActivityKind === "tool.started" || entry.sourceActivityKind === "tool.updated")
+    )
+      continue;
+    count += 1;
+  }
+  return count;
+}
+
 /** Maps item and task status to the status shown on a work-log row. */
 export function extractWorkLogToolLifecycleStatus(
   payloadValue: unknown,

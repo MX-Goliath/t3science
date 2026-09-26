@@ -27,6 +27,7 @@ import {
   summarizeToolGroup,
   toolGroupAction,
   toolGroupSummaryKind,
+  countCompletedWorkCommands,
   workEntryIndicatesToolFailure,
   workEntryIndicatesToolSuccess,
   workLogEntryIsToolLike,
@@ -166,6 +167,7 @@ export type ThreadFeedEntry =
       readonly turnId: TurnId | null;
       readonly groupId: string;
       readonly hiddenCount: number;
+      readonly additionalCommandCount: number;
       readonly expanded: boolean;
       readonly summary: string;
       readonly summaryKind: ToolGroupSummaryKind;
@@ -1980,6 +1982,13 @@ function appendMixedActivityRun(
     turnId,
     groupId,
     hiddenCount: activities.length + thoughtCount,
+    additionalCommandCount: live
+      ? countCompletedWorkCommands(activities.map((activity) => activity.workEntry)) -
+        (thinking
+          ? 0
+          : countCompletedWorkCommands(summaryActivities.map((activity) => activity.workEntry)) -
+            (toolSummary?.additionalCommandCount ?? 0))
+      : 0,
     expanded,
     summary: thinking
       ? "Thinking"
@@ -2259,6 +2268,12 @@ function appendToolGroupRows(
     turnId: sourceGroup.turnId,
     groupId,
     hiddenCount: activities.length,
+    additionalCommandCount: live
+      ? countCompletedWorkCommands(
+          activities.map((activity) => activity.workEntry),
+          latestActivity.workEntry,
+        )
+      : 0,
     expanded,
     summary,
     summaryKind: toolGroupSummaryKind(
