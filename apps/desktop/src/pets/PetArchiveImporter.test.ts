@@ -19,7 +19,11 @@ describe("PetArchiveImporter", () => {
         ["claude.zip", "claude"],
       ] as const) {
         const result = await extractPetArchive({
-          archivePath: NodePath.resolve("apps/desktop/resources/desktop-pets", fileName),
+          archivePath: NodePath.resolve(
+            import.meta.dirname,
+            "../../resources/desktop-pets",
+            fileName,
+          ),
           petsDirectory,
         });
         assert.equal(result.manifest.id, expectedId);
@@ -43,7 +47,7 @@ describe("PetArchiveImporter", () => {
     try {
       const archive = Buffer.from(
         await NodeFS.readFile(
-          NodePath.resolve("apps/desktop/resources/desktop-pets/openai-codex.zip"),
+          NodePath.resolve(import.meta.dirname, "../../resources/desktop-pets/openai-codex.zip"),
         ),
       );
       // The archive's root folder, which is independent of the pet id.

@@ -58,6 +58,7 @@ const importedThread: OrchestrationThread = {
   proposedPlans: [],
   activities: [],
   checkpoints: [],
+  pullRequests: [],
   session: {
     threadId: ThreadId.make("portable-thread"),
     status: "running",

@@ -1,3 +1,5 @@
+import { resolveProjectScripts } from "@t3tools/shared/projectScripts";
+import { ServerSettingsService } from "../serverSettings.ts";
 import {
   CommandId,
   PortableConversationDocument,
@@ -93,6 +95,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   const snapshots = yield* ProjectionSnapshotQuery;
   const providers = yield* ProviderRegistry;
   const portableContext = yield* PortableConversationContext;
+  const settingsService = yield* ServerSettingsService;
   const enabledProjects = yield* Ref.make(new Map<ProjectId, string>());
   const threadProjects = yield* Ref.make(new Map<ThreadId, ProjectId>());
 
@@ -248,7 +251,11 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
     yield* Effect.forEach(projectThreads, (thread) => exportThread(project.workspaceRoot, thread), {
       concurrency: 1,
     });
-    yield* writeManifest(project.workspaceRoot, true, project.scripts);
+    yield* writeManifest(
+      project.workspaceRoot,
+      true,
+      resolveProjectScripts(yield* settingsService.getSettings, project),
+    );
     yield* Ref.update(enabledProjects, (current) =>
       new Map(current).set(project.id, project.workspaceRoot),
     );
@@ -266,16 +273,22 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
       const scripts = Option.isSome(manifest) ? manifest.value.scripts : undefined;
       if (
         scripts === undefined ||
-        (yield* encodeProjectScripts(scripts)) === (yield* encodeProjectScripts(project.scripts))
+        (yield* encodeProjectScripts(scripts)) ===
+          (yield* encodeProjectScripts(
+            resolveProjectScripts(yield* settingsService.getSettings, project),
+          ))
       ) {
         return project;
       }
-      const uuid = yield* crypto.randomUUIDv4;
-      yield* engine.dispatch({
-        type: "project.meta.update",
-        commandId: CommandId.make(`server:portable-project-scripts:${uuid}`),
-        projectId: project.id,
-        scripts: Array.from(scripts),
+      const settings = yield* settingsService.getSettings;
+      yield* settingsService.updateSettings({
+        projectSettingsOverrides: {
+          ...settings.projectSettingsOverrides,
+          [project.id]: {
+            ...settings.projectSettingsOverrides[project.id],
+            defaultProjectScripts: Array.from(scripts),
+          },
+        },
       });
       return { ...project, scripts: Array.from(scripts) };
     },
@@ -416,7 +429,11 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
           yield* importProject(importedProject);
           yield* exportProject(importedProject);
         } else {
-          yield* writeManifest(project.workspaceRoot, false, project.scripts);
+          yield* writeManifest(
+            project.workspaceRoot,
+            false,
+            resolveProjectScripts(yield* settingsService.getSettings, project),
+          );
           yield* Ref.update(enabledProjects, (current) => {
             const next = new Map(current);
             next.delete(project.id);
@@ -454,7 +471,11 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
         event.payload.scripts !== undefined &&
         (yield* Ref.get(enabledProjects)).has(event.payload.projectId)
       ) {
-        yield* writeManifest(project.value.workspaceRoot, true, project.value.scripts);
+        yield* writeManifest(
+          project.value.workspaceRoot,
+          true,
+          resolveProjectScripts(yield* settingsService.getSettings, project.value),
+        );
         yield* Ref.update(enabledProjects, (current) =>
           new Map(current).set(project.value.id, project.value.workspaceRoot),
         );
@@ -527,6 +548,34 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
         ),
       ),
     );
+    const settingsChanges = yield* settingsService.subscribeChanges;
+    yield* Stream.runForEach(settingsChanges, (settings) =>
+      Effect.gen(function* () {
+        const enabled = yield* Ref.get(enabledProjects);
+        yield* Effect.forEach(
+          [...enabled],
+          ([projectId, workspaceRoot]) =>
+            Effect.gen(function* () {
+              const project = yield* snapshots.getProjectShellById(projectId);
+              if (Option.isNone(project)) return;
+              const scripts = resolveProjectScripts(settings, project.value);
+              const manifest = yield* readManifest(workspaceRoot);
+              if (
+                Option.isSome(manifest) &&
+                (yield* encodeProjectScripts(manifest.value.scripts ?? [])) ===
+                  (yield* encodeProjectScripts(scripts))
+              )
+                return;
+              yield* writeManifest(workspaceRoot, true, scripts);
+            }),
+          { concurrency: 1, discard: true },
+        );
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("failed to mirror portable project actions", { cause }),
+        ),
+      ),
+    ).pipe(Effect.forkScoped);
     yield* Stream.runForEach(engine.streamDomainEvents, (event) =>
       handleEvent(event).pipe(
         Effect.catchCause((cause) =>

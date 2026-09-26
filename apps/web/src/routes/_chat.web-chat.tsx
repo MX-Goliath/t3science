@@ -26,7 +26,7 @@ function WebChatRouteView() {
 
   if (!isElectron || !enabled || !bridge) {
     return (
-      <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+      <SidebarInset className="h-dvh min-h-0 overflow-hidden">
         <Empty className="flex-1">
           <EmptyHeader className="max-w-md">
             <EmptyTitle>Web chat is unavailable</EmptyTitle>
@@ -44,7 +44,7 @@ function WebChatRouteView() {
   }
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header
           className={cn(

@@ -28,10 +28,10 @@ export function WorkingPetIndicator({
   }
 
   return (
-    <span className="inline-flex items-center gap-[3px]" data-working-indicator="dots">
+    <span className="inline-flex items-center gap-0.75" data-working-indicator="dots">
       <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse" />
-      <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse [animation-delay:200ms]" />
-      <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse [animation-delay:400ms]" />
+      <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse" />
+      <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse" />
     </span>
   );
 }

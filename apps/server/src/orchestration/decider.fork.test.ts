@@ -67,6 +67,7 @@ const sourceThread: OrchestrationThread = {
   proposedPlans: [],
   activities: [],
   checkpoints: [],
+  pullRequests: [],
   session: null,
 };
 
@@ -128,10 +129,15 @@ it.layer(NodeServices.layer)("conversation fork decider", (it) => {
 
       expect(event.type).toBe("thread.portable-imported");
       expect(event.aggregateId).toBe(newThreadId);
-      expect(event.payload.thread.messages.map((message) => message.id)).toEqual([
-        MessageId.make("question"),
-        MessageId.make("answer"),
+      expect(event.payload.thread.messages.map((message) => message.text)).toEqual([
+        "Question",
+        "Answer",
       ]);
+      expect(
+        event.payload.thread.messages.every((message) =>
+          sourceThread.messages.every((source) => source.id !== message.id),
+        ),
+      ).toBe(true);
       expect(event.payload.thread).toMatchObject({
         id: newThreadId,
         title: "Fork: Original conversation",

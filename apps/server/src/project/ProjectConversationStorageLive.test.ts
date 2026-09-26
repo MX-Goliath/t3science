@@ -1,3 +1,6 @@
+import { DEFAULT_SERVER_SETTINGS, type ServerSettings } from "@t3tools/contracts";
+import { ServerSettingsService } from "../serverSettings.ts";
+import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -99,6 +102,7 @@ function makeThread(input: {
     proposedPlans: [],
     activities: [],
     checkpoints: [],
+    pullRequests: [],
     session: null,
   };
 }
@@ -258,7 +262,28 @@ describe("ProjectConversationStorageLive", () => {
             ),
         });
 
+        let settings: ServerSettings = { ...DEFAULT_SERVER_SETTINGS, projectSettingsFolded: true };
+        const nextSettings = yield* Deferred.make<ServerSettings>();
+        const settingsHandled = yield* Deferred.make<void>();
+        const settingsChanges = Stream.fromEffect(Deferred.await(nextSettings)).pipe(
+          Stream.concat(
+            Stream.fromEffect(
+              Deferred.succeed(settingsHandled, undefined).pipe(Effect.andThen(Effect.never)),
+            ),
+          ),
+        );
+        const settingsLayer = Layer.mock(ServerSettingsService)({
+          getSettings: Effect.sync(() => settings),
+          updateSettings: (patch) =>
+            Effect.sync(() => {
+              settings = applyServerSettingsPatch(settings, patch);
+              return settings;
+            }),
+          subscribeChanges: Effect.succeed(settingsChanges),
+          streamChanges: settingsChanges,
+        });
         const storageLayer = ProjectConversationStorageLive.pipe(
+          Layer.provideMerge(settingsLayer),
           Layer.provideMerge(engineLayer),
           Layer.provideMerge(snapshotsLayer),
           Layer.provideMerge(Layer.mock(ProviderRegistry)({ getProviders: Effect.succeed([]) })),
@@ -283,7 +308,9 @@ describe("ProjectConversationStorageLive", () => {
           expect(
             readModel.threads.find((thread) => thread.id === "shared-thread")?.messages[0]?.text,
           ).toBe("new portable history");
-          expect(readModel.projects[0]?.scripts).toEqual(portableScripts);
+          expect(settings.projectSettingsOverrides[projectId]?.defaultProjectScripts).toEqual(
+            portableScripts,
+          );
 
           const exportedShared = decodeDocument(
             NodeFS.readFileSync(NodePath.join(threadsDirectory, "shared-thread.json"), "utf8"),
@@ -312,6 +339,14 @@ describe("ProjectConversationStorageLive", () => {
                 : current,
             ),
           };
+          const serverSettings = yield* ServerSettingsService;
+          yield* serverSettings.updateSettings({
+            projectSettingsOverrides: {
+              [projectId]: { defaultProjectScripts: Array.from(updatedScripts) },
+            },
+          });
+          yield* Deferred.succeed(nextSettings, settings);
+          yield* Deferred.await(settingsHandled);
           yield* Deferred.succeed(nextDomainEvent, {
             sequence: 1,
             eventId: EventId.make("portable-project-actions-updated"),

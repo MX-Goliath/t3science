@@ -56,7 +56,7 @@ export function ProviderPetSettings({
           disabled={pets.busy}
           onSelect={() => assign(null)}
         >
-          <span className="text-[10px] text-muted-foreground">None</span>
+          <span className="text-3xs text-muted-foreground">None</span>
         </PetChoiceTile>
         {state.pets.map((pet) => (
           <PetChoiceTile
@@ -103,7 +103,7 @@ export function ProviderPetSettings({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex min-h-44 items-center justify-center overflow-hidden rounded-md bg-[radial-gradient(circle_at_center,var(--color-muted)_0%,transparent_68%)]">
+          <div className="flex min-h-44 items-center justify-center overflow-hidden rounded-md bg-muted/30">
             <PetSprite pet={assignedPet} animation={previewAnimation} size="preview" />
           </div>
         </div>
@@ -141,7 +141,7 @@ function PetChoiceTile({
       )}
     >
       <span className="flex h-16 items-center justify-center">{children}</span>
-      <span className="w-full truncate text-[11px] text-foreground">{label}</span>
+      <span className="w-full truncate text-2xs text-foreground">{label}</span>
       {selected ? (
         <span className="absolute right-1 top-1 flex size-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <CheckIcon className="size-2" aria-hidden />

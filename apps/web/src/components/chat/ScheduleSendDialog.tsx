@@ -95,8 +95,8 @@ export function ScheduleSendDialog(props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogPopup className="max-w-sm overflow-hidden" bottomStickOnMobile={false}>
         <form className="contents" onSubmit={submit}>
-          <DialogHeader className="gap-1.5 px-5 pt-5 pb-3">
-            <DialogTitle className="text-lg">Schedule message</DialogTitle>
+          <DialogHeader>
+            <DialogTitle>Schedule message</DialogTitle>
             <DialogDescription>Choose when this prompt should be sent.</DialogDescription>
           </DialogHeader>
 
@@ -123,13 +123,8 @@ export function ScheduleSendDialog(props: {
                   key={preset.id}
                   type="button"
                   size="sm"
-                  variant="outline"
+                  variant={selectedPreset === preset.id ? "secondary" : "outline"}
                   aria-pressed={selectedPreset === preset.id}
-                  className={cn(
-                    "rounded-lg transition-colors",
-                    selectedPreset === preset.id &&
-                      "border-sky-500/50 bg-sky-500/15 text-sky-700 shadow-sky-500/10 hover:bg-sky-500/20 dark:text-sky-300",
-                  )}
                   onClick={() => setSelectedDate(preset.date(), preset.id)}
                 >
                   {preset.label}
@@ -177,13 +172,13 @@ export function ScheduleSendDialog(props: {
                 "flex min-h-10 items-center gap-2.5 rounded-lg border px-3 text-sm",
                 validationError
                   ? "border-destructive/40 bg-destructive/5 text-destructive-foreground"
-                  : "border-sky-500/20 bg-sky-500/[0.06] text-foreground",
+                  : "border-primary/20 bg-primary/5 text-foreground",
               )}
             >
               <TimerIcon
                 className={cn(
                   "size-4 shrink-0",
-                  validationError ? "text-destructive-foreground" : "text-sky-500",
+                  validationError ? "text-destructive-foreground" : "text-primary",
                 )}
                 aria-hidden="true"
               />
@@ -194,7 +189,7 @@ export function ScheduleSendDialog(props: {
             </p>
           </div>
 
-          <DialogFooter className="border-t border-border/70 bg-muted/40 px-5 py-3">
+          <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => props.onOpenChange(false)}>
               Cancel
             </Button>

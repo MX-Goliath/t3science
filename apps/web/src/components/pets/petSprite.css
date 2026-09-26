@@ -1,15 +1,3 @@
-.desktop-pet-sprite {
-  display: inline-block;
-  flex: 0 0 auto;
-  width: 28px;
-  height: 30px;
-  background-repeat: no-repeat;
-  background-size: 800% 900%;
-  background-position-x: 0;
-  background-position-y: var(--pet-y-position);
-  image-rendering: pixelated;
-  animation: desktop-pet-sprite-frames var(--pet-duration) steps(var(--pet-frames)) infinite;
-}
 
 .desktop-pet-sprite[data-pet-size="card"] {
   width: 58px;
@@ -45,3 +33,6 @@
     animation: none;
   }
 }
+
+[data-working-indicator="dots"] > :nth-child(2) { animation-delay: 200ms; }
+[data-working-indicator="dots"] > :nth-child(3) { animation-delay: 400ms; }

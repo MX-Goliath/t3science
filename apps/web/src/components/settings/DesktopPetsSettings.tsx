@@ -74,8 +74,8 @@ export function DesktopPetsSettings() {
                   <div className="flex justify-end border-t border-border/50 px-2 py-1.5">
                     <Button
                       size="xs"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
+                      variant="ghost-destructive"
+
                       disabled={pets.busy}
                       onClick={() => void pets.removePet(pet.id)}
                     >

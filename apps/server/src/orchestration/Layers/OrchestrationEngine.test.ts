@@ -1,3 +1,4 @@
+import { ComposerContextId } from "@t3tools/contracts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -28,7 +29,7 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { PersistenceSqlError } from "../../persistence/Errors.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -61,7 +62,10 @@ const asMessageId = (value: string): MessageId => MessageId.make(value);
 const asTurnId = (value: string): TurnId => TurnId.make(value);
 const asCheckpointRef = (value: string): CheckpointRef => CheckpointRef.make(value);
 
-function makeOrchestrationLayer(databasePath?: string) {
+function makeOrchestrationLayer(
+  databasePath?: string,
+  repositoryIdentityResolver?: RepositoryIdentityResolver.RepositoryIdentityResolver["Service"],
+) {
   const persistence = databasePath
     ? makeSqlitePersistenceLive(databasePath)
     : SqlitePersistenceMemory;
@@ -79,15 +83,27 @@ function makeOrchestrationLayer(databasePath?: string) {
     Layer.provide(ThreadPlanProgress.layer),
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provideMerge(OrchestrationCommandReceiptRepositoryLive),
-    Layer.provide(RepositoryIdentityResolver.layer),
+    Layer.provide(
+      repositoryIdentityResolver
+        ? Layer.succeed(
+            RepositoryIdentityResolver.RepositoryIdentityResolver,
+            repositoryIdentityResolver,
+          )
+        : RepositoryIdentityResolver.layer,
+    ),
     Layer.provide(persistence),
     Layer.provideMerge(ServerConfigLayer),
     Layer.provideMerge(NodeServices.layer),
   );
 }
 
-async function createOrchestrationSystem(databasePath?: string) {
-  const runtime = ManagedRuntime.make(makeOrchestrationLayer(databasePath));
+async function createOrchestrationSystem(
+  databasePath?: string,
+  repositoryIdentityResolver?: RepositoryIdentityResolver.RepositoryIdentityResolver["Service"],
+) {
+  const runtime = ManagedRuntime.make(
+    makeOrchestrationLayer(databasePath, repositoryIdentityResolver),
+  );
   const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
   const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
   return {
@@ -153,6 +169,22 @@ describe("OrchestrationEngine", () => {
         messages: [
           {
             id: MessageId.make("user:msg-1"),
+            context: {
+              version: 1,
+              records: [
+                {
+                  version: 1,
+                  contextId: ComposerContextId.make("ctx_saved"),
+                  kind: "terminal",
+                  label: "Terminal 1",
+                  terminalId: "default",
+                  terminalLabel: "Terminal 1",
+                  lineStart: 1,
+                  lineEnd: 1,
+                  text: "saved terminal output",
+                },
+              ],
+            },
             role: "user",
             text: "Question",
             turnId: null,
@@ -173,6 +205,7 @@ describe("OrchestrationEngine", () => {
         proposedPlans: [],
         activities: [],
         checkpoints: [],
+        pullRequests: [],
         session: null,
       };
       await system.run(
@@ -202,10 +235,19 @@ describe("OrchestrationEngine", () => {
       );
 
       const forkedThread = Option.getOrThrow(await system.readThread(forkedThreadId));
-      expect(forkedThread.messages.map((message) => message.id)).toEqual([
+      const original = Option.getOrThrow(await system.readThread(sourceThreadId));
+      expect(original.messages.map((message) => message.id)).toEqual([
         MessageId.make("user:msg-1"),
         assistantMessageId,
       ]);
+      expect(forkedThread.messages.map((message) => message.text)).toEqual(["Question", "Answer"]);
+      expect(forkedThread.messages[0]?.context).toEqual(sourceThread.messages[0]?.context);
+      expect(original.messages[0]?.context).toEqual(sourceThread.messages[0]?.context);
+      expect(
+        forkedThread.messages.every((message) =>
+          original.messages.every((source) => source.id !== message.id),
+        ),
+      ).toBe(true);
     } finally {
       await system.dispose();
       await NodeFSP.rm(directory, { recursive: true, force: true });
@@ -336,6 +378,17 @@ describe("OrchestrationEngine", () => {
           threadId,
           requestId,
           answers: { "0": "pnpm", "1": "Example" },
+          attachmentsByQuestionId: {
+            "1": [
+              {
+                type: "file" as const,
+                id: "thread-1-00000000-0000-4000-8000-0000000000aa-txt",
+                name: "spec.txt",
+                mimeType: "text/plain",
+                sizeBytes: 4,
+              },
+            ],
+          },
           createdAt: "2026-01-01T00:00:02.000Z",
         };
         await expect(
@@ -353,8 +406,9 @@ describe("OrchestrationEngine", () => {
           (message) => message.role === "user",
         );
         expect(userMessages).toHaveLength(1);
+        expect(userMessages?.[0]?.attachments).toEqual(response.attachmentsByQuestionId["1"]);
         expect(userMessages?.[0]?.text).toBe(
-          "Which package manager?\npnpm\n\nWhat should it be named?\nExample",
+          "Which package manager?\npnpm\n\nWhat should it be named?\nExample\nAttached file: spec.txt (thread-1-00000000-0000-4000-8000-0000000000aa-txt)",
         );
         expect(
           after.threads[0]?.activities.find((activity) => activity.kind === "user-input.resolved")
@@ -469,6 +523,7 @@ describe("OrchestrationEngine", () => {
           proposedPlans: [],
           activities: [],
           checkpoints: [],
+          pullRequests: [],
           session: null,
         },
       ],
@@ -481,6 +536,7 @@ describe("OrchestrationEngine", () => {
         proposedPlans: [],
         activities: [],
         checkpoints: [],
+        pullRequests: [],
       })),
     };
     let fullSnapshotReadCount = 0;
@@ -489,6 +545,7 @@ describe("OrchestrationEngine", () => {
       Layer.provide(
         Layer.succeed(ProjectionSnapshotQuery, {
           getUserInputActivity: () => Effect.die("unused"),
+          listActivitiesByKind: () => Effect.die("unused"),
           getCommandReadModel: () => Effect.succeed(commandReadModel),
           getSnapshot: () =>
             Effect.sync(() => {
@@ -502,6 +559,8 @@ describe("OrchestrationEngine", () => {
               threads: [],
               updatedAt: projectionSnapshot.updatedAt,
             }),
+          getDeletedWorktreeThreads: () => Effect.die("unused"),
+          listThreadsWithPullRequests: () => Effect.die("unused"),
           getArchivedShellSnapshot: () =>
             Effect.succeed({
               snapshotSequence: projectionSnapshot.snapshotSequence,
@@ -513,17 +572,18 @@ describe("OrchestrationEngine", () => {
             Effect.succeed({ snapshotSequence: projectionSnapshot.snapshotSequence }),
           getCounts: () => Effect.succeed({ projectCount: 1, threadCount: 1 }),
           getEventReplayStats: () => Effect.die("unused"),
-          getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
-          getProjectShellById: () => Effect.succeed(Option.none()),
-          getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),
+          getActiveProjectByWorkspaceRoot: () => Effect.succeedNone,
+          getProjectShellById: () => Effect.succeedNone,
+          getProjectShells: () => Effect.succeed([]),
+          getFirstActiveThreadIdByProjectId: () => Effect.succeedNone,
           getImportedAgentSessionSources: () => Effect.die("unused"),
-          getThreadCheckpointContext: () => Effect.succeed(Option.none()),
-          getFullThreadDiffContext: () => Effect.succeed(Option.none()),
+          getThreadCheckpointContext: () => Effect.succeedNone,
+          getFullThreadDiffContext: () => Effect.succeedNone,
           getThreadRuntimeContext: () => Effect.die("unused"),
           getTurnStartMessage: () => Effect.die("unused"),
-          getThreadShellById: () => Effect.succeed(Option.none()),
-          getThreadDetailById: () => Effect.succeed(Option.none()),
-          getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
+          getThreadShellById: () => Effect.succeedNone,
+          getThreadDetailById: () => Effect.succeedNone,
+          getThreadDetailSnapshot: () => Effect.succeedNone,
           searchThreads: () => Effect.succeed({ matches: [] }),
         }),
       ),
@@ -1094,7 +1154,22 @@ describe("OrchestrationEngine", () => {
   it.each(["unlink", "relink", "branch", "worktree", "project", "delete"] as const)(
     "rejects PR discovery completed after a newer %s command",
     async (change) => {
-      const system = await createOrchestrationSystem();
+      const system = await createOrchestrationSystem(undefined, {
+        resolve: (workspaceRoot) =>
+          Effect.succeed({
+            canonicalKey: "example.test/owner/repository",
+            provider: "github",
+            displayName: "owner/repository",
+            rootPath: workspaceRoot,
+            locator: {
+              source: "git-remote",
+              remoteName: "origin",
+              remoteUrl: "https://example.test/owner/repository.git",
+            },
+          }),
+      });
+      // Same-tick links must replace the old PR, not rely on timestamp ordering.
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(now()));
       try {
         const projectId = ProjectId.make("pr-race-project");
         const threadId = ThreadId.make("pr-race-thread");
@@ -1143,6 +1218,7 @@ describe("OrchestrationEngine", () => {
             linkedPullRequest: previous,
           }),
         );
+        expect((await system.readModel()).threads[0]?.linkedPullRequest).toEqual(previous);
         const metadataChanges = {
           unlink: { linkedPullRequest: null },
           relink: {
@@ -1196,6 +1272,9 @@ describe("OrchestrationEngine", () => {
         if (change === "delete") return;
         const current = (await system.readModel()).threads[0];
         expect(current?.branchPullRequest ?? null).toBeNull();
+        expect(current?.pullRequests.map((link) => link.number)).toEqual(
+          change === "unlink" ? [] : change === "relink" ? [3] : [1],
+        );
         expect(current?.linkedPullRequest ?? null).toEqual(
           change === "unlink"
             ? null
@@ -1204,6 +1283,7 @@ describe("OrchestrationEngine", () => {
               : previous,
         );
       } finally {
+        clock.mockRestore();
         await system.dispose();
       }
     },

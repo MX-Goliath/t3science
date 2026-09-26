@@ -1,12 +1,11 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 
 layer("050_ProjectionThreadMessageModelSelection", (it) => {
   it.effect("keeps upstream thread metadata and adds message model metadata", () =>
@@ -14,7 +13,7 @@ layer("050_ProjectionThreadMessageModelSelection", (it) => {
       const sql = yield* SqlClient.SqlClient;
 
       yield* runMigrations({ toMigrationInclusive: 49 });
-      yield* runMigrations({ toMigrationInclusive: 50 });
+      yield* runMigrations({ toMigrationInclusive: 55 });
 
       const threadColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)

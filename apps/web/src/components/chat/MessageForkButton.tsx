@@ -24,7 +24,7 @@ export function MessageForkButton({
             type="button"
             size={size}
             variant={variant}
-            className={cn("text-muted-foreground hover:text-foreground", className)}
+            className={cn("", className)}
           />
         }
       >

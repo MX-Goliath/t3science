@@ -24,7 +24,7 @@ function UsageWindow(props: { window: ServerProviderUsageWindow; providerLabel: 
       <TooltipTrigger
         render={
           <span
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1 text-[11px] text-muted-foreground tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1 text-2xs text-muted-foreground tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
             tabIndex={0}
             aria-label={`${props.window.label} ${props.providerLabel} limit: ${remaining}% remaining`}
           />
@@ -36,7 +36,8 @@ function UsageWindow(props: { window: ServerProviderUsageWindow; providerLabel: 
             cy="10"
             r={radius}
             fill="none"
-            stroke="color-mix(in oklab, var(--color-muted-foreground) 22%, transparent)"
+            stroke="currentColor"
+            className="text-muted-foreground/20"
             strokeWidth="2.5"
           />
           <circle

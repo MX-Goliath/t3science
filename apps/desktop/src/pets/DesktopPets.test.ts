@@ -83,7 +83,7 @@ function runPets<T>(
     stateDir,
     isDevelopment: false,
     resolveResourcePathCandidates: (fileName: string) => [
-      NodePath.resolve("apps/desktop/resources", fileName),
+      NodePath.resolve(import.meta.dirname, "../../resources", fileName),
     ],
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
   const layer = DesktopPetsModule.layer.pipe(
