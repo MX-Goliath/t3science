@@ -193,6 +193,8 @@ import { isThreadOwnPullRequest } from "./pullRequest/pullRequestDetail.logic";
 import { PullRequestDetailPanel } from "./pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
+import { ThreadPullRequestsPanel } from "./pullRequest/ThreadPullRequestsPanel";
+import { DevicePanel } from "./device/DevicePanel";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
 import {
@@ -1947,7 +1949,7 @@ export default function ChatView(props: ChatViewProps) {
   const renderedRightPanelSurface = rightPanelPresence.value?.activeSurface ?? null;
   const renderedRightPanelSurfaces = rightPanelPresence.value?.surfaces ?? [];
   const previewMiniPlayerVisible = shouldRenderPreviewMiniPlayer(
-    activePreviewMiniPlayer?.tabId ?? null,
+    activePreviewMiniPlayer?.source ?? null,
     renderedRightPanelSurface,
   );
   const canMaximizeRightPanel = rightPanelOpen && !shouldUseRightPanelSheet;
@@ -1964,7 +1966,10 @@ export default function ChatView(props: ChatViewProps) {
 
   useEffect(() => {
     if (!activeThreadRef || !activePreviewMiniPlayer) return;
-    const miniTabStillExists = Boolean(activePreviewState.sessions[activePreviewMiniPlayer.tabId]);
+    if (activePreviewMiniPlayer.source.kind !== "browser") return;
+    const miniTabStillExists = Boolean(
+      activePreviewState.sessions[activePreviewMiniPlayer.source.tabId],
+    );
     if (!miniTabStillExists) {
       usePreviewMiniPlayerStore.getState().close(activeThreadRef);
     }
@@ -7824,7 +7829,8 @@ export default function ChatView(props: ChatViewProps) {
         toastManager.add({
           type: "info",
           title: "Fork created",
-          description: "This device is still syncing. Open the fork from the sidebar when it appears.",
+          description:
+            "This device is still syncing. Open the fork from the sidebar when it appears.",
         });
         return;
       }
@@ -7932,7 +7938,6 @@ export default function ChatView(props: ChatViewProps) {
           key={`${activeThreadKey}:${diffPanelGitStatusResolutionKey}`}
           mode="embedded"
           composerDraftTarget={composerDraftTarget}
-          initialGitScope={initialDiffPanelGitScope}
           workspaceMutationId={workspaceMutationId}
         />
       </Suspense>
@@ -7975,6 +7980,26 @@ export default function ChatView(props: ChatViewProps) {
             : "page"
         }
         composerDraftTarget={composerDraftTarget}
+        shortcutsEnabled={rightPanelOpen}
+        getShortcutContext={() => ({
+          previewFocus: false,
+          previewOpen: renderedRightPanelSurface?.kind === "pull-request",
+          isWeb: !isElectron,
+          isDesktop: isElectron,
+          terminalFocus: getTerminalFocusOwner() !== null,
+          terminalOpen: Boolean(terminalUiState.terminalOpen),
+          modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
+        })}
+      />
+    ) : renderedRightPanelSurface?.kind === "pull-requests" ? (
+      <ThreadPullRequestsPanel threadRef={activeThreadRef} />
+    ) : renderedRightPanelSurface?.kind === "device" ? (
+      <DevicePanel
+        mode="embedded"
+        threadRef={activeThreadRef}
+        surface={renderedRightPanelSurface}
+        visible={rightPanelOpen}
+        onDismissSetup={() => closeRightPanelSurface(renderedRightPanelSurface)}
       />
     ) : renderedRightPanelSurface?.kind === "agents" ? (
       <AgentsPanel
@@ -8033,6 +8058,7 @@ export default function ChatView(props: ChatViewProps) {
   const workspaceFileDropHandlers = makeWorkspaceFileDropHandlers({
     setDragActive: setIsWorkspaceFileDragActive,
     addFiles: (files) => composerRef.current?.addDroppedFiles(files),
+    addFolders: () => {},
   });
 
   return (
@@ -8441,10 +8467,10 @@ export default function ChatView(props: ChatViewProps) {
 
             {activeThreadRef && activePreviewMiniPlayer && previewMiniPlayerVisible ? (
               <ThreadPreviewMiniPlayer
-                key={`${activeThreadKey}:${activePreviewMiniPlayer.tabId}`}
+                key={`${activeThreadKey}:${activePreviewMiniPlayer.source.kind === "browser" ? activePreviewMiniPlayer.source.tabId : activePreviewMiniPlayer.source.deviceId}`}
                 threadRef={activeThreadRef}
-                tabId={activePreviewMiniPlayer.tabId}
-                bottomInset={isDraftHeroState ? 0 : composerOverlayHeight}
+                miniPlayer={activePreviewMiniPlayer}
+                composerOverlayElement={composerOverlayElement}
               />
             ) : null}
 
@@ -8544,13 +8570,19 @@ export default function ChatView(props: ChatViewProps) {
           onAddDiff={addDiffSurface}
           onAddFiles={addFilesSurface}
           onAddPullRequest={addPullRequestSurface}
+          onAddPullRequests={() =>
+            useRightPanelStore.getState().open(activeThreadRef, "pull-requests")
+          }
           onAddAgents={addAgentsSurface}
+          onAddDevice={() => useRightPanelStore.getState().open(activeThreadRef, "device")}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
+          pullRequestsAvailable={supportsPullRequests}
           agentsAvailable
+          deviceAvailable={true}
           liveAgentCount={agentPanelModel.liveCount}
         >
           {rightPanelContent}
@@ -8594,13 +8626,19 @@ export default function ChatView(props: ChatViewProps) {
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
             onAddPullRequest={addPullRequestSurface}
+            onAddPullRequests={() =>
+              useRightPanelStore.getState().open(activeThreadRef, "pull-requests")
+            }
             onAddAgents={addAgentsSurface}
+            onAddDevice={() => useRightPanelStore.getState().open(activeThreadRef, "device")}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}
             pullRequestAvailable={pullRequestSurfaceAvailable}
+            pullRequestsAvailable={supportsPullRequests}
             agentsAvailable
+            deviceAvailable={true}
             liveAgentCount={agentPanelModel.liveCount}
           >
             {rightPanelContent}

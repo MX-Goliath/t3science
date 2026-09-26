@@ -28,7 +28,7 @@ const SystemIntegrationOperation = Schema.Literals([
   "unsupported-platform",
 ]);
 
-export class DesktopSystemIntegrationError extends Schema.TaggedErrorClass<DesktopSystemIntegrationError>()(
+export class DesktopSystemIntegrationError extends Schema.TaggedError<DesktopSystemIntegrationError>()(
   "DesktopSystemIntegrationError",
   {
     operation: SystemIntegrationOperation,

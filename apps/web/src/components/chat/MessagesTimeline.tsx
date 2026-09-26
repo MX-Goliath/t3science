@@ -92,6 +92,7 @@ import {
   DownloadIcon,
   EyeIcon,
   GlobeIcon,
+  GitPullRequestIcon,
   HammerIcon,
   MessageCircleIcon,
   Minimize2Icon,
@@ -337,7 +338,7 @@ interface MessagesTimelineProps {
   onRevertToTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
   onForkMessage?: (messageId: MessageId) => void;
-  forkableMessageIds?: ReadonlySet<MessageId>;
+  forkableMessageIds?: ReadonlySet<MessageId> | null;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen?: (attachment: ChatFileAttachment) => void;
@@ -2234,6 +2235,8 @@ function toolGroupSummaryIconName(
       return "terminal";
     case "browser":
       return "browser";
+    case "device":
+      return "device";
     case "search":
       return "globe";
     case "code-search":
@@ -2248,6 +2251,8 @@ function toolGroupSummaryIconName(
       return "zap";
     case "update":
     case "mixed":
+      return "hammer";
+    default:
       return "hammer";
   }
 }
@@ -2350,12 +2355,17 @@ function AssistantChangedFilesSectionInner({
 
 const UserMessageTerminalContextInlineLabel = memo(
   function UserMessageTerminalContextInlineLabel(props: { context: ParsedTerminalContextEntry }) {
-    const tooltipText =
-      props.context.body.length > 0
-        ? `${props.context.header}\n${props.context.body}`
-        : props.context.header;
-
-    return <TerminalContextInlineChip label={props.context.header} tooltipText={tooltipText} />;
+    return (
+      <TerminalContextInlineChip
+        label={formatInlineTerminalContextLabel(props.context.header)}
+        terminalLabel={props.context.header}
+        lineStart={0}
+        lineEnd={0}
+        text={props.context.body}
+        detailsMode="popover"
+        surface="transcript"
+      />
+    );
   },
 );
 
@@ -2795,10 +2805,12 @@ type WorkEntryIconName =
   | "check"
   | "circle-alert"
   | "computer"
+  | "device"
   | "eye"
   | "globe"
   | "hammer"
   | "message-circle"
+  | "pull-request"
   | "search"
   | "square-pen"
   | "terminal"
@@ -3014,6 +3026,10 @@ function WorkEntryIcon({ name, className }: { name: WorkEntryIconName; className
       return <BrowserAppIcon className={className} />;
     case "computer":
       return <ComputerUseAppIcon className={className} />;
+    case "device":
+      return <ComputerUseAppIcon className={className} />;
+    case "pull-request":
+      return <GitPullRequestIcon className={className} aria-hidden />;
     case "t3-code":
       return <T3Wordmark className={className} aria-hidden />;
     case "check":

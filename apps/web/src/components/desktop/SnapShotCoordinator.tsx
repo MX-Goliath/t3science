@@ -150,9 +150,8 @@ export async function deliverSnapShot(
   const dataUrl = compressed.recompressed ? await readFileAsDataUrl(file) : capture.dataUrl;
   const alreadyAttached =
     store.getComposerDraft(target)?.images.some(({ id }) => id === capture.id) ?? false;
-  if (
-    !alreadyAttached &&
-    !store.addImage(target, {
+  if (!alreadyAttached) {
+    store.addImage(target, {
       type: "image",
       id: capture.id,
       name: file.name,
@@ -161,9 +160,10 @@ export async function deliverSnapShot(
       previewUrl: dataUrl,
       file,
       source,
-    })
-  ) {
-    throw new Error("Remove an attachment, then try this capture again.");
+    });
+    if (!store.getComposerDraft(target)?.images.some(({ id }) => id === capture.id)) {
+      throw new Error("Remove an attachment, then try this capture again.");
+    }
   }
   const persisted: PersistedComposerImageAttachment = {
     id: capture.id,

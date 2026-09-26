@@ -1,8 +1,11 @@
 import type {
+  ModelSelection,
   ProjectScript,
   ProjectScriptIcon,
   ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
+import { createModelSelection } from "@t3tools/shared/model";
+import { isProjectCommandAction, isProjectPromptAction } from "@t3tools/shared/projectScripts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -16,14 +19,7 @@ import {
   PlayIcon,
   WrenchIcon,
 } from "lucide-react";
-import React, {
-  type FormEvent,
-  type KeyboardEvent,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { type FormEvent, type KeyboardEvent, useEffect, useState } from "react";
 
 import {
   keybindingValueForCommand,
@@ -31,6 +27,10 @@ import {
 } from "~/lib/projectScriptKeybindings";
 import { keybindingFromKeyboardEvent } from "~/components/settings/KeybindingsSettings.logic";
 import { commandForProjectScript, nextProjectScriptId } from "~/projectScripts";
+import type { ProviderInstanceEntry } from "~/providerInstances";
+import type { ModelEsque } from "./chat/providerIconUtils";
+import { ProviderModelPicker } from "./chat/ProviderModelPicker";
+import { TraitsPicker } from "./chat/TraitsPicker";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -53,6 +53,7 @@ import {
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 import { Switch } from "./ui/switch";
 import { Textarea } from "./ui/textarea";
 
@@ -82,10 +83,12 @@ export function ScriptIcon({
 
 export interface NewProjectScriptInput {
   name: string;
+  kind: "command" | "prompt";
   command: string;
+  prompt: string;
+  modelSelection: ModelSelection | null;
   icon: ProjectScriptIcon;
   runOnWorktreeCreate: boolean;
-  /** Setup scripts only: hold the agent until the script exits. */
   waitForSetup: boolean;
   keybinding: string | null;
   /** Optional URL to open in the in-app preview when this script runs. */
@@ -98,7 +101,10 @@ export type ProjectScriptActionResult = AtomCommandResult<void, unknown>;
 
 export const EMPTY_PROJECT_SCRIPT_INPUT: NewProjectScriptInput = {
   name: "",
+  kind: "command",
   command: "",
+  prompt: "",
+  modelSelection: null,
   icon: "play",
   runOnWorktreeCreate: false,
   waitForSetup: false,
@@ -123,7 +129,10 @@ export function editorRequestForScript(
     scriptId: script.id,
     initial: {
       name: script.name,
-      command: script.command,
+      kind: isProjectPromptAction(script) ? "prompt" : "command",
+      command: isProjectCommandAction(script) ? script.command : "",
+      prompt: isProjectPromptAction(script) ? script.prompt : "",
+      modelSelection: isProjectPromptAction(script) ? script.modelSelection : null,
       icon: script.icon,
       runOnWorktreeCreate: script.runOnWorktreeCreate,
       waitForSetup: script.runOnWorktreeCreate && script.async === false,
@@ -145,6 +154,8 @@ export function ProjectScriptEditorDialog({
   onSubmit,
   onDelete,
   onClose,
+  defaultModelSelection,
+  modelPicker,
 }: {
   request: ProjectScriptEditorRequest | null;
   /** Existing scripts, used to derive a unique id for new scripts. */
@@ -155,10 +166,21 @@ export function ProjectScriptEditorDialog({
   ) => Promise<ProjectScriptActionResult>;
   onDelete: (scriptId: string) => void;
   onClose: () => void;
+  defaultModelSelection: ModelSelection | null;
+  modelPicker: {
+    readonly instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+    readonly modelOptionsByInstance: ReadonlyMap<
+      ModelSelection["instanceId"],
+      ReadonlyArray<ModelEsque>
+    >;
+  };
 }) {
   const formId = React.useId();
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<"command" | "prompt">("command");
   const [command, setCommand] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
   const [icon, setIcon] = useState<ProjectScriptIcon>("play");
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [runOnWorktreeCreate, setRunOnWorktreeCreate] = useState(false);
@@ -168,28 +190,21 @@ export function ProjectScriptEditorDialog({
   const [autoOpenPreview, setAutoOpenPreview] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [savingRequest, setSavingRequest] = useState<ProjectScriptEditorRequest | null>(null);
-  const pendingSubmissionRef = useRef<{ request: ProjectScriptEditorRequest } | null>(null);
 
   const isOpen = request !== null;
   const isEditing = request?.scriptId != null;
-  const isSaving = request !== null && savingRequest === request;
-
-  // A save completion must not affect a replacement request or an unmounted editor.
-  useLayoutEffect(
-    () => () => {
-      if (pendingSubmissionRef.current?.request === request) {
-        pendingSubmissionRef.current = null;
-      }
-    },
-    [request],
+  const selectedModelEntry = modelPicker.instanceEntries.find(
+    (entry) => entry.instanceId === modelSelection?.instanceId,
   );
 
   // Hydrate the form whenever a new request opens the dialog.
   useEffect(() => {
     if (!request) return;
     setName(request.initial.name);
+    setKind(request.initial.kind);
     setCommand(request.initial.command);
+    setPrompt(request.initial.prompt);
+    setModelSelection(request.initial.modelSelection ?? defaultModelSelection);
     setIcon(request.initial.icon);
     setIconPickerOpen(false);
     setRunOnWorktreeCreate(request.initial.runOnWorktreeCreate);
@@ -198,15 +213,7 @@ export function ProjectScriptEditorDialog({
     setPreviewUrl(request.initial.previewUrl ?? "");
     setAutoOpenPreview(request.initial.autoOpenPreview);
     setValidationError(request.error ?? null);
-    setSavingRequest(null);
-  }, [request]);
-
-  const close = () => {
-    pendingSubmissionRef.current = null;
-    setSavingRequest(null);
-    setIconPickerOpen(false);
-    onClose();
-  };
+  }, [defaultModelSelection, request]);
 
   const captureKeybinding = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Tab") return;
@@ -222,15 +229,24 @@ export function ProjectScriptEditorDialog({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!request || pendingSubmissionRef.current !== null) return;
+    if (!request) return;
     const trimmedName = name.trim();
     const trimmedCommand = command.trim();
+    const trimmedPrompt = prompt.trim();
     if (trimmedName.length === 0) {
       setValidationError("Name is required.");
       return;
     }
-    if (trimmedCommand.length === 0) {
+    if (kind === "command" && trimmedCommand.length === 0) {
       setValidationError("Command is required.");
+      return;
+    }
+    if (kind === "prompt" && trimmedPrompt.length === 0) {
+      setValidationError("Prompt is required.");
+      return;
+    }
+    if (kind === "prompt" && modelSelection === null) {
+      setValidationError("Choose a model for this prompt.");
       return;
     }
 
@@ -250,44 +266,33 @@ export function ProjectScriptEditorDialog({
       const trimmedPreviewUrl = previewUrl.trim();
       payload = {
         name: trimmedName,
-        command: trimmedCommand,
+        kind,
+        command: kind === "command" ? trimmedCommand : "",
+        prompt: kind === "prompt" ? trimmedPrompt : "",
+        modelSelection: kind === "prompt" ? modelSelection : null,
         icon,
-        runOnWorktreeCreate,
-        waitForSetup: runOnWorktreeCreate && waitForSetup,
+        runOnWorktreeCreate: kind === "command" ? runOnWorktreeCreate : false,
+        waitForSetup: kind === "command" && runOnWorktreeCreate && waitForSetup,
         keybinding: keybindingRule?.key ?? null,
-        previewUrl: trimmedPreviewUrl.length > 0 ? trimmedPreviewUrl : null,
-        autoOpenPreview: trimmedPreviewUrl.length > 0 ? autoOpenPreview : false,
+        previewUrl: kind === "command" && trimmedPreviewUrl.length > 0 ? trimmedPreviewUrl : null,
+        autoOpenPreview:
+          kind === "command" && trimmedPreviewUrl.length > 0 ? autoOpenPreview : false,
       } satisfies NewProjectScriptInput;
     } catch (error) {
       setValidationError(error instanceof Error ? error.message : "Failed to save action.");
       return;
     }
 
-    const submission = { request };
-    pendingSubmissionRef.current = submission;
-    setSavingRequest(request);
-    setIconPickerOpen(false);
-    try {
-      const result = await onSubmit(request.scriptId, payload);
-      if (pendingSubmissionRef.current === submission) {
-        if (result._tag === "Failure") {
-          if (!isAtomCommandInterrupted(result)) {
-            const error = squashAtomCommandFailure(result);
-            setValidationError(error instanceof Error ? error.message : "Failed to save action.");
-          }
-        } else {
-          close();
-        }
-      }
-    } catch (error) {
-      if (pendingSubmissionRef.current === submission) {
+    const result = await onSubmit(request.scriptId, payload);
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
         setValidationError(error instanceof Error ? error.message : "Failed to save action.");
       }
+      return;
     }
-    if (pendingSubmissionRef.current === submission) {
-      pendingSubmissionRef.current = null;
-      setSavingRequest(null);
-    }
+    setIconPickerOpen(false);
+    onClose();
   };
 
   return (
@@ -296,7 +301,8 @@ export function ProjectScriptEditorDialog({
         open={isOpen}
         onOpenChange={(open) => {
           if (!open) {
-            close();
+            setIconPickerOpen(false);
+            onClose();
           }
         }}
       >
@@ -304,77 +310,97 @@ export function ProjectScriptEditorDialog({
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit Action" : "Add Action"}</DialogTitle>
             <DialogDescription>
-              Actions are project-scoped commands you can run from the top bar or keybindings.
+              Actions run a project command or start a chat from the top bar or a keybinding.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
-            <form id={formId} onSubmit={submit}>
-              <fieldset className="space-y-4" disabled={isSaving}>
-                <div className="space-y-1.5">
-                  <Label htmlFor="script-name">Name</Label>
-                  <div className="flex items-center gap-2">
-                    <Popover onOpenChange={setIconPickerOpen} open={iconPickerOpen}>
-                      <PopoverTrigger
-                        render={
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="size-9 shrink-0 hover:bg-popover active:bg-popover data-pressed:bg-popover data-pressed:shadow-xs/5 data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:border-transparent dark:bg-white/[0.035] dark:data-pressed:before:shadow-none"
-                            aria-label="Choose icon"
-                          />
-                        }
-                      >
-                        <ScriptIcon icon={icon} className="size-4.5" />
-                      </PopoverTrigger>
-                      <PopoverPopup align="start">
-                        <div className="grid grid-cols-3 gap-2">
-                          {SCRIPT_ICONS.map((entry) => {
-                            const isSelected = entry.id === icon;
-                            return (
-                              <button
-                                key={entry.id}
-                                type="button"
-                                className={`relative flex flex-col items-center gap-2 rounded-md border px-2 py-2 text-xs dark:border-transparent ${
-                                  isSelected
-                                    ? "border-primary/70 bg-primary/10 dark:ring-1 dark:ring-primary/30"
-                                    : "border-border/70 hover:bg-accent/60 dark:bg-white/[0.035]"
-                                }`}
-                                onClick={() => {
-                                  setIcon(entry.id);
-                                  setIconPickerOpen(false);
-                                }}
-                              >
-                                <ScriptIcon icon={entry.id} className="size-4" />
-                                <span>{entry.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </PopoverPopup>
-                    </Popover>
-                    <Input
-                      id="script-name"
-                      autoFocus
-                      placeholder="Test"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="script-keybinding">Keybinding</Label>
+            <form id={formId} className="space-y-4" onSubmit={submit}>
+              <div className="space-y-1.5">
+                <Label htmlFor="script-name">Name</Label>
+                <div className="flex items-center gap-2">
+                  <Popover onOpenChange={setIconPickerOpen} open={iconPickerOpen}>
+                    <PopoverTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="size-9 shrink-0 hover:bg-popover active:bg-popover data-pressed:bg-popover data-pressed:shadow-xs/5 data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:border-transparent dark:bg-white/[0.035] dark:data-pressed:before:shadow-none"
+                          aria-label="Choose icon"
+                        />
+                      }
+                    >
+                      <ScriptIcon icon={icon} className="size-4.5" />
+                    </PopoverTrigger>
+                    <PopoverPopup align="start">
+                      <div className="grid grid-cols-3 gap-2">
+                        {SCRIPT_ICONS.map((entry) => {
+                          const isSelected = entry.id === icon;
+                          return (
+                            <button
+                              key={entry.id}
+                              type="button"
+                              className={`relative flex flex-col items-center gap-2 rounded-md border px-2 py-2 text-xs dark:border-transparent ${
+                                isSelected
+                                  ? "border-primary/70 bg-primary/10 dark:ring-1 dark:ring-primary/30"
+                                  : "border-border/70 hover:bg-accent/60 dark:bg-white/[0.035]"
+                              }`}
+                              onClick={() => {
+                                setIcon(entry.id);
+                                setIconPickerOpen(false);
+                              }}
+                            >
+                              <ScriptIcon icon={entry.id} className="size-4" />
+                              <span>{entry.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </PopoverPopup>
+                  </Popover>
                   <Input
-                    id="script-keybinding"
-                    placeholder="Press shortcut"
-                    value={keybinding}
-                    readOnly
-                    onKeyDown={captureKeybinding}
+                    id="script-name"
+                    autoFocus
+                    placeholder="Test"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Press a shortcut. Use <code>Backspace</code> to clear. Shortcuts are
-                    environment-wide. Projects using the same action share its shortcut.
-                  </p>
                 </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="script-kind">Action type</Label>
+                <Select
+                  value={kind}
+                  onValueChange={(value) => {
+                    const nextKind = value as "command" | "prompt";
+                    setKind(nextKind);
+                    if (nextKind === "prompt" && modelSelection === null) {
+                      setModelSelection(defaultModelSelection);
+                    }
+                  }}
+                >
+                  <SelectTrigger id="script-kind">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="command">Terminal command</SelectItem>
+                    <SelectItem value="prompt">New chat prompt</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="script-keybinding">Keybinding</Label>
+                <Input
+                  id="script-keybinding"
+                  placeholder="Press shortcut"
+                  value={keybinding}
+                  readOnly
+                  onKeyDown={captureKeybinding}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Press a shortcut. Use <code>Backspace</code> to clear.
+                </p>
+              </div>
+              {kind === "command" ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="script-command">Command</Label>
                   <Textarea
@@ -384,6 +410,69 @@ export function ProjectScriptEditorDialog({
                     onChange={(event) => setCommand(event.target.value)}
                   />
                 </div>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="script-prompt">Prompt</Label>
+                    <Textarea
+                      id="script-prompt"
+                      placeholder="Review this project and suggest the next highest-impact improvement."
+                      value={prompt}
+                      onChange={(event) => setPrompt(event.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Running this action starts a new chat in the current project.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Model and reasoning</Label>
+                    {modelSelection ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        <ProviderModelPicker
+                          activeInstanceId={modelSelection.instanceId}
+                          model={modelSelection.model}
+                          lockedProvider={null}
+                          instanceEntries={modelPicker.instanceEntries}
+                          modelOptionsByInstance={modelPicker.modelOptionsByInstance}
+                          triggerVariant="outline"
+                          triggerClassName="min-w-0 max-w-none flex-1"
+                          triggerAriaLabel="Prompt model"
+                          onInstanceModelChange={(instanceId, model) =>
+                            setModelSelection(createModelSelection(instanceId, model))
+                          }
+                        />
+                        {selectedModelEntry ? (
+                          <TraitsPicker
+                            provider={selectedModelEntry.driverKind}
+                            planModeEnabled={false}
+                            models={selectedModelEntry.models}
+                            model={modelSelection.model}
+                            prompt={prompt}
+                            onPromptChange={setPrompt}
+                            modelOptions={modelSelection.options ?? []}
+                            triggerVariant="outline"
+                            triggerClassName="min-w-0 max-w-none"
+                            onModelOptionsChange={(options) =>
+                              setModelSelection(
+                                createModelSelection(
+                                  modelSelection.instanceId,
+                                  modelSelection.model,
+                                  options,
+                                ),
+                              )
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Configure an available provider before creating a prompt action.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+              {kind === "command" ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="script-preview-url">Preview URL (optional)</Label>
                   <Input
@@ -396,6 +485,8 @@ export function ProjectScriptEditorDialog({
                     Open this URL in the in-app preview when this action runs.
                   </p>
                 </div>
+              ) : null}
+              {kind === "command" ? (
                 <label className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035]">
                   <span>Run automatically on worktree creation</span>
                   <Switch
@@ -403,10 +494,10 @@ export function ProjectScriptEditorDialog({
                     onCheckedChange={(checked) => setRunOnWorktreeCreate(Boolean(checked))}
                   />
                 </label>
+              ) : null}
+              {kind === "command" ? (
                 <label
-                  className={`flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035] ${
-                    runOnWorktreeCreate ? "" : "opacity-60"
-                  }`}
+                  className={`flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035] ${runOnWorktreeCreate ? "" : "opacity-60"}`}
                 >
                   <span>Wait for it to finish before the agent starts</span>
                   <Switch
@@ -415,6 +506,8 @@ export function ProjectScriptEditorDialog({
                     onCheckedChange={(checked) => setWaitForSetup(Boolean(checked))}
                   />
                 </label>
+              ) : null}
+              {kind === "command" ? (
                 <label
                   className={`flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035] ${
                     previewUrl.trim().length === 0 ? "opacity-60" : ""
@@ -427,8 +520,8 @@ export function ProjectScriptEditorDialog({
                     onCheckedChange={(checked) => setAutoOpenPreview(Boolean(checked))}
                   />
                 </label>
-                {validationError && <p className="text-sm text-destructive">{validationError}</p>}
-              </fieldset>
+              ) : null}
+              {validationError && <p className="text-sm text-destructive">{validationError}</p>}
             </form>
           </DialogPanel>
           <DialogFooter className="dark:border-transparent dark:bg-transparent">
@@ -437,17 +530,16 @@ export function ProjectScriptEditorDialog({
                 type="button"
                 variant="destructive-outline"
                 className="mr-auto"
-                disabled={isSaving}
                 onClick={() => setDeleteConfirmOpen(true)}
               >
                 Delete
               </Button>
             )}
-            <Button type="button" variant="outline" onClick={close}>
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button form={formId} type="submit" disabled={isSaving}>
-              {isSaving ? "Saving…" : isEditing ? "Save changes" : "Save action"}
+            <Button form={formId} type="submit">
+              {isEditing ? "Save changes" : "Save action"}
             </Button>
           </DialogFooter>
         </DialogPopup>
@@ -463,11 +555,10 @@ export function ProjectScriptEditorDialog({
             <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
             <Button
               variant="destructive"
-              disabled={isSaving}
               onClick={() => {
                 if (!request?.scriptId) return;
                 setDeleteConfirmOpen(false);
-                close();
+                onClose();
                 onDelete(request.scriptId);
               }}
             >

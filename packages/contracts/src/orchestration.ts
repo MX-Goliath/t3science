@@ -422,7 +422,10 @@ export type ProjectScriptIcon = typeof ProjectScriptIcon.Type;
 export const ProjectScript = Schema.Struct({
   id: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
-  command: TrimmedNonEmptyString,
+  kind: Schema.optional(Schema.Literal("prompt")),
+  command: Schema.optional(TrimmedNonEmptyString),
+  prompt: Schema.optional(TrimmedNonEmptyString),
+  modelSelection: Schema.optional(ModelSelection),
   icon: ProjectScriptIcon,
   runOnWorktreeCreate: Schema.Boolean,
   /**
@@ -442,7 +445,28 @@ export const ProjectScript = Schema.Struct({
    * the moment this script starts. Ignored without `previewUrl` or on web.
    */
   autoOpenPreview: Schema.optional(Schema.Boolean),
-});
+}).check(
+  Schema.makeFilter((input) => {
+    if (input.kind === "prompt") {
+      return (
+        (input.prompt !== undefined &&
+          input.modelSelection !== undefined &&
+          input.command === undefined &&
+          input.runOnWorktreeCreate === false &&
+          input.async === undefined &&
+          input.previewUrl === undefined &&
+          input.autoOpenPreview === undefined) ||
+        "Prompt actions require a prompt and model and cannot configure terminal behavior"
+      );
+    }
+    return (
+      (input.command !== undefined &&
+        input.prompt === undefined &&
+        input.modelSelection === undefined) ||
+      "Command actions require a command and cannot configure a prompt or model"
+    );
+  }),
+);
 export type ProjectScript = typeof ProjectScript.Type;
 
 export const ProjectFaviconPath = TrimmedNonEmptyString.check(
@@ -577,6 +601,7 @@ export const OrchestrationMessage = Schema.Struct({
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
   context: Schema.optional(OrchestrationMessageContext),
+  modelSelection: Schema.optional(ModelSelection),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -1411,11 +1436,38 @@ const ThreadSessionStopCommand = Schema.Struct({
   onlyIfSettled: Schema.optional(Schema.Boolean),
 });
 
+const ThreadPortableImportCommand = Schema.Struct({
+  type: Schema.Literal("thread.portable.import"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  thread: OrchestrationThread,
+  createdAt: IsoDateTime,
+});
+
+const ThreadPortableContextRestoreCommand = Schema.Struct({
+  type: Schema.Literal("thread.portable-context.restore"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
+const ThreadForkCommand = Schema.Struct({
+  type: Schema.Literal("thread.fork"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  sourceThreadId: ThreadId,
+  messageId: MessageId,
+  newThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
 const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
+  ThreadPortableImportCommand,
+  ThreadForkCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
   ThreadUnarchiveCommand,
@@ -1449,6 +1501,8 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
+  ThreadPortableImportCommand,
+  ThreadForkCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
   ThreadUnarchiveCommand,
@@ -1653,6 +1707,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadMessageReasoningDeltaCommand,
   ThreadMessageReasoningCompleteCommand,
   ThreadHistoryImportCommand,
+  ThreadPortableContextRestoreCommand,
   ThreadMessageUserAppendCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
@@ -1705,6 +1760,8 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.proposed-plan-upserted",
   "thread.turn-diff-completed",
   "thread.activity-appended",
+  "thread.portable-imported",
+  "thread.portable-context-restored",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
@@ -1989,6 +2046,16 @@ export const OrchestrationClientOrigin = Schema.Struct({
 });
 export type OrchestrationClientOrigin = typeof OrchestrationClientOrigin.Type;
 
+export const ThreadPortableImportedPayload = Schema.Struct({
+  projectId: ProjectId,
+  thread: OrchestrationThread,
+});
+
+export const ThreadPortableContextRestoredPayload = Schema.Struct({
+  threadId: ThreadId,
+  restoredAt: IsoDateTime,
+});
+
 export const OrchestrationEventMetadata = Schema.Struct({
   providerTurnId: Schema.optional(TrimmedNonEmptyString),
   providerItemId: Schema.optional(ProviderItemId),
@@ -2178,6 +2245,16 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.activity-appended"),
     payload: ThreadActivityAppendedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.portable-imported"),
+    payload: ThreadPortableImportedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.portable-context-restored"),
+    payload: ThreadPortableContextRestoredPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;

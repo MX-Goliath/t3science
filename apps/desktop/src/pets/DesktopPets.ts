@@ -63,7 +63,7 @@ const DEFAULT_PET_ASSIGNMENTS: ReadonlyArray<readonly [string, string]> = [
   ["claudeAgent", "claude"],
 ];
 
-export class DesktopPetUnknownIdError extends Schema.TaggedErrorClass<DesktopPetUnknownIdError>()(
+export class DesktopPetUnknownIdError extends Schema.TaggedError<DesktopPetUnknownIdError>()(
   "DesktopPetUnknownIdError",
   { petId: Schema.String },
 ) {
@@ -72,7 +72,7 @@ export class DesktopPetUnknownIdError extends Schema.TaggedErrorClass<DesktopPet
   }
 }
 
-export class DesktopPetProtectedError extends Schema.TaggedErrorClass<DesktopPetProtectedError>()(
+export class DesktopPetProtectedError extends Schema.TaggedError<DesktopPetProtectedError>()(
   "DesktopPetProtectedError",
   { petId: Schema.String },
 ) {
@@ -81,7 +81,7 @@ export class DesktopPetProtectedError extends Schema.TaggedErrorClass<DesktopPet
   }
 }
 
-export class DesktopPetOperationError extends Schema.TaggedErrorClass<DesktopPetOperationError>()(
+export class DesktopPetOperationError extends Schema.TaggedError<DesktopPetOperationError>()(
   "DesktopPetOperationError",
   { operation: Schema.String, messageText: Schema.String },
 ) {

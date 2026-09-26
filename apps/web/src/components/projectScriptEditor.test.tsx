@@ -60,6 +60,8 @@ function editor(nextRequest: ProjectScriptEditorRequest) {
       <ProjectScriptEditorDialog
         request={nextRequest}
         scripts={[]}
+        defaultModelSelection={null}
+        modelPicker={{ instanceEntries: [], modelOptionsByInstance: new Map() }}
         onSubmit={onSubmit}
         onClose={onClose}
         onDelete={onDelete}

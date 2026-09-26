@@ -358,11 +358,13 @@ function SidebarThreadTooltip({
           {projectDisplayName ? (
             <div className="flex min-w-0 items-center gap-2">
               <ProjectFavicon
-                environmentId={thread.environmentId}
-                cwd={projectCwd ?? ""}
-                projectName={projectTitle ?? ""}
-                faviconPath={projectFaviconPath}
-                projectIcon={projectIcon}
+                project={{
+                  environmentId: thread.environmentId,
+                  workspaceRoot: projectCwd ?? "",
+                  title: projectTitle ?? "",
+                  faviconPath: projectFaviconPath,
+                  projectIcon: projectIcon,
+                }}
                 className="size-3 shrink-0"
               />
               <div className="min-w-0 truncate text-foreground/75">{projectDisplayName}</div>
@@ -764,11 +766,13 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
           <div className="flex h-5 min-w-0 items-center gap-1.5">
             <SquarePenIcon aria-hidden className={draftPenClassName} />
             <ProjectFavicon
-              environmentId={session.environmentId}
-              cwd={props.projectCwd ?? ""}
-              projectName={props.projectTitle ?? ""}
-              faviconPath={props.projectFaviconPath}
-              projectIcon={props.projectIcon}
+              project={{
+                environmentId: session.environmentId,
+                workspaceRoot: props.projectCwd ?? "",
+                title: props.projectTitle ?? "",
+                faviconPath: props.projectFaviconPath,
+                projectIcon: props.projectIcon,
+              }}
               className="size-4 shrink-0"
             />
             <span className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label">
@@ -1599,11 +1603,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               )}
             >
               <ProjectFavicon
-                environmentId={thread.environmentId}
-                cwd={props.projectCwd ?? ""}
-                projectName={props.projectTitle ?? ""}
-                faviconPath={props.projectFaviconPath}
-                projectIcon={props.projectIcon}
+                project={{
+                  environmentId: thread.environmentId,
+                  workspaceRoot: props.projectCwd ?? "",
+                  title: props.projectTitle ?? "",
+                  faviconPath: props.projectFaviconPath,
+                  projectIcon: props.projectIcon,
+                }}
                 className="size-4"
               />
             </span>
@@ -1751,11 +1757,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
               <ProjectFavicon
-                environmentId={thread.environmentId}
-                cwd={props.projectCwd ?? ""}
-                projectName={props.projectTitle ?? ""}
-                faviconPath={props.projectFaviconPath}
-                projectIcon={props.projectIcon}
+                project={{
+                  environmentId: thread.environmentId,
+                  workspaceRoot: props.projectCwd ?? "",
+                  title: props.projectTitle ?? "",
+                  faviconPath: props.projectFaviconPath,
+                  projectIcon: props.projectIcon,
+                }}
                 className="size-4 shrink-0"
               />
               {props.projectDisplayName ? (
@@ -2068,11 +2076,13 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
           }
         >
           <ProjectFavicon
-            environmentId={thread.environmentId}
-            cwd={props.projectCwd ?? ""}
-            projectName={props.projectTitle ?? ""}
-            faviconPath={props.projectFaviconPath}
-            projectIcon={props.projectIcon}
+            project={{
+              environmentId: thread.environmentId,
+              workspaceRoot: props.projectCwd ?? "",
+              title: props.projectTitle ?? "",
+              faviconPath: props.projectFaviconPath,
+              projectIcon: props.projectIcon,
+            }}
             className="size-4 shrink-0"
           />
           <span className="min-w-0 flex-1 truncate">{thread.title}</span>
@@ -3972,6 +3982,18 @@ export default function Sidebar() {
           api.contextMenu.show(
             buildThreadActionMenuItems({
               branch: thread.branch ?? null,
+              projectFilter: (() => {
+                const group = projectGroupsRef.current.find((candidate) =>
+                  candidate.memberProjectRefs.some(
+                    (ref) =>
+                      ref.environmentId === thread.environmentId &&
+                      ref.projectId === thread.projectId,
+                  ),
+                );
+                return group
+                  ? { label: group.title, isActive: projectScopeKey === group.projectKey }
+                  : null;
+              })(),
               isPinned,
               isSettled,
               isSnoozed,
@@ -3999,6 +4021,17 @@ export default function Sidebar() {
           return;
         }
         switch (clicked.value) {
+          case "filter-by-project": {
+            const group = projectGroupsRef.current.find((candidate) =>
+              candidate.memberProjectRefs.some(
+                (ref) =>
+                  ref.environmentId === thread.environmentId && ref.projectId === thread.projectId,
+              ),
+            );
+            if (group)
+              setProjectScopeKey(projectScopeKey === group.projectKey ? null : group.projectKey);
+            return;
+          }
           case "project-settings": {
             const projectGroup = projectGroupsRef.current.find((group) =>
               group.memberProjectRefs.some(
@@ -4442,11 +4475,13 @@ export default function Sidebar() {
                     {scopedProjectGroup ? (
                       <span className="flex shrink-0">
                         <ProjectFavicon
-                          environmentId={scopedProjectGroup.environmentId}
-                          cwd={scopedProjectGroup.workspaceRoot}
-                          projectName={scopedProjectGroup.title}
-                          faviconPath={scopedProjectGroup.faviconPath}
-                          projectIcon={scopedProjectGroup.projectIcon}
+                          project={{
+                            environmentId: scopedProjectGroup.environmentId,
+                            workspaceRoot: scopedProjectGroup.workspaceRoot,
+                            title: scopedProjectGroup.title,
+                            faviconPath: scopedProjectGroup.faviconPath,
+                            projectIcon: scopedProjectGroup.projectIcon,
+                          }}
                           className="size-4"
                         />
                       </span>
@@ -4521,11 +4556,13 @@ export default function Sidebar() {
                           >
                             {project ? (
                               <ProjectFavicon
-                                environmentId={project.environmentId}
-                                cwd={project.workspaceRoot}
-                                projectName={project.title}
-                                faviconPath={project.faviconPath}
-                                projectIcon={project.projectIcon}
+                                project={{
+                                  environmentId: project.environmentId,
+                                  workspaceRoot: project.workspaceRoot,
+                                  title: project.title,
+                                  faviconPath: project.faviconPath,
+                                  projectIcon: project.projectIcon,
+                                }}
                                 className="size-4 shrink-0"
                               />
                             ) : (

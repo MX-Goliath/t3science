@@ -108,6 +108,8 @@ import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
+import { ProjectConversationStorage } from "./project/ProjectConversationStorage.ts";
+import { ProjectConversationStorageLive } from "./project/ProjectConversationStorageLive.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
 import * as SourceControlRateLimit from "./sourceControl/SourceControlRateLimit.ts";
@@ -561,6 +563,23 @@ const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
   Layer.provide(NetService.layer),
 );
 
+const ProjectConversationStorageStartLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const storage = yield* ProjectConversationStorage;
+    yield* forkParked(storage.start());
+  }),
+);
+
+const ProjectConversationStorageRuntimeLive = Layer.mergeAll(
+  ProjectConversationStorageLive,
+  ProjectConversationStorageStartLive.pipe(Layer.provide(ProjectConversationStorageLive)),
+);
+
+const RuntimeDependenciesWithProjectConversationStorageLive = Layer.mergeAll(
+  RuntimeDependenciesLive,
+  ProjectConversationStorageRuntimeLive.pipe(Layer.provide(RuntimeDependenciesLive)),
+);
+
 const commandReadinessLayer = HttpRouter.middleware(
   (httpEffect) =>
     Effect.flatMap(ServerRuntimeStartup.ServerRuntimeStartup, (startup) =>
@@ -785,7 +804,10 @@ const makeServerLayer = Layer.unwrap(
         ],
         { concurrency: "unbounded" },
       ).pipe(Effect.asVoid),
-    }).pipe(Layer.provideMerge(RuntimeDependenciesLive), Layer.provide(launcherLayer));
+    }).pipe(
+      Layer.provideMerge(RuntimeDependenciesWithProjectConversationStorageLive),
+      Layer.provide(launcherLayer),
+    );
 
     const routesLayer = HttpRouter.serve(makeRoutesLayer.pipe(Layer.provide(launcherLayer)), {
       disableLogger: !config.logWebSocketEvents,

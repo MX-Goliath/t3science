@@ -1,3 +1,4 @@
+import { EMPTY_PROJECT_SCRIPT_INPUT } from "./components/projectScriptEditor";
 import { MAX_SCRIPT_ID_LENGTH } from "@t3tools/contracts";
 import { shortcutLabelForCommand } from "./keybindings";
 import { describe, expect, it } from "vite-plus/test";
@@ -60,6 +61,7 @@ describe("projectScripts helpers", () => {
 
   it("only records async: false for setup scripts that should block the agent", () => {
     const input = {
+      ...EMPTY_PROJECT_SCRIPT_INPUT,
       name: "Setup",
       command: "pnpm i",
       icon: "configure",

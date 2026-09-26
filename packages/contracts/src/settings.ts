@@ -156,6 +156,26 @@ export const EnvironmentIdentificationMode = Schema.Literals(["artwork", "pill",
 export type EnvironmentIdentificationMode = typeof EnvironmentIdentificationMode.Type;
 export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationMode = "artwork";
 
+export const WebChatProvider = Schema.Literals(["chatgpt", "claude", "grok", "perplexity"]);
+export type WebChatProvider = typeof WebChatProvider.Type;
+export const DEFAULT_WEB_CHAT_PROVIDER: WebChatProvider = "chatgpt";
+
+const PersistedWebChatProvider = Schema.Literals([
+  "chatgpt",
+  "claude",
+  "gemini",
+  "grok",
+  "perplexity",
+]).pipe(
+  Schema.decodeTo(
+    WebChatProvider,
+    SchemaTransformation.transform({
+      decode: (provider) => (provider === "gemini" ? "grok" : provider),
+      encode: (provider) => provider,
+    }),
+  ),
+);
+
 export const SnapShotKeyChord = KeybindingShortcut.check(
   Schema.makeFilter(
     (shortcut) =>
@@ -453,6 +473,11 @@ export const ClientSettingsSchema = Schema.Struct({
   // old keys, so everyone, including prior beta opt-outs, resets to the new
   // default sidebar.
   legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  generalChatsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  webChatEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  webChatProvider: PersistedWebChatProvider.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_WEB_CHAT_PROVIDER)),
+  ),
   sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
   ),
@@ -826,6 +851,38 @@ export const AntigravitySettings = makeProviderSettingsSchema(
   { order: ["authMethod", "apiKey", "gcpProject", "gcpLocation", "binaryPath"] },
 );
 export type AntigravitySettings = typeof AntigravitySettings.Type;
+
+const PiModelSlug = TrimmedNonEmptyString.check(Schema.isPattern(/^[^/\s]+\/\S+$/));
+
+export const PiSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("pi").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description: "Path to the Pi CLI binary used by this instance.",
+        providerSettingsForm: { placeholder: "pi", clearWhenEmpty: "omit" },
+      }),
+    ),
+    sessionDir: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Session directory",
+        description: "Optional directory where Pi stores resumable sessions.",
+        providerSettingsForm: { placeholder: "~/.pi/agent/sessions", clearWhenEmpty: "omit" },
+      }),
+    ),
+    customModels: Schema.Array(PiModelSlug).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  { order: ["binaryPath", "sessionDir"] },
+);
+export type PiSettings = typeof PiSettings.Type;
 
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
@@ -1262,6 +1319,7 @@ export const ServerSettings = Schema.Struct({
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     antigravity: AntigravitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    pi: PiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
   // are `ProviderInstanceConfig` envelopes. The driver-specific config blob
@@ -1313,6 +1371,8 @@ const defaultEnabledForDriver = (driver: ProviderDriverKind): boolean => {
   >;
   return legacyDefaults[driver]?.enabled ?? true;
 };
+
+export const OPENCODE_GO_PROVIDER_ID = "opencode-go";
 
 /**
  * Resolve whether a configured provider instance is enabled. An explicit
@@ -1427,6 +1487,13 @@ const AntigravitySettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(CustomModelSetting)),
 });
 
+const PiSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+  sessionDir: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(PiModelSlug)),
+});
+
 const OpenCodeSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
@@ -1537,6 +1604,7 @@ export const ServerSettingsPatch = Schema.Struct({
       grok: Schema.optionalKey(GrokSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       antigravity: Schema.optionalKey(AntigravitySettingsPatch),
+      pi: Schema.optionalKey(PiSettingsPatch),
     }),
   ),
   // Whole-map replacement for the new instance config. Patching individual
@@ -1627,6 +1695,9 @@ export const ClientSettingsPatch = Schema.Struct({
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
+  generalChatsEnabled: Schema.optionalKey(Schema.Boolean),
+  webChatEnabled: Schema.optionalKey(Schema.Boolean),
+  webChatProvider: Schema.optionalKey(WebChatProvider),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, SidebarProjectGroupingMode),

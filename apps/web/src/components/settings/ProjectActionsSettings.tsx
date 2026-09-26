@@ -1,4 +1,13 @@
 import { EnvironmentId, type T3ProjectFileScript } from "@t3tools/contracts";
+import { getCustomModelOptionsByInstance } from "../../modelSelection";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  resolveDefaultProviderModelSelection,
+  sortProviderInstanceEntries,
+} from "../../providerInstances";
+import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
+import { useScopedSettings } from "./useScopedSettings";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -41,12 +50,29 @@ import { useSettingsScope } from "./SettingsScopeContext";
 export function ProjectActionsSettings() {
   const { scope, targets, target } = useSettingsScope();
   const { environments } = useEnvironments();
+  const scopedSettings = useScopedSettings();
   const isProjectScope = scope.kind === "project" || scope.kind === "checkout";
   const representativeConfig = target
     ? environments.find((environment) => environment.environmentId === target.environmentId)
         ?.serverConfig
     : undefined;
   const scripts = target?.settings.defaultProjectScripts ?? [];
+  const providers = representativeConfig?.providers ?? EMPTY_SERVER_PROVIDERS;
+  const defaultModelSelection = resolveDefaultProviderModelSelection(
+    providers,
+    scopedSettings.defaultModelSelection,
+  );
+  const modelPicker = {
+    instanceEntries: sortProviderInstanceEntries(
+      applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), scopedSettings),
+    ),
+    modelOptionsByInstance: getCustomModelOptionsByInstance(
+      scopedSettings,
+      providers,
+      defaultModelSelection?.instanceId,
+      defaultModelSelection?.model,
+    ),
+  };
   const keybindings = representativeConfig?.keybindings ?? DEFAULT_RESOLVED_KEYBINDINGS;
   const mixed = targets.some(
     (candidate) =>
@@ -108,7 +134,10 @@ export function ProjectActionsSettings() {
     async (fileScript: T3ProjectFileScript) => {
       const payload: NewProjectScriptInput = {
         name: fileScript.name,
+        kind: "command",
         command: fileScript.command,
+        prompt: "",
+        modelSelection: null,
         icon: fileScript.icon ?? "play",
         runOnWorktreeCreate: fileScript.runOnWorktreeCreate ?? false,
         waitForSetup: fileScript.runOnWorktreeCreate === true && fileScript.async === false,
@@ -221,6 +250,8 @@ export function ProjectActionsSettings() {
           void persist((current) => current.filter((script) => script.id !== id), id, null)
         }
         onClose={() => setRequest(null)}
+        defaultModelSelection={defaultModelSelection}
+        modelPicker={modelPicker}
       />
     </SettingsSection>
   );

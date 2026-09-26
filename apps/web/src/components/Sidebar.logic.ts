@@ -43,6 +43,15 @@ export function shouldNavigateAfterThreadPark(input: {
   );
 }
 
+export function searchSidebarThreadsByTitle<T extends { readonly title: string }>(
+  threads: readonly T[],
+  query: string,
+): T[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.length === 0) return [];
+  return threads.filter((thread) => thread.title.toLowerCase().includes(normalizedQuery));
+}
+
 const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
 // Visible sidebar rows are prewarmed into the thread-detail cache so opening a
@@ -959,11 +968,14 @@ export function searchSidebarThreads<
 
 export function filterSidebarProjectScopeItems<TItem extends { readonly value: string }>(input: {
   items: readonly TItem[];
+  activeScopeKey: string | null;
   query: string;
   matches: (item: TItem, query: string) => boolean;
 }): readonly TItem[] {
   const query = input.query.trim();
-  if (query.length === 0) return input.items;
+  if (query.length === 0) {
+    return input.items.filter((item) => item.value !== "all" || input.activeScopeKey !== null);
+  }
   return input.items.filter((item) => item.value !== "all" && input.matches(item, query));
 }
 

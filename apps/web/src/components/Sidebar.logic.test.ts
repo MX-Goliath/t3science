@@ -880,6 +880,7 @@ describe("filterSidebarProjectScopeItems", () => {
   const filter = (query: string) =>
     filterSidebarProjectScopeItems({
       items,
+      activeScopeKey: null,
       query,
       matches: (item, candidate) =>
         item.label.toLocaleLowerCase().includes(candidate.toLocaleLowerCase()),

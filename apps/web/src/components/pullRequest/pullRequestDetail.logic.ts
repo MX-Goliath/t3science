@@ -185,6 +185,25 @@ export function editPullRequestThreadComment<
   return comments.map((comment) => (comment.id === commentId ? { ...comment, body } : comment));
 }
 
+export function isThreadOwnPullRequest(
+  thread: {
+    readonly projectId: string | null;
+    readonly repository: string | null;
+    readonly number: number | null;
+  },
+  surface: {
+    readonly projectId: string;
+    readonly repository: string;
+    readonly number: number;
+  },
+): boolean {
+  return (
+    thread.projectId === surface.projectId &&
+    thread.repository === surface.repository &&
+    thread.number === surface.number
+  );
+}
+
 type LegacyLinkedPullRequest = Pick<ThreadLinkedPullRequest, "repository" | "number">;
 
 /**
