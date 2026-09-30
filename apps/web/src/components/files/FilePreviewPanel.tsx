@@ -1,3 +1,4 @@
+import type { CitePdf } from "./pdfCitation";
 import { Spinner } from "~/components/ui/spinner";
 import type {
   ChatFileAttachment,
@@ -93,6 +94,7 @@ import {
 } from "./projectFilesQueryState";
 
 interface FilePreviewPanelProps {
+  onCitePdf?: CitePdf;
   environmentId: EnvironmentId;
   cwd: string;
   projectName: string;
@@ -182,6 +184,7 @@ function WorkspaceImagePreview(props: {
  * host file outside it is served on its own.
  */
 function WorkspaceBrowserPreview(props: {
+  readonly onCitePdf?: CitePdf | undefined;
   readonly environmentId: EnvironmentId;
   readonly threadRef: ScopedThreadRef;
   readonly absolutePath: string;
@@ -224,6 +227,7 @@ function WorkspaceBrowserPreview(props: {
       src={`${assetUrl.url}${revisionSuffix}`}
       title={props.title}
       pdf={isPdfPreviewFile(props.absolutePath)}
+      onCitePdf={props.onCitePdf}
     />
   );
 }
@@ -905,6 +909,7 @@ function initialExplorerOpen(): boolean {
 }
 
 export default function FilePreviewPanel({
+  onCitePdf,
   environmentId,
   cwd,
   projectName,
@@ -1190,6 +1195,7 @@ export default function FilePreviewPanel({
         >
           {isDirectory ? null : relativePath && attachment ? (
             <AttachmentFilePreview
+              onCitePdf={onCitePdf}
               key={`${environmentId}:${attachment.id}`}
               name={attachment.name}
               mimeType={attachment.mimeType}
@@ -1227,6 +1233,7 @@ export default function FilePreviewPanel({
             />
           ) : relativePath && renderBrowserFile && absolutePath ? (
             <WorkspaceBrowserPreview
+              onCitePdf={onCitePdf}
               key={absolutePath}
               environmentId={environmentId}
               threadRef={threadRef}

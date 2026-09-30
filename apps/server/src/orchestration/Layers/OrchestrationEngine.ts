@@ -43,6 +43,7 @@ import {
 import { decideOrchestrationCommand } from "../decider.ts";
 import { createEmptyReadModel, projectEvent } from "../projector.ts";
 import { OrchestrationProjectionPipeline } from "../Services/ProjectionPipeline.ts";
+import { PortableConversationContext } from "../Services/PortableConversationContext.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import {
@@ -96,6 +97,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
   const eventStore = yield* OrchestrationEventStore;
   const commandReceiptRepository = yield* OrchestrationCommandReceiptRepository;
   const projectionPipeline = yield* OrchestrationProjectionPipeline;
+  const portableConversationContext = yield* PortableConversationContext;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const crypto = yield* Crypto.Crypto;
@@ -338,6 +340,12 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           );
 
         commandReadModel = committedCommand.nextCommandReadModel;
+        // Register imported history before the turn reactor can observe the event.
+        for (const event of committedCommand.committedEvents) {
+          if (event.type === "thread.portable-imported") {
+            yield* portableConversationContext.markPending(event.payload.thread.id);
+          }
+        }
         for (const cleanup of committedCommand.attachmentCleanups) {
           yield* cleanup;
         }

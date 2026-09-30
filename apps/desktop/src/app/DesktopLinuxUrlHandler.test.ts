@@ -176,6 +176,7 @@ describe("DesktopLinuxUrlHandler", () => {
       'Exec="/home/al ice/Apps/T3 \\\\"100%%\\\\" \\\\$HOME\\\\\\\\x.AppImage" %U',
     );
     assert.include(entry, "NoDisplay=true");
+    assert.include(entry, "X-GNOME-UsesNotifications=true");
     assert.notInclude(entry, "StartupWMClass=");
     assert.include(entry, "MimeType=x-scheme-handler/t3science;");
     assert.include(entry, "Icon=/home/al ice/icons/T3\\\\x.png");

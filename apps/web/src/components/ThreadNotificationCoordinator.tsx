@@ -13,11 +13,15 @@ import { useCallback, useEffect, useRef } from "react";
 import { getClientSettings, useClientSettings } from "../hooks/useSettings";
 import { useEnvironments } from "../state/environments";
 import { environmentShell } from "../state/shell";
+import { threadNotificationContent } from "../threadNotificationContent";
+import { watchThreadNotificationDetail } from "../threadNotificationDetail";
 import {
   hasDesktopNotifications,
   hasNotificationSound,
   playNotificationSound,
   setNotificationBadge,
+  showThreadNotification,
+  type ThreadNotification,
   unlockNotificationAudio,
 } from "../threadNotifications";
 import { resolveSidebarThreadStatus } from "./Sidebar.logic";
@@ -30,13 +34,21 @@ export function ThreadNotificationCoordinator() {
     (settings) => settings.inAppNotificationsEnabled,
   );
   const pending = useRef(
-    new Map<string, { environmentId: EnvironmentId; notification: Notification }>(),
+    new Map<string, { environmentId: EnvironmentId; notification: ThreadNotification }>(),
   );
-  const onNotification = useCallback((environmentId: EnvironmentId, notification: Notification) => {
-    pending.current.get(notification.tag)?.notification.close();
-    pending.current.set(notification.tag, { environmentId, notification });
-    setNotificationBadge(pending.current.size);
-  }, []);
+  const onNotification = useCallback(
+    (environmentId: EnvironmentId, notification: ThreadNotification) => {
+      pending.current.get(notification.tag)?.notification.close();
+      pending.current.set(notification.tag, { environmentId, notification });
+      setNotificationBadge(pending.current.size);
+      return () => {
+        if (pending.current.get(notification.tag)?.notification !== notification) return;
+        pending.current.delete(notification.tag);
+        setNotificationBadge(pending.current.size);
+      };
+    },
+    [],
+  );
 
   useEffect(() => {
     const activeIds = new Set(environments.map(({ environmentId }) => environmentId));
@@ -92,7 +104,7 @@ function EnvironmentNotifications({
   onNotification,
 }: {
   environmentId: EnvironmentId;
-  onNotification: (environmentId: EnvironmentId, notification: Notification) => void;
+  onNotification: (environmentId: EnvironmentId, notification: ThreadNotification) => () => void;
 }) {
   const shell = useAtomValue(environmentShell.stateValueAtom(environmentId));
   const mode = useClientSettings((settings) => settings.notificationMode);
@@ -106,9 +118,29 @@ function EnvironmentNotifications({
   const previous = useRef(
     new Map<ThreadId, { attention: string | null; completion: number | null }>(),
   );
+  const loading = useRef(new Map<ThreadId, { key: string; cancel: () => void }>());
+  const cancelLoading = useCallback(() => {
+    for (const request of loading.current.values()) request.cancel();
+    loading.current.clear();
+  }, []);
+
+  useEffect(() => {
+    if (!hasDesktopNotifications(mode)) {
+      cancelLoading();
+      return;
+    }
+    window.addEventListener("focus", cancelLoading);
+    const unsubscribe = window.desktopBridge?.onNotificationBadgeClear?.(cancelLoading);
+    return () => {
+      window.removeEventListener("focus", cancelLoading);
+      unsubscribe?.();
+      cancelLoading();
+    };
+  }, [cancelLoading, mode]);
 
   useEffect(() => {
     if (shell.status !== "live" || Option.isNone(shell.snapshot)) {
+      cancelLoading();
       previous.current.clear();
       return;
     }
@@ -129,6 +161,12 @@ function EnvironmentNotifications({
           ? completedAt
           : (prior?.completion ?? null);
       next.set(thread.id, { attention, completion });
+      const eventKey = `${thread.latestTurn?.turnId ?? ""}:${attention ?? completion}`;
+      const pending = loading.current.get(thread.id);
+      if (pending && (pending.key !== eventKey || thread.archivedAt !== null)) {
+        pending.cancel();
+        loading.current.delete(thread.id);
+      }
       if (!prior || thread.archivedAt !== null) continue;
       const kind =
         attention && attention !== prior.attention
@@ -145,9 +183,11 @@ function EnvironmentNotifications({
             : status === "failed"
               ? "Thread failed"
               : "Input needed";
-      if (hasNotificationSound(mode)) {
-        void playNotificationSound(kind, () =>
-          hasNotificationSound(getClientSettings().notificationMode),
+      const isActive = () => document.visibilityState === "visible" && document.hasFocus();
+      if (!isActive() && hasNotificationSound(mode)) {
+        void playNotificationSound(
+          kind,
+          () => !isActive() && hasNotificationSound(getClientSettings().notificationMode),
         );
       }
       if (
@@ -188,34 +228,61 @@ function EnvironmentNotifications({
       }
       if (
         !hasDesktopNotifications(mode) ||
-        (document.visibilityState === "visible" && document.hasFocus()) ||
-        typeof Notification === "undefined" ||
-        Notification.permission !== "granted"
+        (document.visibilityState === "visible" && document.hasFocus())
       )
         continue;
-      try {
-        const notification = new Notification(title, {
-          body: thread.title,
-          tag: `${environmentId}:${thread.id}`,
-          silent: true,
-        });
-        onNotification(environmentId, notification);
-        notification.addEventListener("click", () => {
-          notification.close();
-          window.focus();
-          void navigate({
-            to: "/$environmentId/$threadId",
-            params: { environmentId, threadId: thread.id },
-          });
-        });
-      } catch {
-        // Some browsers expose Notification but reject desktop presentation.
-      }
+      const notificationKind =
+        kind === "completion"
+          ? "done"
+          : status === "failed"
+            ? "error"
+            : status === "approval"
+              ? "approval"
+              : "input";
+      const request = { key: eventKey, cancel: () => {} };
+      loading.current.set(thread.id, request);
+      request.cancel = watchThreadNotificationDetail(
+        { environmentId, threadId: thread.id },
+        thread,
+        notificationKind,
+        (detail) => {
+          if (loading.current.get(thread.id) !== request) return;
+          loading.current.delete(thread.id);
+          if (isActive() || !hasDesktopNotifications(getClientSettings().notificationMode)) return;
+          const content = threadNotificationContent(thread, notificationKind, detail);
+          try {
+            let removeNotification: (() => void) | undefined;
+            const notification = showThreadNotification(
+              content.title,
+              content.body,
+              `${environmentId}:${thread.id}`,
+              () => {
+                notification?.close();
+                window.focus();
+                void navigate({
+                  to: "/$environmentId/$threadId",
+                  params: { environmentId, threadId: thread.id },
+                });
+              },
+              () => removeNotification?.(),
+            );
+            if (notification) removeNotification = onNotification(environmentId, notification);
+          } catch {
+            // Some browsers expose Notification but reject desktop presentation.
+          }
+        },
+      );
+    }
+    for (const [threadId, request] of loading.current) {
+      if (next.has(threadId)) continue;
+      request.cancel();
+      loading.current.delete(threadId);
     }
     previous.current = next;
   }, [
     activeEnvironmentId,
     activeThreadId,
+    cancelLoading,
     environmentId,
     inAppNotificationsEnabled,
     mode,

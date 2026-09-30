@@ -39,7 +39,8 @@ export function NotificationSettings() {
             setPermissionMessage(null);
             if (hasNotificationSound(value)) unlockNotificationAudio();
             if (hasDesktopNotifications(value)) {
-              if (typeof Notification === "undefined" || !window.isSecureContext) {
+              const native = window.desktopBridge?.notifications;
+              if (!native && (typeof Notification === "undefined" || !window.isSecureContext)) {
                 setPermissionMessage(
                   "Notifications need a supported browser over HTTPS, or the desktop app. Sound only is still available.",
                 );
@@ -47,16 +48,20 @@ export function NotificationSettings() {
               }
               setRequesting(true);
               try {
-                const permission = await Notification.requestPermission();
-                if (permission !== "granted") {
+                const granted = native
+                  ? await native.isSupported()
+                  : (await Notification.requestPermission()) === "granted";
+                if (!granted) {
                   setPermissionMessage(
-                    "Allow notifications in your browser or system settings, then choose this option again. Sound only is still available.",
+                    native
+                      ? "System notifications are unavailable. Check that libnotify is installed and notifications are enabled in your desktop settings."
+                      : "Allow notifications in your browser or system settings, then choose this option again. Sound only is still available.",
                   );
                   return;
                 }
               } catch {
                 setPermissionMessage(
-                  "Notifications are unavailable in this browser. Sound only is still available.",
+                  "Notifications are unavailable. Sound only is still available.",
                 );
                 return;
               } finally {

@@ -203,7 +203,7 @@ playback controls. Large text files show a limited preview; save the file to rea
 On web and desktop, files open beside the conversation with the same controls as a workspace
 file: a header row with the view toggle, **Copy contents** and **Save file**. On mobile, documents
 open in the same file screen as workspace files; its menu holds **Copy contents**, **Save or
-share** and **Open in file viewer**. Pictures, videos and PDFs keep their native viewers, and
+share** and **Open in file viewer**. Pictures and videos keep their native viewers, and
 other document formats such as Word or Pages open in the device's own viewer when it has one.
 If nothing on the device can show a format, save or share it to open it elsewhere.
 
@@ -231,6 +231,13 @@ styles, or images from neighboring files.
 On web and desktop, HTML and PDF files open as rendered pages. Switch an HTML
 file to source view to read its markup; a link to a specific line opens source
 automatically. HTML previews cannot access your T3 Code session.
+
+To quote a PDF on web or desktop, open it in the file viewer or preview a draft
+attachment. Select text and click **Cite**. For a figure or scanned page, enable
+**Select area**, drag a rectangle, then click **Cite**. The quote is added to your
+message with the document name and page number. Area selections attach an image
+and include its position on the page. You can edit or remove these before sending.
+Text extraction requires a PDF text layer; scanned text can be shared as an image.
 
 On mobile, select a PDF attachment or link to open it. iOS uses the native viewer;
 Android opens a compatible installed file viewer.

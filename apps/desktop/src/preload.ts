@@ -33,6 +33,12 @@ exposeClerkBridge({ passkeys: true });
 // oxlint-disable-next-line t3code/no-global-process-runtime -- Electron exposes the client platform in its sandboxed preload process.
 const clientPlatform = process.platform;
 
+const notificationClickListeners = new Set<(id: string) => void>();
+const onNotificationClick = (_event: Electron.IpcRendererEvent, id: unknown) => {
+  if (typeof id !== "string") return;
+  for (const listener of notificationClickListeners) listener(id);
+};
+
 if (clientPlatform === "darwin") {
   // Native window buttons do not scale with Chromium zoom. Keep their reserved
   // space in native points, including when a zoomed page is reloaded.
@@ -72,6 +78,31 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   },
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   getClientPlatform: () => clientPlatform,
+  ...(clientPlatform === "linux"
+    ? {
+        notifications: {
+          isSupported: () => ipcRenderer.invoke(IpcChannels.NOTIFICATIONS_SUPPORTED_CHANNEL),
+          show: (notification) =>
+            ipcRenderer.invoke(IpcChannels.SHOW_NOTIFICATION_CHANNEL, notification),
+          close: (id) => ipcRenderer.invoke(IpcChannels.CLOSE_NOTIFICATION_CHANNEL, id),
+          onClick: (listener) => {
+            if (notificationClickListeners.size === 0) {
+              ipcRenderer.on(IpcChannels.NOTIFICATION_CLICK_CHANNEL, onNotificationClick);
+            }
+            notificationClickListeners.add(listener);
+            return () => {
+              notificationClickListeners.delete(listener);
+              if (notificationClickListeners.size === 0) {
+                ipcRenderer.removeListener(
+                  IpcChannels.NOTIFICATION_CLICK_CHANNEL,
+                  onNotificationClick,
+                );
+              }
+            };
+          },
+        } satisfies NonNullable<DesktopBridge["notifications"]>,
+      }
+    : {}),
   setNotificationBadge: (badge) =>
     ipcRenderer.invoke(IpcChannels.SET_NOTIFICATION_BADGE_CHANNEL, badge),
   onNotificationBadgeClear: (listener) => {

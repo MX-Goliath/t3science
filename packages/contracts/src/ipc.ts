@@ -1248,6 +1248,13 @@ export const DesktopPreviewAutomationWaitForInputSchema = Schema.Struct({
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export const DesktopNotification = Schema.Struct({
+  id: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(128)),
+  title: Schema.String.check(Schema.isMaxLength(256)),
+  body: Schema.String.check(Schema.isMaxLength(4096)),
+});
+export type DesktopNotification = typeof DesktopNotification.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   /** Absolute path of a dropped or picked file; absent on desktop builds predating it. */
@@ -1256,6 +1263,13 @@ export interface DesktopBridge {
   getClientPlatform?: () => string;
   setNotificationBadge?: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear?: (listener: () => void) => () => void;
+  /** Native Linux notifications, including AppImage builds. */
+  notifications?: {
+    isSupported: () => Promise<boolean>;
+    show: (notification: DesktopNotification) => Promise<boolean>;
+    close: (id: string) => Promise<void>;
+    onClick: (listener: (id: string) => void) => () => void;
+  };
   onTrackpadScrollEnd?: (listener: () => void) => () => void;
   /**
    * The OS locale as a BCP-47 tag, which the renderer cannot read for itself:

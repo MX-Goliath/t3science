@@ -21,6 +21,17 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 vi.mock("./ui/toast", () => ({ toastManager: { add: state.toast } }));
 vi.mock("../state/shell", () => ({ environmentShell: { stateValueAtom: (id: string) => id } }));
+vi.mock("../threadNotificationDetail", () => ({
+  watchThreadNotificationDetail: (
+    _ref: unknown,
+    _thread: unknown,
+    _kind: unknown,
+    ready: (detail: null) => void,
+  ) => {
+    ready(null);
+    return () => {};
+  },
+}));
 vi.mock("../state/environments", () => ({
   useEnvironments: () => ({
     environments: state.environmentIds.map((environmentId) => ({ environmentId })),
@@ -191,7 +202,7 @@ it("starts a fresh count after another native app window gains focus", async () 
   expect(state.badge).toHaveBeenLastCalledWith(1);
   await act(async () => renderer!.unmount());
   renderer = undefined;
-  expect(unsubscribe).toHaveBeenCalledOnce();
+  expect(unsubscribe).toHaveBeenCalledTimes(3);
   expect(state.badge).toHaveBeenLastCalledWith(0);
 });
 
@@ -253,7 +264,92 @@ it("badges background failures with in-app notifications enabled", async () => {
   await render();
   state.shells.set("one", shell({ latestTurn: { ...thread.latestTurn, state: "error" } }));
   await render();
-  expect(TestNotification.sent[0]?.title).toBe("Thread failed");
+  expect(TestNotification.sent[0]?.title).toBe("Error · Test thread");
   expect(state.badge).toHaveBeenLastCalledWith(1);
   expect(state.toast).not.toHaveBeenCalled();
+});
+
+function nativeNotifications() {
+  const listeners = new Set<(id: string) => void>();
+  const bridge = {
+    isSupported: vi.fn(async () => true),
+    show: vi.fn(async (_input: { id: string; title: string; body: string }) => true),
+    close: vi.fn(async (_id: string) => {}),
+    onClick: (listener: (id: string) => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+  Object.assign(window, { desktopBridge: { notifications: bridge }, isSecureContext: false });
+  // Native Linux notifications must also work for remote HTTP environments.
+  vi.stubGlobal("Notification", undefined);
+  return { bridge, listeners };
+}
+
+it("uses native Linux alerts without browser permission and opens the correct environment", async () => {
+  const { bridge, listeners } = nativeNotifications();
+  await render();
+  complete("one");
+  complete("two");
+  await render();
+  expect(TestNotification.sent).toHaveLength(0);
+  expect(bridge.show).toHaveBeenCalledTimes(2);
+  expect(state.badge).toHaveBeenLastCalledWith(2);
+  const [first, second] = bridge.show.mock.calls.map(([input]) => input);
+  expect(second).toMatchObject({
+    title: "Done · Test thread",
+    body: "The model finished its response.",
+  });
+  expect(first!.id).not.toBe(second!.id);
+  for (const listener of listeners) listener(second!.id);
+  expect(state.navigate).toHaveBeenCalledExactlyOnceWith({
+    to: "/$environmentId/$threadId",
+    params: { environmentId: "two", threadId: "thread" },
+  });
+  expect(bridge.close).toHaveBeenCalledWith(second!.id);
+  window.dispatchEvent(new Event("focus"));
+  expect(bridge.close).toHaveBeenCalledWith(first!.id);
+  expect(listeners.size).toBe(0);
+  expect(state.badge).toHaveBeenLastCalledWith(0);
+});
+
+it("replaces native alerts per thread and closes them when disabled", async () => {
+  const { bridge, listeners } = nativeNotifications();
+  await render();
+  complete();
+  await render();
+  const first = bridge.show.mock.calls[0]![0];
+  complete("one", "2026-09-13T09:00:00Z");
+  await render();
+  expect(bridge.close).toHaveBeenCalledWith(first.id);
+  expect(listeners.size).toBe(1);
+  expect(state.badge).toHaveBeenLastCalledWith(1);
+  state.mode = "off";
+  await render();
+  expect(listeners.size).toBe(0);
+  expect(bridge.close).toHaveBeenCalledTimes(2);
+  expect(state.badge).toHaveBeenLastCalledWith(0);
+});
+
+it("releases native click listeners when notification delivery rejects", async () => {
+  const { bridge, listeners } = nativeNotifications();
+  bridge.show.mockRejectedValue(new Error("IPC unavailable"));
+  await render();
+  complete();
+  await render();
+  expect(listeners.size).toBe(0);
+  expect(bridge.close).toHaveBeenCalledOnce();
+  expect(state.badge).toHaveBeenLastCalledWith(0);
+});
+
+it("does not count native notifications refused by the main process", async () => {
+  const { bridge, listeners } = nativeNotifications();
+  bridge.show.mockResolvedValue(false);
+  await render();
+  complete();
+  await render();
+  expect(listeners.size).toBe(0);
+  expect(state.badge).toHaveBeenLastCalledWith(0);
 });

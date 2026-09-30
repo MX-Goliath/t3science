@@ -690,7 +690,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       ]);
       assert.equal((linux.linux as Record<string, unknown>).executableName, "t3science");
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).desktop, {
-        entry: { StartupWMClass: "t3science" },
+        entry: { StartupWMClass: "t3science", "X-GNOME-UsesNotifications": "true" },
       });
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
       assert.deepStrictEqual(linux.files, [...DESKTOP_FILE_EXCLUSIONS, ...LINUX_FILE_EXCLUSIONS]);

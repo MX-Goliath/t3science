@@ -1,3 +1,4 @@
+import type { CitePdf } from "./pdfCitation";
 import { filePreviewDelimiter } from "@t3tools/shared/delimitedPreview";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
@@ -69,6 +70,7 @@ export function AttachmentFilePreview(props: {
   asset?: { environmentId: EnvironmentId; attachmentId: string };
   /** First crumb: where the file comes from. */
   origin?: string;
+  onCitePdf?: CitePdf | undefined;
   onRemove?: () => void;
   onClose?: () => void;
 }) {
@@ -251,7 +253,12 @@ export function AttachmentFilePreview(props: {
       <ReadOnlySourcePreview name={props.name} text={content.text} />
     )
   ) : kind === "pdf" || kind === "html" ? (
-    <BrowserDocumentFrame src={url} title={props.name} pdf={kind === "pdf"} />
+    <BrowserDocumentFrame
+      src={url}
+      title={props.name}
+      pdf={kind === "pdf"}
+      onCitePdf={props.onCitePdf}
+    />
   ) : kind === "audio" ? (
     <AudioPreview src={url} name={props.name} onError={() => setError("Unable to load audio.")} />
   ) : kind === "video" ? (

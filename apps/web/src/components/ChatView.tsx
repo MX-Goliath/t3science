@@ -9862,6 +9862,15 @@ export default function ChatView(props: ChatViewProps) {
         (renderedRightPanelSurface.kind === "file" && renderedRightPanelSurface.attachment)) ? (
       <Suspense fallback={null}>
         <FilePreviewPanel
+          onCitePdf={(citation) => {
+            const composer = composerRef.current;
+            if (!composer || renderedRightPanelSurface.kind !== "file") return false;
+            const source = renderedRightPanelSurface.attachment
+              ? `${renderedRightPanelSurface.attachment.name} (attachment ${renderedRightPanelSurface.attachment.id})`
+              : renderedRightPanelSurface.relativePath;
+            if (!source) return false;
+            return composer.citePdf(source, citation);
+          }}
           key={`${activeThread.environmentId}:${
             renderedRightPanelSurface.kind === "file" && renderedRightPanelSurface.attachment
               ? `attachment:${renderedRightPanelSurface.attachment.id}`

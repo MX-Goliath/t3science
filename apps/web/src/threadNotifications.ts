@@ -19,6 +19,50 @@ export function hasDesktopNotifications(mode: NotificationMode) {
   return mode === "notifications" || mode === "notifications-and-sound";
 }
 
+export type ThreadNotification = Pick<Notification, "tag" | "close">;
+
+export function showThreadNotification(
+  title: string,
+  body: string,
+  tag: string,
+  onClick: () => void,
+  onFailure: () => void,
+): ThreadNotification | undefined {
+  const native = window.desktopBridge?.notifications;
+  if (native) {
+    // Remote HTTP environments do not expose randomUUID in the renderer.
+    const id = crypto.getRandomValues(new Uint32Array(4)).join("-");
+    let closed = false;
+    const unsubscribe = native.onClick((clickedId) => {
+      if (!closed && clickedId === id) onClick();
+    });
+    const notification = {
+      tag,
+      close: () => {
+        if (closed) return;
+        closed = true;
+        unsubscribe();
+        void native.close(id).catch(() => undefined);
+      },
+    };
+    const failed = () => {
+      notification.close();
+      onFailure();
+    };
+    void native
+      .show({ id, title, body })
+      .then((shown) => {
+        if (!shown) failed();
+      })
+      .catch(failed);
+    return notification;
+  }
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  const notification = new Notification(title, { body, tag, silent: true });
+  notification.addEventListener("click", onClick);
+  return notification;
+}
+
 let originalFavicon: HTMLLinkElement | undefined;
 let badgeFavicon: HTMLLinkElement | undefined;
 

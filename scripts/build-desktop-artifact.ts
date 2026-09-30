@@ -2839,6 +2839,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       desktop: {
         entry: {
           StartupWMClass: DESKTOP_PRODUCTION_LINUX_WM_CLASS,
+          "X-GNOME-UsesNotifications": "true",
         },
       },
     };

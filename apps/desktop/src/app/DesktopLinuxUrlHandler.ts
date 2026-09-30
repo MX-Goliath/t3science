@@ -101,6 +101,7 @@ export function renderUrlHandlerDesktopEntry(input: {
     "Terminal=false",
     "NoDisplay=true",
     "StartupNotify=false",
+    "X-GNOME-UsesNotifications=true",
     `MimeType=x-scheme-handler/${input.scheme};`,
     "",
   ].join("\n");

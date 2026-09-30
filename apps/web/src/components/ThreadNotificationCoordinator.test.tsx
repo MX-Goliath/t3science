@@ -17,6 +17,12 @@ const state = vi.hoisted(() => ({
   approval: false,
   sessionError: false,
   turnError: false,
+  detail: vi.fn(
+    (_ref: unknown, _thread: unknown, _kind: unknown, ready: (detail: null) => void) => {
+      ready(null);
+      return vi.fn();
+    },
+  ),
   add: vi.fn(
     (_toast: { title: string; description: string; actionProps: { onClick: () => void } }) =>
       "toast-1",
@@ -69,6 +75,7 @@ vi.mock("../state/environments", () => ({
 vi.mock("../state/shell", () => ({
   environmentShell: { stateValueAtom: vi.fn() },
 }));
+vi.mock("../threadNotificationDetail", () => ({ watchThreadNotificationDetail: state.detail }));
 vi.mock("../threadNotifications", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../threadNotifications")>()),
   playNotificationSound: state.sound,
@@ -174,7 +181,7 @@ describe("thread notifications", () => {
     await render();
     expect(state.add).toHaveBeenCalledTimes(1);
     expect(state.add).toHaveBeenLastCalledWith(expect.objectContaining({ title }));
-    expect(state.sound).toHaveBeenCalledWith("input", expect.any(Function));
+    expect(state.sound).not.toHaveBeenCalled();
     expect(state.notification).not.toHaveBeenCalled();
 
     state[event] = false;
@@ -185,11 +192,19 @@ describe("thread notifications", () => {
     await render();
     expect(state.add).toHaveBeenCalledTimes(1);
     expect(state.notification).toHaveBeenCalledTimes(1);
-    expect(state.notification).toHaveBeenCalledWith(title, {
-      body: "Fix the login form",
-      tag: "env-1:thread-1",
-      silent: true,
-    });
+    expect(state.notification).toHaveBeenCalledWith(
+      `${event.endsWith("Error") ? "Error" : title} · Fix the login form`,
+      {
+        body:
+          event === "input"
+            ? "The model is waiting for your answer."
+            : event === "approval"
+              ? "The model needs your permission to continue."
+              : "The model could not finish the task. Open the thread for details.",
+        tag: "env-1:thread-1",
+        silent: true,
+      },
+    );
   });
 
   it("keeps background desktop alerts when in-app notifications are disabled", async () => {
@@ -230,11 +245,11 @@ describe("thread notifications", () => {
     expect(state.add).not.toHaveBeenCalled();
   });
 
-  it("keeps sound but replaces the system popup when showing a toast", async () => {
+  it("keeps active-window toasts silent and suppresses system popups", async () => {
     state.mode = "notifications-and-sound";
     await render();
     await complete();
-    expect(state.sound).toHaveBeenCalledWith("completion", expect.any(Function));
+    expect(state.sound).not.toHaveBeenCalled();
     expect(state.add).toHaveBeenCalledTimes(1);
     expect(state.notification).not.toHaveBeenCalled();
   });
@@ -245,10 +260,56 @@ describe("thread notifications", () => {
     await render();
     await complete();
     expect(state.add).not.toHaveBeenCalled();
-    expect(state.notification).toHaveBeenCalledWith("Thread completed", {
-      body: "Fix the login form",
+    expect(state.notification).toHaveBeenCalledWith("Done · Fix the login form", {
+      body: "The model finished its response.",
       tag: "env-1:thread-1",
       silent: true,
     });
+  });
+
+  it("cancels pending notification text when the window gains focus", async () => {
+    let ready: ((detail: null) => void) | undefined;
+    const cancel = vi.fn();
+    state.detail.mockImplementationOnce((_ref, _thread, _kind, callback) => {
+      ready = callback;
+      return cancel;
+    });
+    state.mode = "notifications";
+    state.focused = false;
+    await render();
+    await complete();
+    expect(state.notification).not.toHaveBeenCalled();
+    state.focused = true;
+    window.dispatchEvent(new Event("focus"));
+    state.focused = false;
+    ready!(null);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(state.notification).not.toHaveBeenCalled();
+  });
+
+  it("does not play a buffered sound after the window becomes active", async () => {
+    state.mode = "notifications-and-sound";
+    state.focused = false;
+    await render();
+    await complete();
+    const shouldPlay = state.sound.mock.calls[0]![1];
+    expect(shouldPlay()).toBe(true);
+    state.focused = true;
+    expect(shouldPlay()).toBe(false);
+  });
+
+  it("suppresses a notification if focus changes before its text is ready", async () => {
+    let ready: ((detail: null) => void) | undefined;
+    state.detail.mockImplementationOnce((_ref, _thread, _kind, callback) => {
+      ready = callback;
+      return vi.fn();
+    });
+    state.mode = "notifications";
+    state.focused = false;
+    await render();
+    await complete();
+    state.focused = true;
+    ready!(null);
+    expect(state.notification).not.toHaveBeenCalled();
   });
 });

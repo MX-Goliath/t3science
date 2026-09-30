@@ -45,11 +45,13 @@ import {
 } from "../../persistence/Services/OrchestrationEventStore.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
+import { PortableConversationContextLive } from "./PortableConversationContext.ts";
 import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
+import { PortableConversationContext } from "../Services/PortableConversationContext.ts";
 import {
   OrchestrationProjectionPipeline,
   type OrchestrationProjectionPipelineShape,
@@ -79,6 +81,7 @@ function makeOrchestrationLayer(
     ),
     OrchestrationProjectionSnapshotQueryLive,
   ).pipe(
+    Layer.provideMerge(PortableConversationContextLive),
     Layer.provideMerge(ThreadBackgroundLiveness.layer),
     Layer.provide(ThreadPlanProgress.layer),
     Layer.provide(OrchestrationEventStoreLive),
@@ -105,12 +108,16 @@ async function createOrchestrationSystem(
     makeOrchestrationLayer(databasePath, repositoryIdentityResolver),
   );
   const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
+  const portableContext = await runtime.runPromise(Effect.service(PortableConversationContext));
   const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
   return {
     engine,
+    portableContext,
     readModel: () => runtime.runPromise(snapshotQuery.getSnapshot()),
     readThread: (threadId: ThreadId) =>
       runtime.runPromise(snapshotQuery.getThreadDetailById(threadId)),
+    readThreadPage: (threadId: ThreadId) =>
+      runtime.runPromise(snapshotQuery.getThreadDetailSnapshot(threadId, { turnLimit: 20 })),
     run: <A, E>(effect: Effect.Effect<A, E>) => runtime.runPromise(effect),
     dispose: () => runtime.dispose(),
   };
@@ -217,6 +224,27 @@ describe("OrchestrationEngine", () => {
           createdAt: now(),
         }),
       );
+
+      const liveForkId = ThreadId.make("fork-without-restart");
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.fork",
+          commandId: CommandId.make("fork-live"),
+          projectId,
+          sourceThreadId,
+          messageId: assistantMessageId,
+          newThreadId: liveForkId,
+          createdAt: "2026-01-01T00:00:01.000Z",
+        }),
+      );
+      expect(await system.run(system.portableContext.isPending(liveForkId))).toBe(true);
+      const liveFork = Option.getOrThrow(await system.readThread(liveForkId));
+      expect(liveFork.messages.map((message) => message.text)).toEqual(["Question", "Answer"]);
+      const liveForkPage = Option.getOrThrow(await system.readThreadPage(liveForkId));
+      expect(liveForkPage.thread.messages.map((message) => message.text)).toEqual([
+        "Question",
+        "Answer",
+      ]);
 
       await system.dispose();
       system = await createOrchestrationSystem(databasePath);

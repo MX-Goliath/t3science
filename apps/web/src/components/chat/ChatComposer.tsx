@@ -1,3 +1,4 @@
+import { formatPdfCitation, type PdfCitation } from "../files/pdfCitation";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
 import { usePrimaryEnvironmentId } from "../../state/environments";
@@ -1298,6 +1299,7 @@ export interface ChatComposerHandle {
   restoreAfterTimelineReachedEnd: () => void;
   collapseForTimelineScrollKey: (key: string) => void;
   addDroppedFiles: (files: File[]) => void;
+  citePdf: (source: string, citation: PdfCitation) => Promise<boolean>;
   addDroppedFolders: (folders: File[]) => void;
   hasPendingAttachments: () => boolean;
   insertTextAtEnd: (
@@ -5765,6 +5767,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     return insertedAny;
   };
 
+  const citePdf = async (source: string, citation: PdfCitation): Promise<boolean> => {
+    if (
+      isConnecting ||
+      isComposerApprovalState ||
+      pendingUserInputs.length > 0 ||
+      projectSelectionRequired ||
+      isRevertingCheckpointRef.current
+    )
+      return false;
+    const targetKey = attachmentTargetKey;
+    if (citation.image) {
+      const cursor = promptRef.current.length;
+      const accepted = await addComposerAttachments([citation.image], {
+        selection: { start: cursor, end: cursor },
+      });
+      if (!accepted) return false;
+    }
+    if (attachmentTargetKeyRef.current !== targetKey) return false;
+    return insertComposerTextAtEnd(formatPdfCitation(source, citation));
+  };
+
   /**
    * Chips for freshly attached files land at the caret; when the editor cannot take
    * input (approval, pending questions) they are appended so the file is never invisible.
@@ -6136,6 +6159,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           setIsComposerScrollCollapsed(true);
         }
       },
+      citePdf,
       addDroppedFiles: (files: File[]) => {
         void addComposerAttachments(files).then((inserted) => {
           if (!inserted) focusComposer();
@@ -6331,6 +6355,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       insertComposerDraftTerminalContext,
       insertComposerText,
       insertComposerTextAtEnd,
+      citePdf,
       promptRef,
       composerImagesRef,
       composerFilesRef,
@@ -7103,6 +7128,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         sizeBytes={previewFile.sizeBytes}
                         file={previewFile.file}
                         origin="Draft"
+                        onCitePdf={async (citation) => {
+                          const inserted = await citePdf(previewFile.name, citation);
+                          if (inserted) setPreviewFileId(null);
+                          return inserted;
+                        }}
                         {...(previewFile.uploadedAttachmentId && previewFile.uploadEnvironmentId
                           ? {
                               asset: {
