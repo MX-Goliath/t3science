@@ -329,6 +329,7 @@ function makeTestLayer(input: {
         Layer.mock(PreviewManager.PreviewManager)({
           getBrowserSession: () => Effect.succeed({} as Electron.Session),
           setMainWindow: () => Effect.void,
+          prepareWebview: () => Effect.void,
           isBrowserPartition: (partition) => partition.startsWith("persist:t3science-preview-"),
           getBrowserPartition: () => Effect.succeed("persist:t3science-preview-test"),
           reapplyZoom: () =>

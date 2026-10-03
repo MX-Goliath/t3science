@@ -13,6 +13,28 @@ an existing worktree, use **New thread in this worktree** from the branch toolba
 When you change a new thread's project, T3 Code stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.
 
+### Start without a project
+
+A thread does not need a project. To start one without a project, click **or
+start without a project** under a new thread's heading, pick **No project** from
+the project menu in that heading or from **New thread in...** in the command
+palette, or press `mod+alt+n`. On mobile, pick **No project** from the project
+list. To move a draft into a project, pick the project in the heading.
+
+Each thread without a project works in its own folder under `~/.t3/scratch` (the
+`scratch` folder of your T3 data directory), named after its date, the first words
+of its first message, and a short id, like
+`2026-09-25-convert-these-pngs-to-webp-a1b2c3d4`. Deleting a thread keeps its
+folder, so the files the agent wrote stay until you delete them. Branch, worktree, and diff controls stay hidden because
+these folders are not Git repositories. This is unavailable when the data
+directory itself sits inside a Git checkout.
+
+### General chats
+
+Enable **Settings → General → General chats** to use the fork's shared project for
+conversations without a workspace project. General chats and Scratch are independent:
+Scratch gives each thread its own folder; General chats use one shared folder.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
@@ -61,43 +83,34 @@ edge to pin a thread. Section labels stay readable for the whole drag, and the s
 thread is over takes the accent color. Section labels also
 identify empty sections and a collapsed settled shelf.
 
-Drag within the pinned or active section to change its order. Other rows slide aside to show the
-spot where the thread will land. Drops into either section keep the position you choose. On
-mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
-**Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
-settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**
-or **Settled** to drag a parked thread back into either live section. Each drop saves; **Done** returns to the thread list.
-**Move up** and **Move down** are also available in the thread menu. The server
-saves the order, so it survives a refresh and appears on your other connected devices.
+Drag within the pinned section to change its order. The server saves that order across
+refreshes and connected devices. On mobile, use **Arrange threads** to reorder pins
+or move threads between sections.
 
-On web and desktop, the list also animates section changes made with thread actions such as
-**Pin**, **Settle**, and **Snooze**. These transitions respect your system's reduced-motion
-preference. While dragging, rows follow the insertion gap without replaying a second transition
-after the drop.
+Active threads are sorted by activity. Sending a message brings its thread to the
+top, and starting new work or un-settling a thread also brings it forward. The
+settled shelf uses settlement time. Active threads cannot be manually reordered.
 
-New threads appear above the active threads you have arranged. Settling clears a thread's active
-position, so using **Un-settle** returns it to the top. Pinning and snoozing preserve its active
-position until you move it again. Thread activity does not change the order. The settled shelf
-continues to use settlement time.
+On web and desktop, section changes such as **Pin**, **Settle**, and **Snooze**
+respect your system's reduced-motion preference.
 
-If dragging is unavailable for one environment, update the T3 Code server running in that
-environment. Pinned and active reordering require server support. Threads from older servers keep
-their default order until the server is updated.
+To generate a fresh title from the conversation, open a thread's menu and choose
+**Regenerate title**. The action is unavailable while title generation is in progress
+or when the connected environment needs a server update.
 
-## Schedule a message
+Agents connected through T3 Science can use the same server-owned metadata workflow to
+rename a thread, regenerate its title, or link and unlink a pull request. These changes
+appear on web, desktop, and mobile without requiring the originating browser to remain
+open.
 
-Right-click the send button to schedule the current draft for a specific time. When the active
-provider reports less than 20% remaining in its session limit, the menu also offers the limit's
-reset time. If no session window is reported, T3 Science uses the weekly window. The reset time is
-captured when you schedule the message; T3 Science does not keep polling the limit.
+### Fold working threads (beta)
 
-When an agent is already working in another chat, the menu also offers **Send after agent finishes**.
-Choose the running chat and T3 Science will send the draft as soon as that specific turn completes.
-The option is hidden when no other agent is running.
+On web and desktop, turn on **Settings → General → Working section (beta)** to move threads that
+are working or monitoring into a collapsed **Working** section at the bottom of the sidebar. A
+thread returns to the top of the active list when it finishes, fails, or needs an approval or
+answer. Pinned threads stay in the pinned section.
 
-Scheduled chats appear with a blue timer above regular threads. Open one to edit its prompt. The
-send button becomes a timer; click it to send now or cancel. If T3 Science was closed when a timed
-send passed, the timer is shown in red after reopening and waits for you to choose what to do.
+The active list continues to use activity order when this setting is off.
 
 ## Settle finished work
 
@@ -153,7 +166,34 @@ for custom configuration.
 
 ## Inspect agent work
 
+**Limited** means the provider stopped on a usage or rate limit. The conversation
+keeps the provider's explanation. Retry after the limit resets, or switch to
+another provider instance.
+On web and desktop, press **Resume** in an empty composer to continue a limited
+or interrupted turn manually.
+Queued messages stay saved while the limit blocks the thread. They run after
+the continuation finishes. If the queue was held by a restart, resume it then.
+
+When the provider reports a reset time, choose **Resume at reset** to schedule a
+continuation. You can cancel it from the thread. Enable **Auto-resume limited
+threads** in **Settings → General** on web and desktop, or **Settings → Thread
+behavior** on mobile, to schedule limit stops by default.
+The environment must be running when the reset arrives; it resumes overdue
+continuations after a restart. Sending a new message, archiving, or settling the
+thread prevents a pending continuation from starting.
+
+Choose **Snooze until reset** to hide the thread until its allowance returns.
+Snooze and auto-resume are independent: snooze alone wakes the thread without
+sending a message; enabling both wakes and continues it. **Wake now** cancels
+the snooze. Enable **Snooze limited threads** in thread behavior settings to
+snooze limit stops by default. Providers without a reset time offer manual
+retry and the normal snooze choices.
+
 On web and desktop, use **Agents** to follow work delegated to subagents.
+
+Subagent threads started by the agent can't take messages; message the parent
+thread instead. When such a subagent needs an approval or an answer, the parent
+thread asks for it.
 
 Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it

@@ -1,4 +1,4 @@
-import type { OrchestrationThreadActivity } from "@t3tools/contracts";
+import type { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
 import * as Predicate from "effect/Predicate";
 
 export interface MobileContextWindowSnapshot {
@@ -12,27 +12,23 @@ function finiteNonNegative(value: unknown): number | null {
 }
 
 export function deriveLatestContextWindowSnapshot(
-  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  projection: OrchestrationV2ThreadProjection,
 ): MobileContextWindowSnapshot | null {
-  for (let index = activities.length - 1; index >= 0; index -= 1) {
-    const activity = activities[index];
-    if (activity?.kind !== "context-window.updated" || !Predicate.isObject(activity.payload)) {
-      continue;
-    }
-    const usedTokens = finiteNonNegative(activity.payload.usedTokens);
-    if (usedTokens === null) {
-      continue;
-    }
-    const rawMaxTokens = finiteNonNegative(activity.payload.maxTokens);
-    const maxTokens = rawMaxTokens !== null && rawMaxTokens > 0 ? rawMaxTokens : null;
-    return {
-      usedTokens,
-      maxTokens,
-      usedPercentage:
-        maxTokens === null ? null : Math.min(100, Math.round((usedTokens / maxTokens) * 100)),
-    };
-  }
-  return null;
+  const providerThread = projection.providerThreads.find(
+    (thread) => thread.id === projection.thread.activeProviderThreadId,
+  );
+  const usage = providerThread?.contextUsage;
+  if (!usage) return null;
+  const usedTokens = finiteNonNegative(usage.usedTokens);
+  if (usedTokens === null) return null;
+  const rawMaxTokens = finiteNonNegative(usage.maxTokens);
+  const maxTokens = rawMaxTokens !== null && rawMaxTokens > 0 ? rawMaxTokens : null;
+  return {
+    usedTokens,
+    maxTokens,
+    usedPercentage:
+      maxTokens === null ? null : Math.min(100, Math.round((usedTokens / maxTokens) * 100)),
+  };
 }
 
 export function formatCompactTokens(value: number): string {

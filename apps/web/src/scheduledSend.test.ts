@@ -161,7 +161,7 @@ describe("scheduled send runtime", () => {
         environmentId: "env-1" as never,
         id: "current" as never,
         title: "Current",
-        session: { status: "running", activeTurnId: "turn-current" as never },
+        runtime: { status: "running", activeRunId: "turn-current" as never },
       } as never),
     ).toEqual({
       environmentId: "env-1",
@@ -177,7 +177,7 @@ describe("scheduled send runtime", () => {
         environmentId: "env-1" as never,
         id: "idle" as never,
         title: "Idle",
-        session: { status: "idle", activeTurnId: null },
+        runtime: { status: "idle", activeRunId: null },
       } as never),
     ).toBeNull();
   });
@@ -271,19 +271,19 @@ describe("scheduled send runtime", () => {
           environmentId,
           id: "current" as never,
           title: "Current",
-          session: { status: "running", activeTurnId: "turn-current" as never },
+          runtime: { status: "running", activeRunId: "turn-current" as never },
         },
         {
           environmentId,
           id: "running" as never,
           title: "Running elsewhere",
-          session: { status: "running", activeTurnId: "turn-running" as never },
+          runtime: { status: "running", activeRunId: "turn-running" as never },
         },
         {
           environmentId,
           id: "idle" as never,
           title: "Idle",
-          session: { status: "idle", activeTurnId: null },
+          runtime: { status: "idle", activeRunId: null },
         },
       ] as never,
       { environmentId, threadId: "current" as never },

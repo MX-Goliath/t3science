@@ -7,13 +7,13 @@ import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 const layer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 
-layer("050_ProjectionThreadMessageModelSelection", (it) => {
+layer("057_ScienceMessageModelSelection", (it) => {
   it.effect("keeps upstream thread metadata and adds message model metadata", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
       yield* runMigrations({ toMigrationInclusive: 49 });
-      yield* runMigrations({ toMigrationInclusive: 55 });
+      yield* runMigrations({ toMigrationInclusive: 57 });
 
       const threadColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)

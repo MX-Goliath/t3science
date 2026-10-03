@@ -1,66 +1,80 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { PiSettings } from "@t3tools/contracts";
-import { describe, expect, it } from "@effect/vitest";
+import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import {
-  buildInitialPiProviderSnapshot,
-  checkPiProviderStatus,
-  piModelCapabilities,
-} from "./PiProvider.ts";
+import { checkPiProviderStatus, MINIMUM_PI_VERSION } from "./PiProvider.ts";
 
-const decodePiSettings = Schema.decodeSync(PiSettings);
+const encoder = new TextEncoder();
 
-describe("buildInitialPiProviderSnapshot", () => {
-  it.effect("keeps Pi disabled without claiming the binary is installed", () =>
-    Effect.gen(function* () {
-      const snapshot = yield* buildInitialPiProviderSnapshot(decodePiSettings({ enabled: false }));
-      expect(snapshot.enabled).toBe(false);
-      expect(snapshot.status).toBe("disabled");
-      expect(snapshot.installed).toBe(false);
-      expect(snapshot.models).toEqual([]);
-    }),
-  );
-
-  it.effect("does not invent a fallback model before RPC discovery", () =>
-    Effect.gen(function* () {
-      const snapshot = yield* buildInitialPiProviderSnapshot(decodePiSettings({}));
-      expect(snapshot.status).toBe("warning");
-      expect(snapshot.models).toEqual([]);
-      expect(snapshot.requiresNewThreadForModelChange).toBe(false);
-    }),
-  );
-});
-
-describe("piModelCapabilities", () => {
-  it("exposes only the thinking levels reported by Pi for that model", () => {
-    expect(piModelCapabilities(["off", "high", "max"]).optionDescriptors).toEqual([
-      {
-        id: "thinkingLevel",
-        label: "Thinking",
-        description: "Pi reasoning level supported by this model.",
-        type: "select",
-        options: [
-          { id: "off", label: "Off" },
-          { id: "high", label: "High" },
-          { id: "max", label: "Max" },
-        ],
-      },
-    ]);
+function processHandle(input: {
+  readonly stdout?: string;
+  readonly stderr?: string;
+  readonly exitCode?: number;
+}) {
+  const bytes = (value: string | undefined) =>
+    value === undefined || value.length === 0
+      ? Stream.empty
+      : Stream.succeed(encoder.encode(value));
+  return ChildProcessSpawner.makeHandle({
+    pid: ChildProcessSpawner.ProcessId(900_000_001),
+    exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(input.exitCode ?? 0)),
+    isRunning: Effect.succeed(false),
+    kill: () => Effect.void,
+    unref: Effect.succeed(Effect.void),
+    stdin: Sink.drain,
+    stdout: bytes(input.stdout),
+    stderr: bytes(input.stderr),
+    all: Stream.empty,
+    getInputFd: () => Sink.drain,
+    getOutputFd: () => Stream.empty,
   });
-});
+}
 
-it.layer(NodeServices.layer)("checkPiProviderStatus", (it) => {
-  it.effect("checks the configured binary path", () =>
+function piProbeSpawner(version: string) {
+  return ChildProcessSpawner.make((command) => {
+    const args = ChildProcess.isStandardCommand(command) ? command.args : [];
+    return Effect.succeed(
+      args.includes("--version")
+        ? processHandle({ stdout: `pi ${version}\n` })
+        : processHandle({ stderr: "RPC startup failed", exitCode: 1 }),
+    );
+  });
+}
+
+const settings = {
+  enabled: true,
+  binaryPath: "pi",
+  launchArgs: "",
+  customModels: [],
+} as const;
+
+describe("PiProvider", () => {
+  it.effect("requires the first published Pi version with entries and settlement hooks", () =>
     Effect.gen(function* () {
-      const binaryPath = "/definitely/not/installed/custom-pi";
-      const snapshot = yield* checkPiProviderStatus(
-        decodePiSettings({ enabled: true, binaryPath }),
+      const snapshot = yield* checkPiProviderStatus(settings).pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, piProbeSpawner("0.80.3")),
       );
-      expect(snapshot.installed).toBe(false);
-      expect(snapshot.status).toBe("error");
-      expect(snapshot.message).toContain(binaryPath);
-    }),
+      assert.equal(snapshot.status, "error");
+      assert.equal(snapshot.version, "0.80.3");
+      assert.include(snapshot.message ?? "", `Pi ${MINIMUM_PI_VERSION} or newer`);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps compatible Pi selectable when optional discovery fails", () =>
+    Effect.gen(function* () {
+      const snapshot = yield* checkPiProviderStatus(settings).pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, piProbeSpawner("0.84.3")),
+      );
+      assert.equal(snapshot.status, "ready");
+      assert.equal(snapshot.auth.status, "unknown");
+      assert.deepEqual(
+        snapshot.models.map((model) => model.slug),
+        ["default"],
+      );
+      assert.include(snapshot.message ?? "", "could not refresh its models and commands");
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

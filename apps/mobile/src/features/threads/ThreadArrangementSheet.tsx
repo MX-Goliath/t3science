@@ -148,7 +148,7 @@ function DragHandle(props: {
 
 export function ThreadArrangementSheet(props: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
-  const threads = useAtomValue(environmentThreadShells.threadShellsAtom);
+  const threads = useAtomValue(environmentThreadShells.navigationThreadShellsAtom);
   const configs = useAtomValue(environmentServerConfigsAtom);
   const queuedThreadKeys = useAtomValue(queuedThreadKeysAtom);
   const pendingOrder = useAtomValue(pendingThreadOrderAtom);
@@ -208,11 +208,7 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
         section,
         reorderableEnvironmentIds: new Set(
           [...configs].flatMap(([id, config]) =>
-            (
-              section === "pinned"
-                ? config.environment.capabilities.threadPinReorder
-                : config.environment.capabilities.threadActiveReorder
-            )
+            (section === "pinned" ? config.environment.capabilities.threadPinReorder : false)
               ? [id]
               : [],
           ),

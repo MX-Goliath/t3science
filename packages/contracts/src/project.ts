@@ -1,7 +1,13 @@
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
+import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
+import { ModelSelection } from "./modelSelection.ts";
 import {
+  CommandId,
+  IsoDateTime,
   NonNegativeInt,
   PositiveInt,
+  ProjectId,
   TrimmedNonEmptyString,
   TrimmedString,
 } from "./baseSchemas.ts";
@@ -10,6 +16,249 @@ const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200;
 const PROJECT_SEARCH_CONTENTS_MAX_LIMIT = 500;
 const PROJECT_WRITE_FILE_PATH_MAX_LENGTH = 512;
 const PROJECT_READ_FILE_PATH_MAX_LENGTH = 512;
+
+export const ProjectScriptIcon = Schema.Literals([
+  "play",
+  "test",
+  "lint",
+  "configure",
+  "build",
+  "debug",
+]);
+export type ProjectScriptIcon = typeof ProjectScriptIcon.Type;
+
+export const ProjectScript = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  /**
+   * Existing actions are terminal commands and predate `kind`, so an absent
+   * kind still means command. Prompt actions use the explicit prompt kind.
+   */
+  kind: Schema.optional(Schema.Literal("prompt")),
+  command: Schema.optional(TrimmedNonEmptyString),
+  prompt: Schema.optional(TrimmedNonEmptyString),
+  modelSelection: Schema.optional(ModelSelection),
+  icon: ProjectScriptIcon,
+  runOnWorktreeCreate: Schema.Boolean,
+  /**
+   * For `runOnWorktreeCreate` scripts: when false, the agent's first turn waits
+   * for the script to exit. Absent or true starts the agent right away and
+   * lets the script finish in the background.
+   */
+  async: Schema.optional(Schema.Boolean),
+  /**
+   * URL to open in the in-app browser preview when this script runs (or
+   * when the user explicitly requests a preview). Optional; only honored on
+   * the desktop build.
+   */
+  previewUrl: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * When true, automatically open the preview panel pointed at `previewUrl`
+   * the moment this script starts. Ignored without `previewUrl` or on web.
+   */
+  autoOpenPreview: Schema.optional(Schema.Boolean),
+}).check(
+  Schema.makeFilter((input) => {
+    if (input.kind === "prompt") {
+      return (
+        (input.prompt !== undefined &&
+          input.modelSelection !== undefined &&
+          input.command === undefined &&
+          input.runOnWorktreeCreate === false &&
+          input.previewUrl === undefined &&
+          input.autoOpenPreview === undefined) ||
+        "Prompt actions require a prompt and model and cannot configure terminal behavior"
+      );
+    }
+    return (
+      (input.command !== undefined &&
+        input.prompt === undefined &&
+        input.modelSelection === undefined) ||
+      "Command actions require a command and cannot configure a prompt or model"
+    );
+  }),
+);
+export type ProjectScript = typeof ProjectScript.Type;
+
+export const ProjectIconColor = Schema.Literals([
+  "gray",
+  "red",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  "green",
+  "emerald",
+  "teal",
+  "cyan",
+  "sky",
+  "blue",
+  "indigo",
+  "violet",
+  "purple",
+  "fuchsia",
+  "pink",
+  "rose",
+]);
+export type ProjectIconColor = typeof ProjectIconColor.Type;
+
+const ProjectLucideIconName = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(64),
+  Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+);
+
+const ProjectEmoji = TrimmedNonEmptyString.check(Schema.isMaxLength(32));
+
+// Grapheme-count validation belongs to the server command boundary, not snapshot decoding.
+export const ProjectMonogramText = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(32),
+  Schema.isPattern(/^[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d]*$/u),
+);
+
+const ProjectLucideIcon = Schema.Struct({
+  kind: Schema.Literal("lucide"),
+  name: ProjectLucideIconName,
+  color: ProjectIconColor,
+});
+const ProjectEmojiIcon = Schema.Struct({
+  kind: Schema.Literal("emoji"),
+  emoji: ProjectEmoji,
+});
+const ProjectMonogramIcon = Schema.Struct({
+  kind: Schema.Literal("monogram"),
+  text: ProjectMonogramText,
+  color: ProjectIconColor,
+});
+const ProjectIcon = Schema.Union([ProjectLucideIcon, ProjectEmojiIcon, ProjectMonogramIcon]);
+const ProjectLucideIconWire = Schema.Struct({
+  ...ProjectLucideIcon.fields,
+  monogramText: Schema.optional(ProjectMonogramText),
+  monogram: Schema.optional(ProjectMonogramText),
+});
+
+/** A workspace-relative image a project may use as its favicon. */
+export const ProjectFaviconPath = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(1024),
+  Schema.isPattern(/\.(?:avif|gif|ico|jpe?g|png|svg|webp)$/i),
+);
+export type ProjectFaviconPath = typeof ProjectFaviconPath.Type;
+
+// Older peers only know lucide/emoji. Keep monograms out of their validated
+// `monogram` field too: old grapheme counters can reject otherwise valid text.
+export const ProjectIconOverride = Schema.Union([
+  ProjectLucideIconWire,
+  ProjectEmojiIcon,
+  ProjectMonogramIcon,
+]).pipe(
+  Schema.decodeTo(
+    ProjectIcon,
+    SchemaTransformation.transform({
+      decode: (icon): typeof ProjectIcon.Type => {
+        if (icon.kind !== "lucide") return icon;
+        const text = icon.monogramText ?? icon.monogram;
+        return text === undefined
+          ? { kind: "lucide", name: icon.name, color: icon.color }
+          : { kind: "monogram", text, color: icon.color };
+      },
+      encode: (icon) =>
+        icon.kind === "monogram"
+          ? {
+              kind: "lucide" as const,
+              name: "folder-code",
+              color: icon.color,
+              monogramText: icon.text,
+            }
+          : icon,
+    }),
+  ),
+);
+export type ProjectIconOverride = typeof ProjectIconOverride.Type;
+
+export const Project = Schema.Struct({
+  id: ProjectId,
+  title: TrimmedNonEmptyString,
+  workspaceRoot: TrimmedNonEmptyString,
+  repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
+  faviconPath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  defaultModelSelection: Schema.NullOr(ModelSelection),
+  defaultThreadEnvMode: Schema.optional(Schema.NullOr(ThreadEnvMode)),
+  // Opt-in because background sync performs network I/O and may move the checkout.
+  autoPull: Schema.optional(Schema.Boolean),
+  scripts: Schema.Array(ProjectScript),
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  deletedAt: Schema.NullOr(IsoDateTime),
+});
+export type Project = typeof Project.Type;
+
+export const ProjectSnapshot = Schema.Struct({
+  projects: Schema.Array(Project),
+  updatedAt: IsoDateTime,
+});
+export type ProjectSnapshot = typeof ProjectSnapshot.Type;
+
+export const ProjectChange = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("project.upserted"), project: Project }),
+  Schema.Struct({
+    type: Schema.Literal("project.deleted"),
+    projectId: ProjectId,
+    deletedAt: IsoDateTime,
+  }),
+]);
+export type ProjectChange = typeof ProjectChange.Type;
+
+export const ProjectCreatePayload = Schema.Struct({
+  title: TrimmedNonEmptyString,
+  workspaceRoot: TrimmedNonEmptyString,
+  createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
+  defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
+  scripts: Schema.optional(Schema.Array(ProjectScript)),
+});
+export type ProjectCreatePayload = typeof ProjectCreatePayload.Type;
+
+export const ProjectUpdatePayload = Schema.Struct({
+  title: Schema.optional(TrimmedNonEmptyString),
+  workspaceRoot: Schema.optional(TrimmedNonEmptyString),
+  defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
+  autoPull: Schema.optional(Schema.Boolean),
+  projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  faviconPath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  defaultThreadEnvMode: Schema.optional(Schema.NullOr(ThreadEnvMode)),
+  scripts: Schema.optional(Schema.Array(ProjectScript)),
+});
+export type ProjectUpdatePayload = typeof ProjectUpdatePayload.Type;
+
+export const ProjectMutation = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("project.create"),
+    commandId: CommandId,
+    projectId: ProjectId,
+    ...ProjectCreatePayload.fields,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("project.update"),
+    commandId: CommandId,
+    projectId: ProjectId,
+    ...ProjectUpdatePayload.fields,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("project.delete"),
+    commandId: CommandId,
+    projectId: ProjectId,
+    force: Schema.optional(Schema.Boolean),
+  }),
+]);
+export type ProjectMutation = typeof ProjectMutation.Type;
+
+export class ProjectMutationError extends Schema.TaggedError<ProjectMutationError>()(
+  "ProjectMutationError",
+  {
+    commandId: CommandId,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 export const ProjectEntryKind = Schema.Literals(["file", "directory"]);
 export type ProjectEntryKind = typeof ProjectEntryKind.Type;
@@ -280,6 +529,26 @@ export const ProjectWriteFileResult = Schema.Struct({
   relativePath: TrimmedNonEmptyString,
 });
 export type ProjectWriteFileResult = typeof ProjectWriteFileResult.Type;
+
+/** The environment's Scratch project, created on first request. */
+export const ProjectEnsureScratchResult = Schema.Struct({
+  projectId: ProjectId,
+});
+export type ProjectEnsureScratchResult = typeof ProjectEnsureScratchResult.Type;
+
+/** A project started from just a name, in a new folder the server makes. */
+export const ProjectCreateNewInput = Schema.Struct({
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(200)),
+});
+export type ProjectCreateNewInput = typeof ProjectCreateNewInput.Type;
+
+export const ProjectCreateNewResult = Schema.Struct({
+  projectId: ProjectId,
+  workspaceRoot: TrimmedNonEmptyString,
+  /** Why the first commit failed. The project and its files exist either way. */
+  commitError: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type ProjectCreateNewResult = typeof ProjectCreateNewResult.Type;
 
 export class ProjectWriteFileError extends Schema.TaggedError<ProjectWriteFileError>()(
   "ProjectWriteFileError",

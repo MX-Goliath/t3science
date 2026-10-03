@@ -1,7 +1,8 @@
-import { ProjectId, TurnId, type OrchestrationLatestTurn } from "@t3tools/contracts";
+import { ProjectId, RunId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  activeThreadAnchorTimestampMs,
   generateSpreadPinOrderKeys,
   getLatestThreadForProject,
   pinOrderKeyBetween,
@@ -15,6 +16,17 @@ import {
   type SettledThreadTimestampInput,
   type ThreadSortInput,
 } from "./threadSort.ts";
+
+describe("activeThreadAnchorTimestampMs", () => {
+  it("uses the later unsettle time when an old thread re-enters the active list", () => {
+    expect(
+      activeThreadAnchorTimestampMs({
+        createdAt: "2026-01-01T00:00:00.000Z",
+        unsettledAt: "2026-08-01T00:00:00.000Z",
+      }),
+    ).toBe(Date.parse("2026-08-01T00:00:00.000Z"));
+  });
+});
 
 type TestThread = { readonly id: string } & ThreadSortInput;
 
@@ -35,7 +47,7 @@ describe("resolveSettledThreadTimestamp", () => {
       resolveSettledThreadTimestamp({
         settledAt: "2026-03-09T10:00:00.000Z",
         latestUserMessageAt: "2026-03-09T11:00:00.000Z",
-        latestTurn: null,
+        latestRun: null,
         updatedAt: "2026-03-09T12:00:00.000Z",
       }),
     ).toBe("2026-03-09T10:00:00.000Z");
@@ -46,7 +58,7 @@ describe("resolveSettledThreadTimestamp", () => {
       resolveSettledThreadTimestamp({
         settledAt: "invalid",
         latestUserMessageAt: "2026-03-09T11:00:00.000Z",
-        latestTurn: null,
+        latestRun: null,
         updatedAt: "2026-03-09T12:00:00.000Z",
       }),
     ).toBe("2026-03-09T11:00:00.000Z");
@@ -54,7 +66,7 @@ describe("resolveSettledThreadTimestamp", () => {
       resolveSettledThreadTimestamp({
         settledAt: null,
         latestUserMessageAt: null,
-        latestTurn: null,
+        latestRun: null,
         updatedAt: "2026-03-09T12:00:00.000Z",
       }),
     ).toBe("2026-03-09T12:00:00.000Z");
@@ -66,13 +78,13 @@ describe("sortSettledThreads", () => {
     id: string;
     settledAt?: string | null;
     latestUserMessageAt?: string | null;
-    latestTurn?: OrchestrationLatestTurn | null;
+    latestRun?: SettledThreadTimestampInput["latestRun"];
     updatedAt?: string;
   }) => ({
     id: input.id,
     settledAt: input.settledAt ?? null,
     latestUserMessageAt: input.latestUserMessageAt ?? null,
-    latestTurn: input.latestTurn ?? null,
+    latestRun: input.latestRun ?? null,
     updatedAt: input.updatedAt ?? "2026-03-09T09:00:00.000Z",
   });
 
@@ -112,9 +124,9 @@ describe("sortSettledThreads", () => {
       settled({
         id: "completed-later",
         latestUserMessageAt: "2026-03-09T10:00:00.000Z",
-        latestTurn: {
-          turnId: TurnId.make("turn-1"),
-          state: "completed",
+        latestRun: {
+          runId: RunId.make("run-1"),
+          status: "completed",
           assistantMessageId: null,
           requestedAt: "2026-03-09T10:00:00.000Z",
           startedAt: "2026-03-09T10:00:00.000Z",
@@ -387,115 +399,31 @@ describe("generateSpreadPinOrderKeys", () => {
   );
 });
 
-describe("sortActiveThreadsByOrderKey", () => {
-  it("keeps new and reopened threads ahead of the saved order", () => {
-    const sorted = sortActiveThreadsByOrderKey([
-      {
-        id: "arranged-first",
-        createdAt: "2026-03-09T09:00:00.000Z",
-        activeOrderKey: "f",
-      },
-      {
-        id: "new",
-        createdAt: "2026-03-09T11:00:00.000Z",
-        activeOrderKey: null,
-      },
-      {
-        id: "arranged-last",
-        createdAt: "2026-03-09T12:00:00.000Z",
-        unsettledAt: "2026-03-09T13:00:00.000Z",
-        activeOrderKey: "t",
-      },
-      {
-        id: "reopened",
-        createdAt: "2026-03-01T09:00:00.000Z",
-        unsettledAt: "2026-03-09T12:00:00.000Z",
-      },
-    ]);
-    expect(sorted.map((thread) => thread.id)).toEqual([
-      "reopened",
-      "new",
-      "arranged-first",
-      "arranged-last",
+describe("activity sorting", () => {
+  it("moves old chats above saved manual keys after a new user message", () => {
+    const old = {
+      id: "old",
+      createdAt: "2026-01-01T00:00:00Z",
+      activeOrderKey: "z",
+      latestUserMessageAt: "2026-10-03T12:00:00Z",
+    };
+    const recent = { id: "recent", createdAt: "2026-10-03T11:00:00Z", activeOrderKey: "a" };
+    expect(sortActiveThreadsByOrderKey([recent, old]).map((thread) => thread.id)).toEqual([
+      "old",
+      "recent",
     ]);
   });
-
-  it("breaks equal order keys and timestamps by thread then environment", () => {
-    for (const activeOrderKey of [null, "m"]) {
-      const threads = [
-        { id: "thread-b", environmentId: "env-a" },
-        { id: "thread-a", environmentId: "env-b" },
-        { id: "thread-a", environmentId: "env-a" },
-      ].map((thread) => ({
-        ...thread,
-        createdAt: "2026-03-09T10:00:00.000Z",
-        activeOrderKey,
-      }));
-      expect(
-        sortActiveThreadsByOrderKey(threads).map(
-          (thread) => `${thread.id}:${thread.environmentId}`,
-        ),
-      ).toEqual(["thread-a:env-a", "thread-a:env-b", "thread-b:env-a"]);
-    }
-  });
-
-  it("applies every move across a mixed keyless and keyed section", () => {
-    const threads = Array.from({ length: 6 }, (_, index) => ({
-      id: String(index),
-      createdAt: `2026-03-09T0${6 - index}:00:00.000Z`,
-      activeOrderKey: index < 3 ? null : ["f", "m", "t"][index - 3]!,
-    }));
-    const ids = threads.map((thread) => thread.id);
-    const keysById = new Map(threads.map((thread) => [thread.id, thread.activeOrderKey]));
-    for (const movedId of ids) {
-      for (let targetIndex = 0; targetIndex < ids.length; targetIndex += 1) {
-        const desired = ids.filter((id) => id !== movedId);
-        desired.splice(targetIndex, 0, movedId);
-        const assignments = planPinnedReorder({ orderedIds: desired, keysById, movedId });
-        const nextKeys = new Map(
-          assignments.map((assignment) => [assignment.id, assignment.orderKey]),
-        );
-        const updated = threads.map((thread) => ({
-          ...thread,
-          activeOrderKey: nextKeys.get(thread.id) ?? thread.activeOrderKey,
-        }));
-        expect(sortActiveThreadsByOrderKey(updated).map((thread) => thread.id)).toEqual(desired);
-      }
-    }
-  });
-
-  it("moves a keyless thread into the arranged run with one write", () => {
-    const assignments = planPinnedMove({
-      orderedIds: ["new", "reopened", "first", "last"],
-      keysById: new Map([
-        ["new", null],
-        ["reopened", null],
-        ["first", "f"],
-        ["last", "t"],
-      ]),
-      movedId: "reopened",
-      direction: "down",
-    });
-    expect(assignments).toHaveLength(1);
-    expect(assignments![0]!.id).toBe("reopened");
-    expect(assignments![0]!.orderKey > "f").toBe(true);
-    expect(assignments![0]!.orderKey < "t").toBe(true);
-  });
-
-  it("materializes a large active list without changing the requested order", () => {
-    const threads = Array.from({ length: 1_200 }, (_, index) => ({
-      id: String(index),
-      createdAt: "2026-03-09T10:00:00.000Z",
-      activeOrderKey: null as string | null,
-    }));
-    const orderedIds = threads.map((thread) => thread.id).toReversed();
-    const assignments = planPinnedReorder({
-      orderedIds,
-      movedId: orderedIds[0]!,
-      keysById: new Map(threads.map((thread) => [thread.id, thread.activeOrderKey])),
-    });
-    const keys = new Map(assignments.map((assignment) => [assignment.id, assignment.orderKey]));
-    const updated = threads.map((thread) => ({ ...thread, activeOrderKey: keys.get(thread.id) }));
-    expect(sortActiveThreadsByOrderKey(updated).map((thread) => thread.id)).toEqual(orderedIds);
+  it("surfaces reopened chats and breaks ties by environment", () => {
+    const base = { id: "chat", createdAt: "2026-01-01T00:00:00Z" };
+    const threads = [
+      { ...base, environmentId: "b" },
+      { ...base, environmentId: "a" },
+      { ...base, id: "reopened", unsettledAt: "2026-10-03T12:00:00Z" },
+    ];
+    expect(
+      sortActiveThreadsByOrderKey(threads).map(
+        (thread) => `${thread.id}:${"environmentId" in thread ? thread.environmentId : ""}`,
+      ),
+    ).toEqual(["reopened:", "chat:a", "chat:b"]);
   });
 });

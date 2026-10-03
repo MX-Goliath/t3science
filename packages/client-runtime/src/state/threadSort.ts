@@ -1,5 +1,8 @@
-import type { OrchestrationThreadShell, ProjectId } from "@t3tools/contracts";
+import type { ProjectId } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+import type { EnvironmentThreadShell } from "./models.ts";
+import * as Arr from "effect/Array";
+import * as Order from "effect/Order";
 
 export interface ThreadSortInput {
   readonly createdAt: string;
@@ -18,8 +21,8 @@ export function toSortableTimestamp(iso: string | undefined): number | null {
 }
 
 export type SettledThreadTimestampInput = Pick<
-  OrchestrationThreadShell,
-  "settledAt" | "latestUserMessageAt" | "latestTurn" | "updatedAt"
+  EnvironmentThreadShell,
+  "settledAt" | "latestUserMessageAt" | "latestRun" | "updatedAt"
 >;
 
 /** The timestamp a settled row sorts and labels by on every client: settledAt
@@ -33,9 +36,9 @@ export function resolveSettledThreadTimestamp(thread: SettledThreadTimestampInpu
   let latestMs = Number.NEGATIVE_INFINITY;
   for (const candidate of [
     thread.latestUserMessageAt,
-    thread.latestTurn?.requestedAt,
-    thread.latestTurn?.startedAt,
-    thread.latestTurn?.completedAt,
+    thread.latestRun?.requestedAt,
+    thread.latestRun?.startedAt,
+    thread.latestRun?.completedAt,
   ]) {
     const parsed = toSortableTimestamp(candidate ?? undefined);
     if (candidate != null && parsed !== null && parsed > latestMs) {
@@ -342,8 +345,7 @@ export function sortPinnedThreadsByOrderKey<
   return [...keyed, ...keyless];
 }
 
-/** Unarranged active threads follow activity and re-entry. Once users arrange
-    a row, its saved key keeps it stable across later activity. */
+/** Active threads follow activity and re-entry on every client, including legacy manually ordered rows. */
 export function sortActiveThreadsByOrderKey<
   T extends Pick<ThreadSortInput, "createdAt" | "latestUserMessageAt" | "messages"> & {
     readonly id: string;
@@ -354,29 +356,15 @@ export function sortActiveThreadsByOrderKey<
   },
 >(threads: readonly T[]): T[] {
   if (threads.length < 2) return [...threads];
-  const timestamps = new Map<T, number>();
-  for (const thread of threads) {
-    if (thread.activeOrderKey == null) {
-      timestamps.set(thread, activeThreadAnchorTimestampMs(thread));
-    }
-  }
-  return [...threads].sort((left, right) => {
-    const leftKey = left.activeOrderKey;
-    const rightKey = right.activeOrderKey;
-    if (leftKey == null && rightKey != null) return -1;
-    if (leftKey != null && rightKey == null) return 1;
-    let order = 0;
-    if (leftKey != null && rightKey != null) {
-      order = leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-    } else {
-      order = timestamps.get(right)! - timestamps.get(left)!;
-    }
-    return (
-      order ||
+  const timestamps = new Map(
+    threads.map((thread) => [thread, activeThreadAnchorTimestampMs(thread)]),
+  );
+  return [...threads].sort(
+    (left, right) =>
+      timestamps.get(right)! - timestamps.get(left)! ||
       left.id.localeCompare(right.id) ||
-      (left.environmentId ?? "").localeCompare(right.environmentId ?? "")
-    );
-  });
+      (left.environmentId ?? "").localeCompare(right.environmentId ?? ""),
+  );
 }
 
 /**

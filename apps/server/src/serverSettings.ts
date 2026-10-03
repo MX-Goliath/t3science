@@ -1,3 +1,4 @@
+import { migrateLegacyResponseStreaming } from "./legacyResponseStreaming.ts";
 /**
  * ServerSettings - Server-authoritative settings service.
  *
@@ -16,14 +17,17 @@ import {
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_SERVER_SETTINGS,
   ModelSelection,
+  ProjectId,
   ProjectScript,
-  type ProjectSettingsOverrides,
+  ProjectSettingsOverrides,
   type ProviderInstanceConfig,
   type ProviderInstanceEnvironmentVariable,
   type UsageLimitSourceConfig,
+  type ProviderInstanceMutation,
   ProviderDriverKind,
   ProviderInstanceId,
   resolveProviderInstanceEnabled,
+  ResponseStreamingMode,
   ServerSettings,
   ServerSettingsError,
   type ServerSettingsPatch,
@@ -43,7 +47,7 @@ import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { migrateLegacyResponseStreaming } from "./legacyResponseStreaming.ts";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -203,6 +207,39 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
   return { ...settings, providerInstances, usageLimitSources, bitbucket };
 }
 
+export function applyProviderInstanceMutation(
+  settings: ServerSettings,
+  mutation: ProviderInstanceMutation,
+): ServerSettings {
+  const providerInstances = { ...settings.providerInstances };
+  if (mutation.operation === "upsert" || mutation.operation === "create") {
+    providerInstances[mutation.instanceId] = mutation.instance;
+  } else {
+    delete providerInstances[mutation.instanceId];
+  }
+  return { ...settings, providerInstances };
+}
+
+function ensureProviderInstanceMutationAllowed(
+  settings: ServerSettings,
+  mutation: ProviderInstanceMutation,
+  settingsPath: string,
+): Effect.Effect<void, ServerSettingsError> {
+  if (
+    mutation.operation === "create" &&
+    settings.providerInstances[mutation.instanceId] !== undefined
+  ) {
+    return Effect.fail(
+      new ServerSettingsError({
+        settingsPath,
+        operation: "create-provider-instance",
+        providerInstanceId: mutation.instanceId,
+      }),
+    );
+  }
+  return Effect.void;
+}
+
 export class ServerSettingsService extends Context.Service<
   ServerSettingsService,
   {
@@ -219,6 +256,17 @@ export class ServerSettingsService extends Context.Service<
     readonly updateSettings: (
       patch: ServerSettingsPatch,
     ) => Effect.Effect<ServerSettings, ServerSettingsError>;
+
+    /** Apply a patch and one provider-instance mutation against the same latest settings snapshot. */
+    readonly updateProviderInstance: (
+      mutation: ProviderInstanceMutation,
+      patch?: ServerSettingsPatch,
+    ) => Effect.Effect<ServerSettings, ServerSettingsError>;
+
+    /** Run an effect against a settings snapshot while settings writes are paused. */
+    readonly withSettingsSnapshot: <A, E, R>(
+      use: (settings: ServerSettings) => Effect.Effect<A, E, R>,
+    ) => Effect.Effect<A, E | ServerSettingsError, R>;
 
     /** Stream of settings change events. */
     readonly streamChanges: Stream.Stream<ServerSettings>;
@@ -250,18 +298,43 @@ const makeTest = (overrides: DeepPartial<ServerSettings> = {}) =>
         : {}),
     });
     const currentSettingsRef = yield* Ref.make<ServerSettings>(initialSettings);
+    const writeSemaphore = yield* Semaphore.make(1);
+    const getSettings = Ref.get(currentSettingsRef).pipe(Effect.map(resolveTextGenerationProvider));
 
-    return {
-      start: Effect.void,
-      ready: Effect.void,
-      getSettings: Ref.get(currentSettingsRef).pipe(Effect.map(resolveTextGenerationProvider)),
-      updateSettings: (patch) =>
+    const updateTestSettings = (
+      update: (current: ServerSettings) => Effect.Effect<ServerSettings, ServerSettingsError>,
+    ): Effect.Effect<ServerSettings, ServerSettingsError> =>
+      writeSemaphore.withPermits(1)(
         Ref.get(currentSettingsRef).pipe(
-          Effect.map((currentSettings) => applyServerSettingsPatch(currentSettings, patch)),
+          Effect.flatMap(update),
           Effect.flatMap(normalizeServerSettings),
           Effect.tap((nextSettings) => Ref.set(currentSettingsRef, nextSettings)),
           Effect.map(resolveTextGenerationProvider),
         ),
+      );
+
+    return {
+      start: Effect.void,
+      ready: Effect.void,
+      getSettings,
+      updateSettings: (patch) =>
+        updateTestSettings((currentSettings) =>
+          Effect.succeed(applyServerSettingsPatch(currentSettings, patch)),
+        ),
+      updateProviderInstance: (mutation, patch = {}) =>
+        updateTestSettings((currentSettings) =>
+          Effect.gen(function* () {
+            yield* ensureProviderInstanceMutationAllowed(
+              currentSettings,
+              mutation,
+              "test settings",
+            );
+            const patched = applyServerSettingsPatch(currentSettings, patch);
+            return applyProviderInstanceMutation(patched, mutation);
+          }),
+        ),
+      withSettingsSnapshot: (use) =>
+        writeSemaphore.withPermits(1)(getSettings.pipe(Effect.flatMap(use))),
       streamChanges: Stream.empty,
       subscribeChanges: Effect.succeed(Stream.empty),
     } satisfies ServerSettingsService["Service"];
@@ -270,12 +343,34 @@ const makeTest = (overrides: DeepPartial<ServerSettings> = {}) =>
 export const layerTest = (overrides: DeepPartial<ServerSettings> = {}) =>
   Layer.effect(ServerSettingsService, makeTest(overrides));
 
-const decodeRawSettingsJsonExit = Schema.decodeUnknownExit(fromLenientJson(Schema.Unknown));
-const decodeServerSettingsJsonExit = (raw: string) => {
-  const parsed = decodeRawSettingsJsonExit(raw);
-  if (parsed._tag === "Failure") return parsed;
-  return Schema.decodeUnknownExit(ServerSettings)(migrateLegacyResponseStreaming(parsed.value));
-};
+const ServerSettingsJson = fromLenientJson(
+  Schema.Unknown.pipe(
+    Schema.decodeTo(
+      Schema.Unknown,
+      SchemaTransformation.transform({
+        decode: migrateLegacyResponseStreaming,
+        encode: (value) => value,
+      }),
+    ),
+  ).pipe(
+    Schema.decodeTo(
+      Schema.Struct({
+        ...ServerSettings.fields,
+        responseStreamingMode: ResponseStreamingMode.pipe(
+          Schema.withDecodingDefault(Effect.succeed("paragraph" as const)),
+        ),
+        projectSettingsOverrides: Schema.Record(
+          ProjectId,
+          Schema.Struct({
+            ...ProjectSettingsOverrides.fields,
+            responseStreamingMode: Schema.optionalKey(ResponseStreamingMode),
+          }),
+        ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+      }),
+    ),
+  ),
+);
+const decodeServerSettingsJsonExit = Schema.decodeUnknownExit(ServerSettingsJson);
 const PersistedOptionalProviderSettings = Schema.Struct({
   providers: Schema.optionalKey(
     Schema.Struct({
@@ -337,8 +432,19 @@ function restoreUsedProviders(
   };
 }
 
+const ACP_REGISTRY_DRIVER = ProviderDriverKind.make("acpRegistry");
+
+/** ACP Registry instances reject every application text-generation operation. */
+function selectionSupportsTextGeneration(
+  settings: ServerSettings,
+  selection: ModelSelection,
+): boolean {
+  return settings.providerInstances[selection.instanceId]?.driver !== ACP_REGISTRY_DRIVER;
+}
+
 function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
-  return isModelSelectionProviderEnabled(settings, settings.textGenerationModelSelection)
+  return isModelSelectionProviderEnabled(settings, settings.textGenerationModelSelection) &&
+    selectionSupportsTextGeneration(settings, settings.textGenerationModelSelection)
     ? settings
     : fallbackTextGenerationProvider(settings);
 }
@@ -1022,13 +1128,13 @@ const make = Effect.gen(function* () {
     );
   };
 
-  const updateSettings = (
-    patch: ServerSettingsPatch,
+  const updateAndPersistSettings = (
+    update: (current: ServerSettings) => Effect.Effect<ServerSettings, ServerSettingsError>,
   ): Effect.Effect<ServerSettings, ServerSettingsError> =>
     writeSemaphore.withPermits(1)(
       Effect.gen(function* () {
         const current = yield* getSettingsFromCache;
-        const updated = applyServerSettingsPatch(current, patch);
+        const updated = yield* update(current);
         const persisted = yield* persistProviderEnvironmentSecrets(current, updated);
         const next = yield* normalizeServerSettings(persisted.settings);
         const materialized = yield* Effect.uninterruptibleMask(() =>
@@ -1055,6 +1161,15 @@ const make = Effect.gen(function* () {
         yield* emitChange(next);
         return resolveTextGenerationProvider(materialized);
       }),
+    );
+
+  const withSettingsSnapshot: ServerSettingsService["Service"]["withSettingsSnapshot"] = (use) =>
+    writeSemaphore.withPermits(1)(
+      getSettingsFromCache.pipe(
+        Effect.flatMap(materializeProviderEnvironmentSecrets),
+        Effect.map(resolveTextGenerationProvider),
+        Effect.flatMap(use),
+      ),
     );
 
   const revalidateAndEmit = writeSemaphore.withPermits(1)(
@@ -1132,7 +1247,19 @@ const make = Effect.gen(function* () {
       Effect.flatMap(materializeProviderEnvironmentSecrets),
       Effect.map(resolveTextGenerationProvider),
     ),
-    updateSettings,
+    updateSettings: (patch) =>
+      updateAndPersistSettings((current) =>
+        Effect.succeed(applyServerSettingsPatch(current, patch)),
+      ),
+    updateProviderInstance: (mutation, patch = {}) =>
+      updateAndPersistSettings((current) =>
+        Effect.gen(function* () {
+          yield* ensureProviderInstanceMutationAllowed(current, mutation, settingsPath);
+          const patched = applyServerSettingsPatch(current, patch);
+          return applyProviderInstanceMutation(patched, mutation);
+        }),
+      ),
+    withSettingsSnapshot,
     get streamChanges() {
       return materializeChanges(Stream.fromPubSub(changesPubSub));
     },

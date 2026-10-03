@@ -6,12 +6,13 @@ import { runMigrations } from "../Migrations.ts";
 import forkMessageModel from "./050_ProjectionThreadMessageModelSelection.ts";
 import reconcile from "./055_ReconcileForkSchema.ts";
 
-for (const state of ["fresh", "fork-50", "failed-merge-54", "upstream-54"] as const) {
-  it.effect(`reconciles ${state} without losing messages or their model metadata`, () =>
+it.effect.each(["fresh", "fork-50", "fork-55", "failed-merge-54", "upstream-54"] as const)(
+  "reconciles %s without losing messages or their model metadata",
+  (state) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* runMigrations({ toMigrationInclusive: state === "upstream-54" ? 54 : 49 });
-      if (state === "fork-50" || state === "failed-merge-54") {
+      if (state === "fork-50" || state === "fork-55" || state === "failed-merge-54") {
         yield* forkMessageModel;
         yield* sql`INSERT INTO effect_sql_migrations (migration_id, name, created_at) VALUES (50, 'ProjectionThreadMessageModelSelection', CURRENT_TIMESTAMP)`;
       }
@@ -20,8 +21,12 @@ for (const state of ["fresh", "fork-50", "failed-merge-54", "upstream-54"] as co
         yield* sql`ALTER TABLE projection_threads ADD COLUMN title_state_json TEXT`;
       }
       yield* sql`INSERT INTO projection_thread_messages (message_id, thread_id, role, text, is_streaming, created_at, updated_at) VALUES ('saved-message', 'saved-thread', 'assistant', 'Keep this conversation', 0, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')`;
-      if (state === "fork-50" || state === "failed-merge-54") {
+      if (state === "fork-50" || state === "fork-55" || state === "failed-merge-54") {
         yield* sql`UPDATE projection_thread_messages SET model_selection_json = '{"instanceId":"pi","model":"anthropic/claude"}' WHERE message_id = 'saved-message'`;
+      }
+      if (state === "fork-55") {
+        yield* reconcile;
+        yield* sql`INSERT INTO effect_sql_migrations (migration_id, name, created_at) VALUES (55, 'ReconcileForkSchema', CURRENT_TIMESTAMP)`;
       }
       yield* runMigrations();
       yield* reconcile;
@@ -31,7 +36,7 @@ for (const state of ["fresh", "fork-50", "failed-merge-54", "upstream-54"] as co
         context: string | null;
       }>`SELECT text, model_selection_json AS model, context_json AS context FROM projection_thread_messages WHERE message_id = 'saved-message'`;
       assert.equal(messages[0]?.text, "Keep this conversation");
-      if (state === "fork-50" || state === "failed-merge-54") {
+      if (state === "fork-50" || state === "fork-55" || state === "failed-merge-54") {
         assert.equal(messages[0]?.model, '{"instanceId":"pi","model":"anthropic/claude"}');
       }
       const columns = yield* sql<{ name: string }>`PRAGMA table_info(projection_threads)`;
@@ -54,7 +59,7 @@ for (const state of ["fresh", "fork-50", "failed-merge-54", "upstream-54"] as co
           name,
         );
       }
+      assert.isTrue(tables.some((table) => table.name === "orchestration_v2_projection_threads"));
       assert.deepEqual(yield* runMigrations(), []);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
-  );
-}
+);

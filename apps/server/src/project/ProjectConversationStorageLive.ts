@@ -6,12 +6,17 @@ import {
   PROJECT_CONVERSATION_STORAGE_DIRECTORY,
   PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION,
   ProjectConversationStorageError,
-  type OrchestrationEvent,
-  type OrchestrationProject,
-  type OrchestrationThread,
+  EventId,
+  TurnItemId,
+  type ApplicationStoredEvent,
+  type OrchestrationV2AppThread,
+  type OrchestrationV2ThreadProjection,
+  type OrchestrationV2ConversationMessage,
+  type OrchestrationV2DomainEvent,
+  type OrchestrationV2TurnItem,
+  type OrchestrationProjectShell,
   ProjectScript,
   type ProjectId,
-  ProviderDriverKind,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -24,14 +29,16 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { writeFileStringAtomically } from "../atomicWrite.ts";
 import { attachmentRelativePath, resolveAttachmentPath } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
-import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
-import { PortableConversationContext } from "../orchestration/Services/PortableConversationContext.ts";
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { OrchestratorV2 } from "../orchestration-v2/Orchestrator.ts";
+import { EventSinkV2 } from "../orchestration-v2/EventSink.ts";
+import { ProjectStoreV2 } from "../orchestration-v2/ProjectStore.ts";
+import { OrchestrationEventStore } from "../persistence/Services/OrchestrationEventStore.ts";
 import { ProviderRegistry } from "../provider/Services/ProviderRegistry.ts";
 import {
   ProjectConversationStorage,
@@ -43,7 +50,7 @@ const THREADS_DIRECTORY_NAME = "threads";
 const ATTACHMENTS_DIRECTORY_NAME = "attachments";
 
 const Manifest = Schema.Struct({
-  schemaVersion: Schema.Literal(PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION),
+  schemaVersion: Schema.Literals([1, PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION]),
   enabled: Schema.Boolean,
   updatedAt: Schema.String,
   scripts: Schema.optionalKey(Schema.Array(ProjectScript)),
@@ -56,34 +63,150 @@ const decodePortableConversation = Schema.decodeUnknownEffect(PortableConversati
 const encodeManifest = Schema.encodeEffect(ManifestJson);
 const encodePortableConversation = Schema.encodeEffect(PortableConversationJson);
 const encodeProjectScripts = Schema.encodeEffect(ProjectScriptsJson);
-const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
-type PortableProject = Pick<OrchestrationProject, "id" | "workspaceRoot" | "scripts">;
+type PortableProject = Pick<OrchestrationProjectShell, "id" | "workspaceRoot" | "scripts">;
 
 function storageError(message: string): ProjectConversationStorageError {
   return new ProjectConversationStorageError({ message });
 }
 
-function shouldExportEvent(event: OrchestrationEvent): boolean {
-  switch (event.type) {
-    case "thread.activity-appended":
-    case "thread.turn-start-requested":
-    case "thread.turn-interrupt-requested":
-    case "thread.approval-response-requested":
-    case "thread.user-input-response-requested":
-    case "thread.checkpoint-revert-requested":
-    case "thread.session-stop-requested":
-    case "thread.portable-context-restored":
-      return false;
-    case "thread.message-sent":
-      return event.payload.role !== "assistant" || !event.payload.streaming;
-    case "thread.session-set":
-      return (
-        event.payload.session.status !== "starting" && event.payload.session.status !== "running"
-      );
-    default:
-      return event.aggregateKind === "thread";
-  }
+export function portableThreadSnapshot(
+  projectId: ProjectId,
+  document: PortableConversationDocument,
+) {
+  const original = document.thread;
+  const thread: OrchestrationV2AppThread = {
+    ...original,
+    createdBy: "system",
+    creationSource: "server",
+    projectId,
+    providerInstanceId: original.modelSelection.instanceId,
+    branch: null,
+    worktreePath: null,
+    activeProviderThreadId: null,
+    historyOrigin: "v1_import",
+    lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: original.id },
+    forkedFrom: null,
+    lastVisitedAt: null,
+  };
+  const messages: ReadonlyArray<OrchestrationV2ConversationMessage> =
+    document.schemaVersion === 2
+      ? document.messages.map((message) => ({
+          ...message,
+          threadId: thread.id,
+          runId: null,
+          nodeId: null,
+          streaming: false,
+        }))
+      : originalMessages(document).map((message) => ({
+          ...message,
+          createdBy: message.role === "user" ? "user" : "agent",
+          creationSource: "server",
+          role: message.role === "reasoning" ? "assistant" : message.role,
+          threadId: thread.id,
+          runId: null,
+          nodeId: null,
+          attachments: message.attachments ?? [],
+          streaming: false,
+        }));
+  const turnItems: ReadonlyArray<OrchestrationV2TurnItem> =
+    document.schemaVersion === 2
+      ? document.turnItems.map((item) => ({
+          ...item,
+          threadId: thread.id,
+          runId: null,
+          nodeId: null,
+          status: item.status === "running" ? "interrupted" : item.status,
+        }))
+      : messages.map((message, index): OrchestrationV2TurnItem => {
+          const base = {
+            id: TurnItemId.make(`portable:${message.id}`),
+            threadId: thread.id,
+            runId: null,
+            nodeId: null,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: null,
+            parentItemId: null,
+            ordinal: index + 1,
+            status: "completed" as const,
+            title: null,
+            startedAt: message.createdAt,
+            completedAt: message.updatedAt,
+            updatedAt: message.updatedAt,
+          };
+          return message.role === "user"
+            ? {
+                ...base,
+                type: "user_message",
+                createdBy: "user",
+                creationSource: "server",
+                messageId: message.id,
+                inputIntent: "turn_start",
+                text: message.text,
+                context: message.context,
+                attachments: message.attachments,
+              }
+            : {
+                ...base,
+                type: "assistant_message",
+                messageId: message.id,
+                text: message.text,
+                modelSelection: message.modelSelection,
+                streaming: false,
+              };
+        });
+  return { thread, messages, turnItems };
+}
+
+function originalMessages(document: Extract<PortableConversationDocument, { schemaVersion: 1 }>) {
+  return document.thread.messages;
+}
+
+type PortableProjection = Pick<
+  OrchestrationV2ThreadProjection,
+  "messages" | "runs" | "turnItems" | "visibleTurnItems"
+>;
+
+export function portableConversationHistory(
+  projection: PortableProjection,
+  inheritedSources: ReadonlyArray<PortableProjection>,
+) {
+  const visibleMessageIds = new Set(
+    projection.visibleTurnItems.flatMap(({ item }) =>
+      item.type === "user_message" || item.type === "assistant_message" ? [item.messageId] : [],
+    ),
+  );
+  const sourceMessages = [
+    ...inheritedSources.flatMap((source) =>
+      source.messages.filter((message) => visibleMessageIds.has(message.id)),
+    ),
+    ...projection.messages,
+  ];
+  const sourceRuns = [...inheritedSources.flatMap((source) => source.runs), ...projection.runs];
+  const messages = [
+    ...new Map(sourceMessages.map((message) => [message.id, message])).values(),
+  ].map((message) => ({
+    ...message,
+    streaming: false,
+    modelSelection:
+      message.modelSelection ?? sourceRuns.find((run) => run.id === message.runId)?.modelSelection,
+  }));
+  const turnItems =
+    projection.visibleTurnItems.length > 0
+      ? projection.visibleTurnItems.map(({ item }, ordinal) => ({
+          ...item,
+          ordinal: ordinal + 1,
+          ...(item.type === "assistant_message"
+            ? {
+                modelSelection:
+                  item.modelSelection ??
+                  sourceRuns.find((run) => run.id === item.runId)?.modelSelection,
+              }
+            : {}),
+        }))
+      : projection.turnItems;
+  return { messages, turnItems };
 }
 
 export const makeProjectConversationStorage = Effect.gen(function* () {
@@ -91,13 +214,14 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const crypto = yield* Crypto.Crypto;
-  const engine = yield* OrchestrationEngineService;
-  const snapshots = yield* ProjectionSnapshotQuery;
+  const engine = yield* OrchestratorV2;
+  const projects = yield* ProjectStoreV2;
+  const eventSink = yield* EventSinkV2;
+  const events = yield* OrchestrationEventStore;
   const providers = yield* ProviderRegistry;
-  const portableContext = yield* PortableConversationContext;
   const settingsService = yield* ServerSettingsService;
+  const importLock = yield* Semaphore.make(1);
   const enabledProjects = yield* Ref.make(new Map<ProjectId, string>());
-  const threadProjects = yield* Ref.make(new Map<ThreadId, ProjectId>());
 
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   const writeAtomically = (input: { readonly filePath: string; readonly contents: string }) =>
@@ -154,42 +278,35 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   const resolveProject = Effect.fn("ProjectConversationStorage.resolveProject")(function* (
     projectId: ProjectId,
   ) {
-    const project = yield* snapshots.getProjectShellById(projectId);
+    const project = yield* projects.getShell(projectId);
     if (Option.isNone(project)) {
       return yield* storageError(`Project '${projectId}' was not found.`);
     }
     return project.value;
   });
 
-  const sourceProviderForThread = Effect.fn("ProjectConversationStorage.sourceProviderForThread")(
-    function* (thread: OrchestrationThread) {
-      if (isProviderDriverKind(thread.session?.providerName)) {
-        return thread.session.providerName;
-      }
-      const provider = (yield* providers.getProviders).find(
-        (entry) => entry.instanceId === thread.modelSelection.instanceId,
-      );
-      return provider?.driver ?? null;
-    },
-  );
-
-  const copyThreadAttachmentsToProject = Effect.fn(
-    "ProjectConversationStorage.copyThreadAttachmentsToProject",
-  )(function* (workspaceRoot: string, thread: OrchestrationThread) {
-    const attachments = thread.messages.flatMap((message) => message.attachments ?? []);
+  const copyAttachments = Effect.fn("ProjectConversationStorage.copyAttachments")(function* (
+    workspaceRoot: string,
+    messages: ReadonlyArray<OrchestrationV2ConversationMessage>,
+    restore: boolean,
+  ) {
     yield* fileSystem.makeDirectory(attachmentsDirectory(workspaceRoot), { recursive: true });
+    yield* fileSystem.makeDirectory(config.attachmentsDir, { recursive: true });
     yield* Effect.forEach(
-      attachments,
+      messages.flatMap((message) => message.attachments),
       (attachment) =>
         Effect.gen(function* () {
-          const source = resolveAttachmentPath({
+          const localPath = resolveAttachmentPath({
             attachmentsDir: config.attachmentsDir,
             attachment,
           });
-          if (source === null || !(yield* fileSystem.exists(source))) return;
           const relativePath = attachmentRelativePath(attachment);
-          if (relativePath === null) return;
-          const destination = path.join(attachmentsDirectory(workspaceRoot), relativePath);
+          if (localPath === null || relativePath === null) return;
+          const portablePath = path.join(attachmentsDirectory(workspaceRoot), relativePath);
+          const source = restore ? portablePath : localPath;
+          const destination = restore ? localPath : portablePath;
+          if (!(yield* fileSystem.exists(source))) return;
+          yield* fileSystem.makeDirectory(path.dirname(destination), { recursive: true });
           yield* fileSystem.writeFile(destination, yield* fileSystem.readFile(source));
         }),
       { concurrency: 1 },
@@ -198,26 +315,41 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
 
   const exportThread = Effect.fn("ProjectConversationStorage.exportThread")(function* (
     workspaceRoot: string,
-    thread: OrchestrationThread,
+    threadId: ThreadId,
   ) {
-    const exportedAt = yield* nowIso;
+    const projection = yield* engine.getThreadProjection(threadId);
+    const thread = projection.thread;
+    if (thread === null || thread.deletedAt !== null) return;
+    const available = yield* providers.getProviders;
+    const inheritedSources = yield* Effect.forEach(
+      [
+        ...new Set(
+          projection.visibleTurnItems
+            .filter((entry) => entry.visibility === "inherited")
+            .map((entry) => entry.sourceThreadId),
+        ),
+      ],
+      (sourceThreadId) => engine.getThreadProjection(sourceThreadId),
+      { concurrency: 1 },
+    );
+    const { messages, turnItems } = portableConversationHistory(projection, inheritedSources);
     const document: PortableConversationDocument = {
-      schemaVersion: PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION,
-      exportedAt,
-      sourceProvider: yield* sourceProviderForThread(thread),
+      schemaVersion: 2,
+      exportedAt: yield* nowIso,
+      sourceProvider:
+        available.find((entry) => entry.instanceId === thread.modelSelection.instanceId)?.driver ??
+        null,
       thread: {
         ...thread,
         branch: null,
         worktreePath: null,
-        session: null,
-        latestTurn:
-          thread.latestTurn?.state === "running"
-            ? { ...thread.latestTurn, state: "interrupted", completedAt: exportedAt }
-            : thread.latestTurn,
-        messages: thread.messages.map((message) => ({ ...message, streaming: false })),
+        activeProviderThreadId: null,
+        historyOrigin: "v1_import",
       },
+      messages,
+      turnItems,
     };
-    yield* copyThreadAttachmentsToProject(workspaceRoot, thread);
+    yield* copyAttachments(workspaceRoot, messages, false);
     yield* writeAtomically({
       filePath: threadDocumentPath(workspaceRoot, thread.id),
       contents: `${yield* encodePortableConversation(document)}\n`,
@@ -227,7 +359,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   const writeManifest = Effect.fn("ProjectConversationStorage.writeManifest")(function* (
     workspaceRoot: string,
     enabled: boolean,
-    scripts: OrchestrationProject["scripts"],
+    scripts: OrchestrationProjectShell["scripts"],
   ) {
     const manifest = {
       schemaVersion: PROJECT_CONVERSATION_STORAGE_SCHEMA_VERSION,
@@ -244,13 +376,17 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   const exportProject = Effect.fn("ProjectConversationStorage.exportProject")(function* (
     project: PortableProject,
   ) {
-    const snapshot = yield* snapshots.getSnapshot();
-    const projectThreads = snapshot.threads.filter(
+    const snapshot = yield* engine.getShellSnapshot();
+    const projectThreads = [...snapshot.threads, ...snapshot.archivedThreads].filter(
       (thread) => thread.projectId === project.id && thread.deletedAt === null,
     );
-    yield* Effect.forEach(projectThreads, (thread) => exportThread(project.workspaceRoot, thread), {
-      concurrency: 1,
-    });
+    yield* Effect.forEach(
+      projectThreads,
+      (thread) => exportThread(project.workspaceRoot, thread.id),
+      {
+        concurrency: 1,
+      },
+    );
     yield* writeManifest(
       project.workspaceRoot,
       true,
@@ -259,11 +395,6 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
     yield* Ref.update(enabledProjects, (current) =>
       new Map(current).set(project.id, project.workspaceRoot),
     );
-    yield* Ref.update(threadProjects, (current) => {
-      const next = new Map(current);
-      for (const thread of projectThreads) next.set(thread.id, project.id);
-      return next;
-    });
     return projectThreads.length;
   });
 
@@ -294,101 +425,87 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
     },
   );
 
-  const remapImportedThread = Effect.fn("ProjectConversationStorage.remapImportedThread")(
-    function* (
-      projectId: ProjectId,
-      document: PortableConversationDocument,
-    ): Effect.fn.Return<OrchestrationThread> {
-      const available = yield* providers.getProviders;
-      const exact = available.find(
-        (entry) =>
-          entry.instanceId === document.thread.modelSelection.instanceId &&
-          entry.enabled &&
-          entry.availability !== "unavailable",
-      );
-      const compatible = document.sourceProvider
-        ? available.find(
-            (entry) =>
-              entry.driver === document.sourceProvider &&
-              entry.enabled &&
-              entry.availability !== "unavailable",
-          )
-        : undefined;
-      const target = exact ?? compatible;
-      return {
-        ...document.thread,
-        projectId,
-        branch: null,
-        worktreePath: null,
-        session: null,
-        modelSelection: target
-          ? { ...document.thread.modelSelection, instanceId: target.instanceId }
-          : document.thread.modelSelection,
-      };
-    },
-  );
-
-  const restoreThreadAttachments = Effect.fn("ProjectConversationStorage.restoreThreadAttachments")(
-    function* (workspaceRoot: string, thread: OrchestrationThread) {
-      const attachments = thread.messages.flatMap((message) => message.attachments ?? []);
-      yield* Effect.forEach(
-        attachments,
-        (attachment) =>
-          Effect.gen(function* () {
-            const relativePath = attachmentRelativePath(attachment);
-            if (relativePath === null) return;
-            const source = path.join(attachmentsDirectory(workspaceRoot), relativePath);
-            if (!(yield* fileSystem.exists(source))) return;
-            const destination = resolveAttachmentPath({
-              attachmentsDir: config.attachmentsDir,
-              attachment,
-            });
-            if (destination === null) return;
-            yield* fileSystem.writeFile(destination, yield* fileSystem.readFile(source));
-          }),
-        { concurrency: 1 },
-      );
-    },
-  );
-
   const importProject = Effect.fn("ProjectConversationStorage.importProject")(function* (
-    project: Pick<OrchestrationProject, "id" | "workspaceRoot">,
+    project: Pick<OrchestrationProjectShell, "id" | "workspaceRoot">,
   ) {
     const files = yield* listExportedThreadFiles(project.workspaceRoot);
-    const snapshot = yield* snapshots.getSnapshot();
-    const existingThreads = new Map(snapshot.threads.map((thread) => [thread.id, thread] as const));
     let imported = 0;
-
     for (const fileName of files) {
-      const raw = yield* fileSystem.readFileString(
-        path.join(threadsDirectory(project.workspaceRoot), fileName),
+      const document = yield* decodePortableConversation(
+        yield* fileSystem.readFileString(
+          path.join(threadsDirectory(project.workspaceRoot), fileName),
+        ),
       );
-      const document = yield* decodePortableConversation(raw);
-      const existing = existingThreads.get(document.thread.id);
-      if (existing !== undefined) {
-        if (existing.projectId !== project.id || existing.updatedAt >= document.thread.updatedAt) {
-          continue;
-        }
-      }
-      const thread = yield* remapImportedThread(project.id, document);
-      yield* restoreThreadAttachments(project.workspaceRoot, thread);
+      const existing = yield* engine.getThreadShell(document.thread.id);
+      // Restore newer snapshots only into the same idle project.
+      if (
+        existing !== null &&
+        (existing.projectId !== project.id ||
+          DateTime.toEpochMillis(existing.updatedAt) >=
+            DateTime.toEpochMillis(document.thread.updatedAt) ||
+          ["preparing", "starting", "running", "waiting", "queued"].includes(existing.status))
+      )
+        continue;
+      const snapshot = portableThreadSnapshot(project.id, document);
+      const available = yield* providers.getProviders;
+      const target =
+        available.find(
+          (entry) =>
+            entry.instanceId === snapshot.thread.modelSelection.instanceId &&
+            entry.enabled &&
+            entry.availability !== "unavailable",
+        ) ??
+        available.find(
+          (entry) =>
+            entry.driver === document.sourceProvider &&
+            entry.enabled &&
+            entry.availability !== "unavailable",
+        );
+      const thread = target
+        ? {
+            ...snapshot.thread,
+            providerInstanceId: target.instanceId,
+            modelSelection: { ...snapshot.thread.modelSelection, instanceId: target.instanceId },
+          }
+        : snapshot.thread;
+      yield* copyAttachments(project.workspaceRoot, snapshot.messages, true);
       const uuid = yield* crypto.randomUUIDv4;
-      yield* engine.dispatch({
-        type: "thread.portable.import",
-        commandId: CommandId.make(`server:portable-import:${uuid}`),
-        projectId: project.id,
-        thread,
-        createdAt: yield* nowIso,
+      const occurredAt = yield* DateTime.now;
+      const importedEvents: ReadonlyArray<OrchestrationV2DomainEvent> = [
+        {
+          id: EventId.make(`portable:${uuid}:thread`),
+          type: existing === null ? "thread.created" : "thread.metadata-updated",
+          threadId: thread.id,
+          providerInstanceId: thread.providerInstanceId,
+          occurredAt,
+          payload: thread,
+        },
+        ...snapshot.messages.map((message) => ({
+          id: EventId.make(`portable:${uuid}:message:${message.id}`),
+          type: "message.updated" as const,
+          threadId: thread.id,
+          occurredAt,
+          payload: message,
+        })),
+        ...snapshot.turnItems.map((item) => ({
+          id: EventId.make(`portable:${uuid}:item:${item.id}`),
+          type: "turn-item.updated" as const,
+          threadId: thread.id,
+          occurredAt,
+          payload: item,
+        })),
+      ];
+      yield* eventSink.write({
+        commandId: CommandId.make(`portable:${uuid}`),
+        events: importedEvents,
       });
-      yield* portableContext.markPending(thread.id);
-      existingThreads.set(thread.id, thread);
       imported += 1;
     }
     return imported;
   });
 
   const stateForProject = Effect.fn("ProjectConversationStorage.stateForProject")(function* (
-    project: Pick<OrchestrationProject, "id" | "workspaceRoot">,
+    project: Pick<OrchestrationProjectShell, "id" | "workspaceRoot">,
   ) {
     const manifest = yield* readManifest(project.workspaceRoot);
     const files = yield* listExportedThreadFiles(project.workspaceRoot);
@@ -426,7 +543,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
         const project = yield* resolveProject(input.projectId);
         if (input.enabled) {
           const importedProject = yield* importProjectScripts(project);
-          yield* importProject(importedProject);
+          yield* importLock.withPermits(1)(importProject(importedProject));
           yield* exportProject(importedProject);
         } else {
           yield* writeManifest(
@@ -453,38 +570,34 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
       new Map(current).set(project.id, project.workspaceRoot),
     );
     const importedProject = yield* importProjectScripts(project);
-    yield* importProject(importedProject);
+    yield* importLock.withPermits(1)(importProject(importedProject));
   });
 
   const handleEvent = Effect.fn("ProjectConversationStorage.handleEvent")(function* (
-    event: OrchestrationEvent,
+    event: ApplicationStoredEvent,
   ) {
-    if (event.type === "project.created") {
-      const project = yield* snapshots.getProjectShellById(event.payload.projectId);
-      if (Option.isSome(project)) yield* scanProject(project.value);
-      return;
-    }
-    if (event.type === "project.meta-updated") {
-      const project = yield* snapshots.getProjectShellById(event.payload.projectId);
-      if (Option.isNone(project)) return;
-      if (
-        event.payload.scripts !== undefined &&
-        (yield* Ref.get(enabledProjects)).has(event.payload.projectId)
-      ) {
-        yield* writeManifest(
-          project.value.workspaceRoot,
-          true,
-          resolveProjectScripts(yield* settingsService.getSettings, project.value),
-        );
-        yield* Ref.update(enabledProjects, (current) =>
-          new Map(current).set(project.value.id, project.value.workspaceRoot),
-        );
-      } else {
-        yield* scanProject(project.value);
+    if (
+      !("event" in event) &&
+      (event.type === "project.created" || event.type === "project.meta-updated")
+    ) {
+      const project = yield* projects.getShell(event.payload.projectId);
+      if (Option.isSome(project)) {
+        if (
+          event.type === "project.meta-updated" &&
+          (yield* Ref.get(enabledProjects)).has(project.value.id)
+        ) {
+          yield* writeManifest(
+            project.value.workspaceRoot,
+            true,
+            resolveProjectScripts(yield* settingsService.getSettings, project.value),
+          );
+        } else {
+          yield* scanProject(project.value);
+        }
       }
       return;
     }
-    if (event.type === "project.deleted") {
+    if (!("event" in event) && event.type === "project.deleted") {
       yield* Ref.update(enabledProjects, (current) => {
         const next = new Map(current);
         next.delete(event.payload.projectId);
@@ -492,39 +605,32 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
       });
       return;
     }
-    if (event.aggregateKind !== "thread") return;
-
-    if (event.type === "thread.created" || event.type === "thread.portable-imported") {
-      const projectId =
-        event.type === "thread.created" ? event.payload.projectId : event.payload.projectId;
-      yield* Ref.update(threadProjects, (current) =>
-        new Map(current).set(event.aggregateId as ThreadId, projectId),
-      );
-    }
-    const projectId = (yield* Ref.get(threadProjects)).get(event.aggregateId as ThreadId);
-    if (projectId === undefined) return;
-    const workspaceRoot = (yield* Ref.get(enabledProjects)).get(projectId);
+    if (!("event" in event)) return;
+    const domainEvent = event.event;
+    const thread = yield* engine.getThreadShell(domainEvent.threadId);
+    if (thread === null) return;
+    const workspaceRoot = (yield* Ref.get(enabledProjects)).get(thread.projectId);
     if (workspaceRoot === undefined) return;
-
-    if (event.type === "thread.deleted") {
-      yield* fileSystem.remove(threadDocumentPath(workspaceRoot, event.payload.threadId), {
-        force: true,
-      });
+    if (thread.deletedAt !== null) {
+      yield* fileSystem.remove(threadDocumentPath(workspaceRoot, thread.id), { force: true });
       return;
     }
-    if (!shouldExportEvent(event)) return;
-    const thread = yield* snapshots.getThreadDetailById(event.aggregateId as ThreadId);
-    if (Option.isSome(thread) && thread.value.deletedAt === null) {
-      yield* exportThread(workspaceRoot, thread.value);
-    }
+    const shouldExport =
+      domainEvent.type.startsWith("thread.") ||
+      (domainEvent.type === "message.updated" && !domainEvent.payload.streaming) ||
+      (domainEvent.type === "run.updated" &&
+        ["completed", "failed", "cancelled"].includes(domainEvent.payload.status));
+    if (!shouldExport) return;
+    yield* exportThread(workspaceRoot, thread.id);
   });
 
   const start: ProjectConversationStorageShape["start"] = Effect.fn(
     "ProjectConversationStorage.start",
   )(function* () {
     if (config.mode !== "desktop") return;
-    const snapshot = yield* snapshots
-      .getSnapshot()
+    const afterSequence = yield* events.latestApplicationSequence.pipe(Effect.orDie);
+    const snapshot = yield* engine
+      .getShellSnapshot()
       .pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("failed to initialize project conversation storage", { cause }).pipe(
@@ -533,11 +639,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
         ),
       );
     if (snapshot === null) return;
-    yield* Ref.set(
-      threadProjects,
-      new Map(snapshot.threads.map((thread) => [thread.id, thread.projectId] as const)),
-    );
-    yield* Effect.forEach(snapshot.projects, (project) =>
+    yield* Effect.forEach(yield* projects.listShells().pipe(Effect.orDie), (project) =>
       scanProject(project).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("failed to scan portable conversations for project", {
@@ -556,7 +658,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
           [...enabled],
           ([projectId, workspaceRoot]) =>
             Effect.gen(function* () {
-              const project = yield* snapshots.getProjectShellById(projectId);
+              const project = yield* projects.getShell(projectId);
               if (Option.isNone(project)) return;
               const scripts = resolveProjectScripts(settings, project.value);
               const manifest = yield* readManifest(workspaceRoot);
@@ -576,12 +678,12 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
         ),
       ),
     ).pipe(Effect.forkScoped);
-    yield* Stream.runForEach(engine.streamDomainEvents, (event) =>
+    yield* Stream.runForEach(events.streamApplicationEvents({ afterSequence }), (event) =>
       handleEvent(event).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("failed to mirror portable conversation event", {
-            eventType: event.type,
-            aggregateId: event.aggregateId,
+            eventType: "event" in event ? event.event.type : event.type,
+            sequence: event.sequence,
             cause,
           }),
         ),

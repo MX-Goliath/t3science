@@ -17,10 +17,8 @@ import {
   DESKTOP_APP_ID,
   DESKTOP_DEVELOPMENT_LINUX_DESKTOP_ENTRY_NAME,
   DESKTOP_DEVELOPMENT_LINUX_WM_CLASS,
-  DESKTOP_DEVELOPMENT_USER_DATA_DIR_NAME,
   DESKTOP_PRODUCTION_LINUX_DESKTOP_ENTRY_NAME,
   DESKTOP_PRODUCTION_LINUX_WM_CLASS,
-  DESKTOP_PRODUCTION_USER_DATA_DIR_NAME,
 } from "@t3tools/shared/desktopProductIdentity";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
@@ -96,8 +94,6 @@ export class DesktopEnvironment extends Context.Service<
     readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
     readonly appImagePath: Option.Option<string>;
-    readonly userDataDirName: string;
-    readonly legacyUserDataDirName: string;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
     readonly resolvePickFolderDefaultPath: (rawOptions: unknown) => Option.Option<string>;
@@ -196,12 +192,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
     joinPath: path.join,
     t3Home: config.t3Home,
   });
-  const userDataDirName = isDevelopment
-    ? DESKTOP_DEVELOPMENT_USER_DATA_DIR_NAME
-    : DESKTOP_PRODUCTION_USER_DATA_DIR_NAME;
-  const legacyUserDataDirName = isDevelopment
-    ? `${DESKTOP_APP_BASE_NAME} (Dev)`
-    : `${DESKTOP_APP_BASE_NAME} (Alpha)`;
   const linuxApplicationsDir = path.join(
     Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
     "applications",
@@ -260,8 +250,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
       : DESKTOP_PRODUCTION_LINUX_WM_CLASS,
     linuxApplicationsDir,
     appImagePath: config.appImagePath,
-    userDataDirName,
-    legacyUserDataDirName,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),
     runtimeInfo: resolveDesktopRuntimeInfo({
       platform: input.platform,

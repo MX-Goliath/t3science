@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from "react";
-import type { OrchestrationLatestTurnState, TurnId } from "@t3tools/contracts";
+import type { OrchestrationV2RunStatus, RunId } from "@t3tools/contracts";
 
 import {
   EMPTY_SETTLED_TAIL_STATE,
@@ -20,8 +20,8 @@ import {
 export function useWorkingRowSettledTail(input: {
   /** Environment-scoped thread key. Thread IDs are only unique within an environment. */
   readonly threadKey: string | null;
-  readonly latestTurnId: TurnId | null;
-  readonly latestTurnState: OrchestrationLatestTurnState | null;
+  readonly latestTurnId: RunId | null;
+  readonly latestTurnState: OrchestrationV2RunStatus | null;
   readonly isWorking: boolean;
   readonly latestTurnSettled: boolean;
 }): SettledTurnState | null {
@@ -29,9 +29,13 @@ export function useWorkingRowSettledTail(input: {
   const key = JSON.stringify([input.threadKey, input.latestTurnId]);
   const settledTurnState: SettledTurnState | null =
     input.latestTurnState === "completed" ||
-    input.latestTurnState === "error" ||
-    input.latestTurnState === "interrupted"
-      ? input.latestTurnState
+    input.latestTurnState === "failed" ||
+    input.latestTurnState === "cancelled"
+      ? input.latestTurnState === "failed"
+        ? "error"
+        : input.latestTurnState === "cancelled"
+          ? "interrupted"
+          : "completed"
       : null;
   const settledNow = input.latestTurnSettled && !input.isWorking && settledTurnState !== null;
 

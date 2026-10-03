@@ -1,9 +1,5 @@
-import { derivePendingRequests } from "@t3tools/client-runtime/pending-requests";
-import type {
-  OrchestrationThread,
-  OrchestrationThreadShell,
-  ScopedThreadRef,
-} from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { OrchestrationV2ThreadProjection, ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 
 import { appAtomRegistry } from "./rpc/atomRegistry";
@@ -13,9 +9,9 @@ import type { ThreadNotificationKind } from "./threadNotificationContent";
 /** Subscribe only for a pending alert; reuse the loaded detail and release it on delivery. */
 export function watchThreadNotificationDetail(
   ref: ScopedThreadRef,
-  expected: Pick<OrchestrationThreadShell, "latestTurn">,
+  expected: Pick<EnvironmentThreadShell, "latestRun">,
   kind: ThreadNotificationKind,
-  onReady: (detail: OrchestrationThread | null) => void,
+  onReady: (detail: OrchestrationV2ThreadProjection | null) => void,
 ) {
   const atom = environmentThreadDetails.stateAtom(ref);
   let stopped = false;
@@ -31,17 +27,29 @@ export function watchThreadNotificationDetail(
     const detail = Option.getOrNull(state.data);
     if (state.status !== "deleted" && Option.isNone(state.error)) {
       if (state.status !== "live" || !detail) return;
-      if (detail.latestTurn?.turnId !== expected.latestTurn?.turnId) return;
-      if (kind === "done" && detail.latestTurn?.state !== "completed") return;
+      const run = detail.runs.find((run) => run.id === expected.latestRun?.runId);
+      if (!run) return;
+      if (kind === "done" && run.status !== "completed") return;
+      if (kind === "error" && run.status !== "failed") return;
       if (
-        kind === "error" &&
-        detail.latestTurn?.state !== "error" &&
-        detail.session?.status !== "error"
+        kind === "input" &&
+        !detail.turnItems.some(
+          (item) =>
+            item.runId === run.id &&
+            item.type === "user_input_request" &&
+            item.status !== "completed",
+        )
       )
         return;
-      if (kind === "input" && derivePendingRequests(detail.activities).userInputs.length === 0)
-        return;
-      if (kind === "approval" && derivePendingRequests(detail.activities).approvals.length === 0)
+      if (
+        kind === "approval" &&
+        !detail.turnItems.some(
+          (item) =>
+            item.runId === run.id &&
+            item.type === "approval_request" &&
+            item.status !== "completed",
+        )
+      )
         return;
     }
     stop();

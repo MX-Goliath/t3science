@@ -1,3 +1,5 @@
+import { presentThreadShell } from "@t3tools/client-runtime/state/models";
+import * as DateTime from "effect/DateTime";
 import { planPinnedMove } from "@t3tools/client-runtime/state/thread-sort";
 import {
   createPendingThreadOrder,
@@ -17,12 +19,13 @@ import {
   MessageId,
   ProjectId,
   ProviderInstanceId,
+  RunId,
   ThreadId,
-  TurnId,
 } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
+import { makeRawThreadShell, makeThreadShellFixture } from "../../test-fixtures";
 import { threadJumpTarget } from "../keyboard/threadKeyboardShortcuts";
 import {
   buildThreadListV2Items,
@@ -35,6 +38,7 @@ import {
   resolveThreadListV2SwipeActions,
   sortThreadsForListV2,
   threadListV2ListItemsAreEqual,
+  threadHasUnseenCompletion,
   type ThreadListV2ListItem,
 } from "./threadListV2";
 
@@ -43,31 +47,14 @@ const environmentId = EnvironmentId.make("environment-1");
 function makeThread(
   input: Partial<EnvironmentThreadShell> & Pick<EnvironmentThreadShell, "id" | "title">,
 ): EnvironmentThreadShell {
-  return {
+  return makeThreadShellFixture({
     environmentId,
-    projectId: ProjectId.make("project-1"),
-    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    branch: null,
-    worktreePath: null,
-    pullRequests: [],
-    latestTurn: null,
-    createdAt: "2026-06-01T00:00:00.000Z",
-    updatedAt: "2026-06-01T00:00:00.000Z",
-    archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    session: null,
-    latestUserMessageAt: null,
-    hasPendingApprovals: false,
-    hasPendingUserInput: false,
-    hasActionableProposedPlan: false,
     ...input,
-  };
+  });
 }
 
 const NOW = "2026-06-02T00:00:00.000Z";
+
 const linkedPullRequest = {
   projectId: ProjectId.make("project-1"),
   repository: "pingdotgg/t3code",
@@ -124,24 +111,93 @@ describe("resolveThreadListV2SnoozeMenuSelection", () => {
 });
 
 describe("resolveThreadListV2Status", () => {
-  it("prioritizes approval over a running session", () => {
+  it("distinguishes usage limits from ordinary failures and clears the label after recovery", () => {
+    const thread = makeThread({
+      id: ThreadId.make("limited"),
+      title: "Limited",
+      runtime: {
+        status: "failed",
+        activeRunId: null,
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        providerName: "Codex",
+        lastError: "Plan limit reached",
+        lastErrorClass: "usage_limit",
+        updatedAt: NOW,
+      },
+    });
+    expect(resolveThreadListV2Status(thread)).toBe("limited");
+    expect(
+      resolveThreadListV2Status({
+        ...thread,
+        runtime: { ...thread.runtime!, lastErrorClass: null },
+      }),
+    ).toBe("failed");
+    expect(
+      resolveThreadListV2Status({
+        ...thread,
+        runtime: { ...thread.runtime!, status: "completed" },
+      }),
+    ).toBe("ready");
+  });
+
+  it("prioritizes approval over a running runtime", () => {
     const thread = makeThread({
       id: ThreadId.make("t"),
       title: "t",
       hasPendingApprovals: true,
-      session: {
-        threadId: ThreadId.make("t"),
+      runtime: {
         status: "running",
+        activeRunId: RunId.make("run-t"),
         providerName: "Codex",
         providerInstanceId: ProviderInstanceId.make("codex"),
-        runtimeMode: "full-access",
-        activeTurnId: null,
         lastError: null,
         updatedAt: NOW,
       },
     });
     expect(resolveThreadListV2Status(thread)).toBe("approval");
   });
+
+  it("reports waiting when presentation parks runtime idle for background tasks", () => {
+    expect(
+      resolveThreadListV2Status(
+        makeThread({
+          id: ThreadId.make("t"),
+          title: "t",
+          pendingBackgroundTasks: [{ taskId: "bg-1", description: "Watch build", kind: "monitor" }],
+          runtime: {
+            status: "idle",
+            activeRunId: null,
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            providerName: "Codex",
+            lastError: null,
+            updatedAt: NOW,
+          },
+        }),
+      ),
+    ).toBe("waiting");
+  });
+
+  it.each([
+    { kind: "command", status: "ready" },
+    { kind: "monitor", status: "waiting" },
+  ] as const)(
+    "presents an unseen completion with a $kind roster as $status",
+    ({ kind, status }) => {
+      const thread = presentThreadShell(
+        environmentId,
+        makeRawThreadShell({
+          latestRunId: RunId.make("run-background-completion"),
+          status: "completed",
+          latestRunCompletedAt: DateTime.makeUnsafe(NOW),
+          lastVisitedAt: DateTime.makeUnsafe("2026-06-01T23:59:00.000Z"),
+          pendingBackgroundTasks: [{ taskId: "background-work", kind }],
+        }),
+      );
+
+      expect(resolveThreadListV2Status(thread)).toBe(status);
+      expect(threadHasUnseenCompletion(thread)).toBe(true);
+    },
+  );
 
   it("resolves ready for quiescent threads", () => {
     expect(resolveThreadListV2Status(makeThread({ id: ThreadId.make("t"), title: "t" }))).toBe(
@@ -292,52 +348,22 @@ describe("resolveThreadListV2SnoozeGateExpiryMs", () => {
 });
 
 describe("sortThreadsForListV2", () => {
-  const sortable = (input: { id: string; createdAt: string; latestUserMessageAt?: string }) => ({
-    ...input,
-    updatedAt: input.createdAt,
-    latestUserMessageAt: input.latestUserMessageAt ?? null,
+  it("uses activity order even when old manual keys are present", () => {
+    const sorted = sortThreadsForListV2([
+      { id: "newer-arranged", createdAt: "2026-06-01T12:00:00.000Z", activeOrderKey: "t" },
+      { id: "older-arranged", createdAt: "2026-06-01T08:00:00.000Z", activeOrderKey: "f" },
+      { id: "new", createdAt: "2026-06-01T13:00:00.000Z" },
+    ]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["new", "newer-arranged", "older-arranged"]);
   });
 
-  it("honors a saved active order and leaves new threads above it", () => {
+  it("orders by creation time, newest first, ignoring activity", () => {
     const sorted = sortThreadsForListV2([
-      {
-        ...sortable({ id: "newer-arranged", createdAt: "2026-06-01T12:00:00.000Z" }),
-        activeOrderKey: "t",
-      },
-      {
-        ...sortable({ id: "older-arranged", createdAt: "2026-06-01T08:00:00.000Z" }),
-        activeOrderKey: "f",
-      },
-      sortable({ id: "new", createdAt: "2026-06-01T13:00:00.000Z" }),
+      { id: "oldest", createdAt: "2026-06-01T08:00:00.000Z" },
+      { id: "newest", createdAt: "2026-06-01T12:00:00.000Z" },
+      { id: "middle", createdAt: "2026-06-01T10:00:00.000Z" },
     ]);
-    expect(sorted.map((thread) => thread.id)).toEqual(["new", "older-arranged", "newer-arranged"]);
-  });
-
-  it("moves the unarranged thread with the latest user message to the top", () => {
-    const sorted = sortThreadsForListV2([
-      sortable({
-        id: "oldest",
-        createdAt: "2026-06-01T08:00:00.000Z",
-        latestUserMessageAt: "2026-06-01T13:00:00.000Z",
-      }),
-      sortable({ id: "newest", createdAt: "2026-06-01T12:00:00.000Z" }),
-      sortable({ id: "middle", createdAt: "2026-06-01T10:00:00.000Z" }),
-    ]);
-    expect(sorted.map((thread) => thread.id)).toEqual(["oldest", "newest", "middle"]);
-  });
-
-  it("surfaces an un-settled thread at the top via its re-entry stamp", () => {
-    const sorted = sortThreadsForListV2([
-      {
-        id: "old-unsettled",
-        createdAt: "2026-06-01T08:00:00.000Z",
-        updatedAt: "2026-06-01T08:00:00.000Z",
-        unsettledAt: "2026-06-01T13:00:00.000Z",
-      },
-      sortable({ id: "newest", createdAt: "2026-06-01T12:00:00.000Z" }),
-      sortable({ id: "middle", createdAt: "2026-06-01T10:00:00.000Z" }),
-    ]);
-    expect(sorted.map((thread) => thread.id)).toEqual(["old-unsettled", "newest", "middle"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "oldest"]);
   });
 });
 
@@ -381,7 +407,7 @@ describe("getThreadListV2OrderedSection", () => {
       getThreadListV2OrderedSection({ threads, section: "active", now: NOW }).map(
         (thread) => thread.id,
       ),
-    ).toEqual(["active-new", "active-first", "active-later"]);
+    ).toEqual(["active-first", "active-later", "active-new"]);
     expect(
       getThreadListV2OrderedSection({ threads, section: "pinned", now: NOW }).map(
         (thread) => thread.id,
@@ -480,6 +506,60 @@ describe("buildThreadListV2Items", () => {
       pinned: true,
     });
     expect(layout.settledCount).toBe(0);
+  });
+
+  it("hides snoozed threads and counts them — visibility parity with web", () => {
+    const layout = buildThreadListV2Items({
+      threads: [
+        makeThread({ id: ThreadId.make("active"), title: "Active" }),
+        makeThread({
+          id: ThreadId.make("snoozed"),
+          title: "Snoozed",
+          snoozedUntil: "2026-06-03T09:00:00.000Z",
+          snoozedAt: "2026-06-01T12:00:00.000Z",
+        }),
+        makeThread({
+          id: ThreadId.make("woken"),
+          title: "Woken",
+          // Wake time already passed: back in the active list.
+          snoozedUntil: "2026-06-01T18:00:00.000Z",
+          snoozedAt: "2026-06-01T12:00:00.000Z",
+        }),
+      ],
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+    });
+
+    // Same createdAt → static sort tiebreaks by id; the point is the woken
+    // thread is BACK in the card block and the snoozed one is gone.
+    expect(layout.items.map((item) => item.thread.id)).toEqual(["active", "woken"]);
+    expect(layout.snoozedCount).toBe(1);
+  });
+
+  it("moves a settled pinned thread into the settled shelf — parity with web (#7969)", () => {
+    const layout = buildThreadListV2Items({
+      threads: [
+        makeThread({ id: ThreadId.make("active"), title: "Active" }),
+        makeThread({
+          id: ThreadId.make("pinned-settled"),
+          title: "Pinned while settled",
+          pinnedAt: "2026-06-01T12:00:00.000Z",
+          // Stale settled state (the decider clears it on pin): the pin wins.
+          settledOverride: "settled",
+          settledAt: "2026-06-01T12:00:00.000Z",
+        }),
+      ],
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+    });
+
+    // Since #7969 a settled thread leaves the active block even while pinned;
+    // the pin re-applies when the thread is un-settled.
+    expect(layout.items.map((item) => item.thread.id)).toEqual(["active", "pinned-settled"]);
+    expect(layout.items.map((item) => item.pinned)).toEqual([false, false]);
+    expect(layout.settledCount).toBe(1);
   });
 
   it("snooze hides a pinned thread and wake restores it to the pinned block", () => {
@@ -727,14 +807,14 @@ describe("buildThreadListV2Items", () => {
     expect(layout.settledShelfHeaderIndex).toBe(0);
   });
 
-  it("does not promote a card for non-user activity", () => {
+  it("keeps cards in creation order while settled sorts by recency", () => {
     const { items } = buildThreadListV2Items({
       threads: [
         makeThread({
           id: ThreadId.make("older-created"),
           title: "Older",
           createdAt: "2026-06-01T08:00:00.000Z",
-          updatedAt: NOW,
+          updatedAt: NOW, // recent activity must NOT promote it
         }),
         makeThread({
           id: ThreadId.make("newer-created"),
@@ -821,10 +901,11 @@ describe("buildThreadListV2Items", () => {
   });
 
   it("scopes the flat list to one project", () => {
+    const projectId = ProjectId.make("project-1");
     const otherProjectId = ProjectId.make("project-2");
     const { items } = buildThreadListV2Items({
       threads: [
-        makeThread({ id: ThreadId.make("included"), title: "Included" }),
+        makeThread({ id: ThreadId.make("included"), projectId, title: "Included" }),
         makeThread({
           id: ThreadId.make("excluded"),
           projectId: otherProjectId,
@@ -832,7 +913,7 @@ describe("buildThreadListV2Items", () => {
         }),
       ],
       environmentId: null,
-      projectRefs: [{ environmentId, projectId: ProjectId.make("project-1") }],
+      projectRefs: [{ environmentId, projectId }],
       searchQuery: "",
       now: NOW,
     });
@@ -842,19 +923,21 @@ describe("buildThreadListV2Items", () => {
 
   it("scopes the flat list to every environment member of a logical project", () => {
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+    const projectId = ProjectId.make("project-1");
     const { items } = buildThreadListV2Items({
       threads: [
-        makeThread({ id: ThreadId.make("local"), title: "Local" }),
+        makeThread({ id: ThreadId.make("local"), projectId, title: "Local" }),
         makeThread({
           environmentId: remoteEnvironmentId,
           id: ThreadId.make("remote"),
+          projectId,
           title: "Remote",
         }),
       ],
       environmentId: null,
       projectRefs: [
-        { environmentId, projectId: ProjectId.make("project-1") },
-        { environmentId: remoteEnvironmentId, projectId: ProjectId.make("project-1") },
+        { environmentId, projectId },
+        { environmentId: remoteEnvironmentId, projectId },
       ],
       searchQuery: "",
       now: NOW,
@@ -877,9 +960,9 @@ describe("buildThreadListV2Items settled paging", () => {
           latestUserMessageAt: `2026-06-01T0${index}:00:00.000Z`,
           // A turn adopted the message (same requestedAt): without it the
           // thread reads as a queued turn start, which never settles.
-          latestTurn: {
-            turnId: TurnId.make(`turn-${index}`),
-            state: "completed",
+          latestRun: {
+            runId: RunId.make(`run-${index}`),
+            status: "completed",
             requestedAt: `2026-06-01T0${index}:00:00.000Z`,
             startedAt: `2026-06-01T0${index}:00:00.000Z`,
             completedAt: `2026-06-01T0${index}:10:00.000Z`,
@@ -1055,7 +1138,7 @@ describe("buildThreadListV2ListItems", () => {
 });
 
 describe("pending mobile thread moves", () => {
-  function fixture(section: "active" | "pinned" = "active") {
+  function fixture(section: "active" | "pinned" = "pinned") {
     const rows = ["a", "b", "c"].map((id, index) =>
       makeThread({
         id: ThreadId.make(id),
@@ -1106,7 +1189,7 @@ describe("pending mobile thread moves", () => {
     }).items.map((item) => item.thread.id);
   }
 
-  it.each(["active", "pinned"] as const)(
+  it.each(["pinned"] as const)(
     "holds %s order through every intermediate key upsert",
     (section) => {
       const { rows, assignments, pending, update } = fixture(section);
@@ -1155,7 +1238,7 @@ describe("pending mobile thread moves", () => {
     expect(
       reconcilePendingThreadOrder(
         pending,
-        rows.map((row, index) => (index === 0 ? { ...row, activeOrderKey: "zz" } : row)),
+        rows.map((row, index) => (index === 0 ? { ...row, pinOrderKey: "zz" } : row)),
       ),
     ).toBeNull();
     const settled = rows.map((row, index) =>
@@ -1170,7 +1253,7 @@ describe("pending mobile thread moves", () => {
     expect(reconcilePendingThreadOrder(confirmed, rows)).toBeNull();
   });
 
-  it("preserves the hold for activity but releases for a reopened sort anchor", () => {
+  it("keeps pinned ordering stable across activity and reopening", () => {
     const { rows, pending } = fixture();
     expect(
       reconcilePendingThreadOrder(
@@ -1183,7 +1266,7 @@ describe("pending mobile thread moves", () => {
         pending,
         rows.map((row, index) => (index === 0 ? { ...row, unsettledAt: NOW } : row)),
       ),
-    ).toBeNull();
+    ).toBe(pending);
   });
 });
 
@@ -1309,7 +1392,7 @@ describe("thread drag destinations", () => {
     expect(threadOrderAfterMove(["a", "b"], "missing", "down")).toBeNull();
   });
 
-  it.each(["active", "pinned"] as const)(
+  it.each(["pinned"] as const)(
     "persists a dropped %s row and holds its order until confirmed",
     (section) => {
       const ordered = ["a", "b", "c", "d"].map((id) =>
@@ -1480,20 +1563,47 @@ describe("cross-section thread drops", () => {
   });
 });
 
+it("excludes subagents from navigation, search and ordering while retaining user forks", () => {
+  const root = makeThread({ id: ThreadId.make("root"), title: "Root" });
+  const child = makeThread({
+    id: ThreadId.make("child"),
+    title: "Child",
+    lineage: { parentThreadId: root.id, rootThreadId: root.id, relationshipToParent: "subagent" },
+  });
+  const fork = makeThread({
+    id: ThreadId.make("fork"),
+    title: "Fork",
+    lineage: { parentThreadId: root.id, rootThreadId: root.id, relationshipToParent: "fork" },
+  });
+  const threads = [root, child, fork];
+  expect(
+    buildThreadListV2Items({ threads, environmentId: null, searchQuery: "", now: NOW }).items.map(
+      (item) => item.thread.id,
+    ),
+  ).toEqual([fork.id, root.id]);
+  expect(
+    buildThreadListV2Items({ threads, environmentId: null, searchQuery: "Child", now: NOW }).items,
+  ).toEqual([]);
+  expect(
+    getThreadListV2OrderedSection({ threads, section: "active", now: NOW }).map(
+      (thread) => thread.id,
+    ),
+  ).toEqual([fork.id, root.id]);
+});
+
 /* ─── Recycled-list equality + per-row clock scoping ─────────────────── */
 
 const BASE_MS = Date.parse(NOW);
 const isoAt = (ms: number) => new Date(ms).toISOString();
 const MINUTE_MS = 60_000;
 
-function runningSession(threadId: string) {
+function runningRuntime() {
   return {
-    threadId: ThreadId.make(threadId),
     status: "running" as const,
     providerName: "Codex",
     providerInstanceId: ProviderInstanceId.make("codex"),
     runtimeMode: "full-access" as const,
-    activeTurnId: null,
+    activeRunId: null,
     lastError: null,
     updatedAt: NOW,
   };
@@ -1776,7 +1886,7 @@ describe("buildThreadListV2ListItems clock scoping", () => {
         id: ThreadId.make("tick-working"),
         title: "tick working",
         latestUserMessageAt: isoAt(BASE_MS - 5 * MINUTE_MS),
-        session: runningSession("tick-working"),
+        runtime: runningRuntime(),
       });
       const threads = buildTickThreads();
       const items = buildTickList(
@@ -1838,6 +1948,27 @@ describe("thread list v2 minute tick invalidation", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("keeps unread completion labels stable across a minute tick", () => {
+    const unread = makeThread({
+      id: ThreadId.make("tick-unread"),
+      title: "Unread completion",
+      lastVisitedAt: isoAt(BASE_MS - 10 * MINUTE_MS),
+      latestRun: {
+        runId: RunId.make("tick-unread-run"),
+        status: "completed",
+        requestedAt: isoAt(BASE_MS - 6 * MINUTE_MS),
+        startedAt: isoAt(BASE_MS - 6 * MINUTE_MS),
+        completedAt: isoAt(BASE_MS - 5 * MINUTE_MS),
+        assistantMessageId: null,
+      },
+    });
+    const options = { snoozeEnvironmentIds: new Set<EnvironmentId>() };
+    const first = buildTickList([unread], BASE_MS, [], options)[0]!;
+    const next = buildTickList([unread], BASE_MS + MINUTE_MS, [], options)[0]!;
+    expect(first.type === "v2-thread" && first.timeLabel).toBe("");
+    expect(threadListV2ListItemsAreEqual(first, next)).toBe(true);
   });
 
   it("keeps hour-granularity rows stable across a minute tick when they carry no snooze menu", () => {

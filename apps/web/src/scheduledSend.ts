@@ -1,9 +1,4 @@
-import type {
-  EnvironmentId,
-  ServerProviderUsageLimits,
-  ThreadId,
-  TurnId,
-} from "@t3tools/contracts";
+import type { EnvironmentId, ServerProviderUsageLimits, ThreadId, RunId } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 
 export type ScheduledSendSource = "custom" | "rate-limit" | "agent-completion";
@@ -12,7 +7,7 @@ export type ScheduledSendLimitWindow = "fiveHour" | "weekly";
 export interface ScheduledSendAgentTarget {
   environmentId: EnvironmentId;
   threadId: ThreadId;
-  turnId: TurnId;
+  turnId: RunId;
   threadTitle: string;
 }
 
@@ -99,15 +94,19 @@ export function shouldDispatchAgentCompletionSend(input: {
 }
 
 export function resolveAgentCompletionScheduleTarget(
-  thread: Pick<EnvironmentThreadShell, "environmentId" | "id" | "title" | "session">,
+  thread: Pick<EnvironmentThreadShell, "environmentId" | "id" | "title" | "runtime">,
 ): ScheduledSendAgentTarget | null {
-  const activeTurnId = thread.session?.status === "running" ? thread.session.activeTurnId : null;
-  if (activeTurnId === null) return null;
+  const activeRunId =
+    thread.runtime &&
+    ["preparing", "starting", "running", "waiting"].includes(thread.runtime.status)
+      ? thread.runtime.activeRunId
+      : null;
+  if (activeRunId === null) return null;
 
   return {
     environmentId: thread.environmentId,
     threadId: thread.id,
-    turnId: activeTurnId,
+    turnId: activeRunId,
     threadTitle: thread.title,
   };
 }

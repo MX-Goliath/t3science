@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
-import { ProjectScript } from "./orchestration.ts";
+import { ProjectScript } from "./project.ts";
 
 const decodeProjectScript = Schema.decodeUnknownSync(ProjectScript);
 

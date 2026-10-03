@@ -1,20 +1,23 @@
-import { derivePendingRequests } from "@t3tools/client-runtime/pending-requests";
-import type { OrchestrationThread, OrchestrationThreadShell } from "@t3tools/contracts";
-import * as Predicate from "effect/Predicate";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
 
-export type ThreadNotificationKind = "done" | "input" | "approval" | "error";
-type NotificationThread = Pick<OrchestrationThreadShell, "title" | "latestTurn" | "session">;
-type NotificationDetail = Pick<
-  OrchestrationThread,
-  "messages" | "activities" | "proposedPlans" | "latestTurn" | "session"
->;
+export type ThreadNotificationKind = "done" | "input" | "approval" | "error" | "limited";
+type NotificationThread = Pick<EnvironmentThreadShell, "title" | "latestRun" | "runtime">;
+type NotificationDetail = OrchestrationV2ThreadProjection;
 
-const labels = { done: "Done", input: "Input needed", approval: "Approval needed", error: "Error" };
+const labels = {
+  done: "Done",
+  input: "Input needed",
+  approval: "Approval needed",
+  error: "Error",
+  limited: "Usage limit reached",
+};
 const fallbacks = {
   done: "The model finished its response.",
   input: "The model is waiting for your answer.",
   approval: "The model needs your permission to continue.",
   error: "The model could not finish the task. Open the thread for details.",
+  limited: "The provider usage limit was reached.",
 };
 
 /** Keep a short, readable beginning of the text without formatting markers. */
@@ -36,39 +39,31 @@ export function threadNotificationContent(
   kind: ThreadNotificationKind,
   detail: NotificationDetail | null,
 ) {
-  const current = detail?.latestTurn?.turnId === thread.latestTurn?.turnId ? detail : null;
+  const runId = thread.latestRun?.runId;
+  const items = detail?.turnItems.filter((item) => item.runId === runId) ?? [];
   let text: string | undefined;
-  if (kind === "done" && current) {
-    text = current.messages.findLast(
-      (message) =>
-        message.role === "assistant" &&
-        message.turnId === thread.latestTurn?.turnId &&
-        message.text.trim(),
+  if (kind === "done") {
+    text = detail?.messages.findLast(
+      (message) => message.role === "assistant" && message.runId === runId && message.text.trim(),
     )?.text;
-    text ||= current.proposedPlans.findLast(
-      (plan) => plan.turnId === thread.latestTurn?.turnId,
-    )?.planMarkdown;
-  } else if (kind === "input" && current) {
-    text = derivePendingRequests(current.activities)
-      .userInputs[0]?.questions.map((question) => question.question)
-      .join(" ");
-  } else if (kind === "approval" && current) {
-    const approval = derivePendingRequests(current.activities).approvals[0];
-    text = approval?.detail ?? approval?.appName ?? approval?.requestKind;
-  } else if (kind === "error") {
-    const activity = current?.activities.findLast(
-      (activity) => activity.tone === "error" && activity.turnId === thread.latestTurn?.turnId,
+    const plan = items.findLast((item) => item.type === "proposed_plan");
+    if (!text && plan?.type === "proposed_plan") text = plan.markdown;
+  } else if (kind === "input") {
+    const question = items.findLast(
+      (item) => item.type === "user_input_request" && item.status !== "completed",
     );
-    const payload = activity?.payload;
-    const errorDetail = Predicate.isObject(payload)
-      ? typeof payload.detail === "string"
-        ? payload.detail
-        : typeof payload.message === "string"
-          ? payload.message
-          : undefined
-      : undefined;
+    if (question?.type === "user_input_request")
+      text = question.questions.map((question) => question.question).join(" ");
+  } else if (kind === "approval") {
+    const approval = items.findLast(
+      (item) => item.type === "approval_request" && item.status !== "completed",
+    );
+    if (approval?.type === "approval_request")
+      text = approval.prompt ?? approval.appName ?? approval.requestKind;
+  } else if (kind === "error" || kind === "limited") {
+    const error = items.findLast((item) => item.type === "error");
     text =
-      thread.session?.lastError ?? current?.session?.lastError ?? errorDetail ?? activity?.summary;
+      thread.runtime?.lastError ?? (error?.type === "error" ? error.failure.message : undefined);
   }
   return {
     title: `${labels[kind]} · ${preview(thread.title, 180)}`,
