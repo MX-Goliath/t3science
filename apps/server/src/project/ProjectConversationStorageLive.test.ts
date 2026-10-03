@@ -14,6 +14,7 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
@@ -163,6 +164,20 @@ it.effect(
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "science-portable-" });
       const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "science-portable-state-" });
       const directory = path.join(root, ".t3", "conversations");
+      const removed = yield* Deferred.make<void>();
+      const monitoredFs: FileSystem.FileSystem = {
+        ...fs,
+        remove: (filePath, options) =>
+          fs
+            .remove(filePath, options)
+            .pipe(
+              Effect.tap(() =>
+                filePath === path.join(directory, "threads", "portable-thread.json")
+                  ? Deferred.succeed(removed, undefined)
+                  : Effect.void,
+              ),
+            ),
+      };
       yield* fs.makeDirectory(path.join(directory, "threads"), { recursive: true });
       yield* fs.writeFileString(
         path.join(directory, "threads", "portable-thread.json"),
@@ -248,10 +263,31 @@ it.effect(
           assert.deepStrictEqual(manifest.scripts, scripts);
           assert.isFalse((yield* storage.setEnabled({ projectId, enabled: false })).enabled);
           assert.isTrue(yield* fs.exists(path.join(directory, "threads", "portable-thread.json")));
+          yield* storage.setEnabled({ projectId, enabled: true });
+          yield* storage.start();
+          yield* eventSink.write({
+            events: [
+              {
+                id: EventId.make("portable-delete"),
+                threadId: thread.id,
+                type: "thread.deleted",
+                occurredAt: now,
+                payload: { ...restored.thread, deletedAt: now },
+              },
+            ],
+          });
+          yield* Deferred.await(removed);
+          assert.isNull(yield* projections.getThreadShell(thread.id));
+          assert.isFalse(yield* fs.exists(path.join(directory, "threads", "portable-thread.json")));
+          assert.equal(
+            (yield* storage.setEnabled({ projectId, enabled: true })).exportedThreadCount,
+            0,
+          );
         }).pipe(
           Effect.provide(
             ProjectConversationStorageLive.pipe(
               Layer.provide(orchestrator),
+              Layer.provide(Layer.succeed(FileSystem.FileSystem, monitoredFs)),
               Layer.provide(settingsLayerTest()),
               Layer.provide(testConfig),
               Layer.provide(Layer.mock(ProviderRegistry)({ getProviders: Effect.succeed([]) })),

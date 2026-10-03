@@ -607,6 +607,15 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
     }
     if (!("event" in event)) return;
     const domainEvent = event.event;
+    if (domainEvent.type === "thread.deleted") {
+      const workspaceRoot = (yield* Ref.get(enabledProjects)).get(domainEvent.payload.projectId);
+      if (workspaceRoot !== undefined) {
+        yield* fileSystem.remove(threadDocumentPath(workspaceRoot, domainEvent.threadId), {
+          force: true,
+        });
+      }
+      return;
+    }
     const thread = yield* engine.getThreadShell(domainEvent.threadId);
     if (thread === null) return;
     const workspaceRoot = (yield* Ref.get(enabledProjects)).get(thread.projectId);
