@@ -62,7 +62,7 @@ function UsageWindow(props: {
         render={
           <button
             type="button"
-            className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-md px-1 text-2xs text-muted-foreground tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-md px-1 text-2xs text-muted-foreground tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             aria-label={`${props.window.label} ${props.providerLabel} limit: ${remaining}% remaining`}
           />
         }
@@ -109,7 +109,7 @@ function UsageWindow(props: {
               <Button
                 size="xs"
                 variant="outline"
-                disabled={redeem.busy}
+                disabled={redeem.busy || !redeem.canManageProviders}
                 onClick={() => {
                   setOpen(false);
                   redeem.setConfirming(true);
@@ -125,6 +125,7 @@ function UsageWindow(props: {
         open={redeem.confirming}
         onOpenChange={redeem.setConfirming}
         onConfirm={() => void redeem.redeem()}
+        disabled={redeem.busy || !redeem.canManageProviders}
       />
     </Popover>
   );

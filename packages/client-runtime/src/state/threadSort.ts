@@ -79,9 +79,7 @@ function getFirstSortableTimestamp(...values: Array<string | null | undefined>):
   return null;
 }
 
-function findLatestUserMessageTimestamp(
-  thread: Pick<ThreadSortInput, "latestUserMessageAt" | "messages">,
-): number | null {
+function getLatestUserMessageTimestamp(thread: ThreadSortInput): number {
   if (thread.latestUserMessageAt) {
     const latestUserMessageTimestamp = toSortableTimestamp(thread.latestUserMessageAt);
     if (latestUserMessageTimestamp !== null) {
@@ -105,12 +103,6 @@ function findLatestUserMessageTimestamp(
     return latestUserMessageTimestamp;
   }
 
-  return null;
-}
-
-function getLatestUserMessageTimestamp(thread: ThreadSortInput): number {
-  const latestUserMessageTimestamp = findLatestUserMessageTimestamp(thread);
-  if (latestUserMessageTimestamp !== null) return latestUserMessageTimestamp;
   return getFirstSortableTimestamp(thread.updatedAt, thread.createdAt) ?? Number.NEGATIVE_INFINITY;
 }
 
@@ -126,19 +118,20 @@ export function getThreadSortTimestamp(
   return getLatestUserMessageTimestamp(thread);
 }
 
-/** Active-list recency shared by web and mobile. A new user message moves a
-    thread to the top; un-settling also surfaces it even when its last message
-    is older. Malformed timestamps sink to 0. */
-export function activeThreadAnchorTimestampMs(
-  thread: Pick<ThreadSortInput, "createdAt" | "latestUserMessageAt" | "messages"> & {
-    readonly updatedAt?: string | undefined;
-    readonly unsettledAt?: string | null | undefined;
-  },
-): number {
+/**
+ * Sort anchor for the active thread list: creation time, re-anchored to
+ * unsettledAt when the thread last re-entered the active list (an explicit
+ * un-settle, or a settled thread waking on activity). The list stays static
+ * between lifecycle transitions, but an un-settled thread surfaces at the
+ * top instead of sinking back to its creation-order slot. Shared by web and
+ * mobile so both render the same order. Malformed timestamps sink to 0.
+ */
+export function activeThreadAnchorTimestampMs(thread: {
+  readonly createdAt: string;
+  readonly unsettledAt?: string | null | undefined;
+}): number {
   return Math.max(
-    findLatestUserMessageTimestamp(thread) ??
-      getFirstSortableTimestamp(thread.createdAt, thread.updatedAt) ??
-      0,
+    toSortableTimestamp(thread.createdAt) ?? 0,
     toSortableTimestamp(thread.unsettledAt ?? undefined) ?? 0,
   );
 }
@@ -345,26 +338,41 @@ export function sortPinnedThreadsByOrderKey<
   return [...keyed, ...keyless];
 }
 
-/** Active threads follow activity and re-entry on every client, including legacy manually ordered rows. */
+/** New and reopened threads lead the active list. Arranged threads follow
+    their saved keys; activity leaves both groups in place. */
 export function sortActiveThreadsByOrderKey<
-  T extends Pick<ThreadSortInput, "createdAt" | "latestUserMessageAt" | "messages"> & {
+  T extends {
     readonly id: string;
-    readonly updatedAt?: string | undefined;
+    readonly createdAt: string;
     readonly unsettledAt?: string | null | undefined;
     readonly activeOrderKey?: string | null | undefined;
     readonly environmentId?: string | undefined;
   },
 >(threads: readonly T[]): T[] {
   if (threads.length < 2) return [...threads];
-  const timestamps = new Map(
-    threads.map((thread) => [thread, activeThreadAnchorTimestampMs(thread)]),
-  );
-  return [...threads].sort(
-    (left, right) =>
-      timestamps.get(right)! - timestamps.get(left)! ||
+  const timestamps = new Map<T, number>();
+  for (const thread of threads) {
+    if (thread.activeOrderKey == null) {
+      timestamps.set(thread, activeThreadAnchorTimestampMs(thread));
+    }
+  }
+  return [...threads].sort((left, right) => {
+    const leftKey = left.activeOrderKey;
+    const rightKey = right.activeOrderKey;
+    if (leftKey == null && rightKey != null) return -1;
+    if (leftKey != null && rightKey == null) return 1;
+    let order = 0;
+    if (leftKey != null && rightKey != null) {
+      order = leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    } else {
+      order = timestamps.get(right)! - timestamps.get(left)!;
+    }
+    return (
+      order ||
       left.id.localeCompare(right.id) ||
-      (left.environmentId ?? "").localeCompare(right.environmentId ?? ""),
-  );
+      (left.environmentId ?? "").localeCompare(right.environmentId ?? "")
+    );
+  });
 }
 
 /**

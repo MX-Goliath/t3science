@@ -14,6 +14,7 @@ import {
 import {
   PreviewAutomationHost,
   PreviewAutomationError,
+  PreviewAutomationNavigateInput,
   PreviewAutomationOpenInput,
   PreviewAutomationResizeInput,
   PreviewAutomationResizeResult,
@@ -28,6 +29,7 @@ const decodeConfiguredLocalServerUrls = Schema.decodeUnknownSync(ConfiguredLocal
 const decodeViewport = Schema.decodeUnknownSync(PreviewViewportSetting);
 const decodeResizeInput = Schema.decodeUnknownSync(PreviewAutomationResizeInput);
 const decodeOpenInput = Schema.decodeUnknownSync(PreviewAutomationOpenInput);
+const decodeNavigateInput = Schema.decodeUnknownSync(PreviewAutomationNavigateInput);
 const decodeResizeResult = Schema.decodeUnknownSync(PreviewAutomationResizeResult);
 const decodeAutomationHost = Schema.decodeUnknownSync(PreviewAutomationHost);
 const decodeAutomationError = Schema.decodeUnknownSync(PreviewAutomationError);
@@ -40,6 +42,34 @@ describe("PreviewAutomationOpenInput", () => {
 
   it("retains the legacy show visibility alias", () => {
     expect(decodeOpenInput({ show: false })).toEqual({ show: false });
+  });
+});
+
+describe.each([
+  ["open URL", (url: string) => decodeOpenInput({ url })],
+  ["navigate URL", (url: string) => decodeNavigateInput({ url })],
+  ["navigate target URL", (url: string) => decodeNavigateInput({ target: { kind: "url", url } })],
+] as const)("preview %s validation", (_name, decode) => {
+  it("accepts trimmed URLs up to 2048 characters", () => {
+    for (const url of [
+      "https://example.com",
+      "localhost:5173",
+      "https://example.com/".padEnd(2048, "a"),
+    ]) {
+      expect(() => decode(url)).not.toThrow();
+    }
+  });
+
+  it("rejects empty, untrimmed, and oversized URLs", () => {
+    for (const url of [
+      "",
+      " https://example.com",
+      "https://example.com\n",
+      "\u00a0https://example.com",
+      "a".repeat(2049),
+    ]) {
+      expect(() => decode(url)).toThrow();
+    }
   });
 });
 

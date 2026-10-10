@@ -19,18 +19,15 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as Sqlite from "../persistence/Sqlite.ts";
 import { layerTest as settingsLayerTest } from "../serverSettings.ts";
 import { ServerConfig } from "../config.ts";
 import { OrchestratorV2 } from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
-import {
-  OrchestrationV2EventSinkLayerLive,
-  OrchestrationEventInfrastructureLayerLive,
-} from "../orchestration-v2/runtimeLayer.ts";
-import { ProviderRegistry } from "../provider/Services/ProviderRegistry.ts";
+import { layerEventSink, layerEventInfrastructure } from "../orchestration-v2/runtimeLayer.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import { ProjectConversationStorage } from "./ProjectConversationStorage.ts";
 import {
   ProjectConversationStorageLive,
@@ -148,13 +145,13 @@ it("exports the inherited fork prefix and retains its model metadata", () => {
   );
 });
 
-const database = SqlitePersistenceMemory;
+const database = Sqlite.layerMemory;
 const stores = Layer.mergeAll(
   ProjectionStore.layer,
   ProjectStore.layer,
-  OrchestrationEventInfrastructureLayerLive,
+  layerEventInfrastructure,
 ).pipe(Layer.provideMerge(database));
-const sink = OrchestrationV2EventSinkLayerLive.pipe(Layer.provideMerge(stores));
+const sink = layerEventSink.pipe(Layer.provideMerge(stores));
 it.effect(
   "imports old snapshots, exports V2, preserves project actions and disables mirroring without deleting files",
   () =>
@@ -290,7 +287,9 @@ it.effect(
               Layer.provide(Layer.succeed(FileSystem.FileSystem, monitoredFs)),
               Layer.provide(settingsLayerTest()),
               Layer.provide(testConfig),
-              Layer.provide(Layer.mock(ProviderRegistry)({ getProviders: Effect.succeed([]) })),
+              Layer.provide(
+                Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
+              ),
             ),
           ),
         );

@@ -32,14 +32,14 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import { writeFileStringAtomically } from "../atomicWrite.ts";
+import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import { attachmentRelativePath, resolveAttachmentPath } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
 import { OrchestratorV2 } from "../orchestration-v2/Orchestrator.ts";
 import { EventSinkV2 } from "../orchestration-v2/EventSink.ts";
 import { ProjectStoreV2 } from "../orchestration-v2/ProjectStore.ts";
-import { OrchestrationEventStore } from "../persistence/Services/OrchestrationEventStore.ts";
-import { ProviderRegistry } from "../provider/Services/ProviderRegistry.ts";
+import { OrchestrationEventStore } from "../persistence/OrchestrationEventStore.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import {
   ProjectConversationStorage,
   type ProjectConversationStorageShape,
@@ -218,7 +218,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   const projects = yield* ProjectStoreV2;
   const eventSink = yield* EventSinkV2;
   const events = yield* OrchestrationEventStore;
-  const providers = yield* ProviderRegistry;
+  const providers = yield* ProviderRegistry.ProviderRegistry;
   const settingsService = yield* ServerSettingsService;
   const importLock = yield* Semaphore.make(1);
   const enabledProjects = yield* Ref.make(new Map<ProjectId, string>());
@@ -254,9 +254,10 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
     const filePath = manifestPath(workspaceRoot);
     const raw = yield* fileSystem.readFileString(filePath).pipe(
       Effect.map(Option.some),
-      Effect.catchTag("PlatformError", (cause) =>
-        cause.reason._tag === "NotFound" ? Effect.succeed(Option.none()) : Effect.fail(cause),
-      ),
+      Effect.catchTags({
+        PlatformError: (cause) =>
+          cause.reason._tag === "NotFound" ? Effect.succeed(Option.none()) : Effect.fail(cause),
+      }),
     );
     if (Option.isNone(raw)) return Option.none<Schema.Schema.Type<typeof Manifest>>();
     return Option.some(yield* decodeManifest(raw.value));
@@ -268,9 +269,12 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
         .readDirectory(threadsDirectory(workspaceRoot), { recursive: false })
         .pipe(
           Effect.map((entries) => entries.filter((entry) => entry.endsWith(".json")).toSorted()),
-          Effect.catchTag("PlatformError", (cause) =>
-            cause.reason._tag === "NotFound" ? Effect.succeed([] as string[]) : Effect.fail(cause),
-          ),
+          Effect.catchTags({
+            PlatformError: (cause) =>
+              cause.reason._tag === "NotFound"
+                ? Effect.succeed([] as string[])
+                : Effect.fail(cause),
+          }),
         );
     },
   );

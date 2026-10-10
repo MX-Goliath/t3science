@@ -6,7 +6,7 @@ import {
   type ServerProvider,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
-import { Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry } from "effect/reactivity";
 import { createThreadListEnvironmentsAtom } from "./thread-list-environments";
 
 const ID = EnvironmentId.make("one");
@@ -103,6 +103,7 @@ describe("thread list environment projection", () => {
     ["threadSnooze", "snoozeEnvironmentIds"],
     ["threadPinning", "pinningEnvironmentIds"],
     ["threadPinReorder", "pinReorderEnvironmentIds"],
+    ["threadActiveReorder", "activeReorderEnvironmentIds"],
     ["threadTitleRegeneration", "titleRegenerationEnvironmentIds"],
   ] as const)("tracks enabling and removing %s", (capability, collection) => {
     const h = harness();
@@ -127,22 +128,6 @@ describe("thread list environment projection", () => {
       h.write(config);
       expect(h.read()).toBe(disabled);
       expect(h.notifications().list).toBe(2);
-    } finally {
-      h.registry.dispose();
-    }
-  });
-
-  it("keeps activity sorting even if an environment advertises active reordering", () => {
-    const h = harness();
-    try {
-      h.write({
-        ...config,
-        environment: {
-          ...config.environment,
-          capabilities: { ...config.environment.capabilities, threadActiveReorder: true },
-        },
-      });
-      expect(h.read().activeReorderEnvironmentIds.size).toBe(0);
     } finally {
       h.registry.dispose();
     }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { observeResize } from "~/lib/observeResize";
 import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "./pdfTextLayer.css";
@@ -108,11 +109,9 @@ function PdfPage({
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
-    const observer = new ResizeObserver(() =>
+    return observeResize(element, () =>
       setWidth(Math.max(100, Math.floor(element.clientWidth - 24))),
     );
-    observer.observe(element);
-    return () => observer.disconnect();
   }, []);
   useEffect(() => {
     let disposed = false;
@@ -268,8 +267,7 @@ function PdfPage({
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto p-3">
         <div className="relative w-fit bg-white" aria-label={`${title}, page ${pageNumber}`}>
           <canvas ref={canvasRef} />
-          {/* PDF.js supplies the textLayer CSS. */}
-          {/* oxlint-disable-next-line shadcn/no-unknown-classes */}
+          {/* oxlint-disable-next-line shadcn/no-unknown-classes -- PDF.js supplies the textLayer CSS. */}
           <div ref={textRef} className="textLayer" />
           {areaMode && ready ? (
             <div

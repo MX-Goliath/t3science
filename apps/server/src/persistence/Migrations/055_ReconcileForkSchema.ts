@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import messageModel from "./050_ProjectionThreadMessageModelSelection.ts";
 import pullRequests from "./050_ProjectionThreadPullRequests.ts";
 import messageContext from "./051_ProjectionThreadMessageContext.ts";

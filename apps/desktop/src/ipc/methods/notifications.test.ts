@@ -1,6 +1,6 @@
 import * as NodeEvents from "node:events";
 import { it } from "@effect/vitest";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { beforeEach, expect, vi } from "vite-plus/test";
@@ -83,7 +83,7 @@ const withNotifications = Effect.fnUntraced(function* (
       );
     }),
   ).pipe(
-    Effect.provideService(HostProcessPlatform, platform),
+    Effect.provideService(HostProcess.Platform, platform),
     Effect.provideService(DesktopAssets.DesktopAssets, {
       iconPaths: Effect.succeed({
         png: Option.some(icon),

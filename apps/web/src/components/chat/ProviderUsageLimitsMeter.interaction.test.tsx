@@ -3,12 +3,16 @@ import {
   ProviderInstanceId,
   type ServerProviderUsageLimits,
 } from "@t3tools/contracts";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { act, type ReactNode } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => ({ consume: vi.fn(), notify: vi.fn() }));
+vi.mock("../../state/session", () => ({
+  useEnvironmentScope: () => true,
+  readEnvironmentScope: () => true,
+}));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.consume }));
 vi.mock("../../state/server", () => ({ serverEnvironment: { consumeResetCredit: "reset" } }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: state.notify } }));

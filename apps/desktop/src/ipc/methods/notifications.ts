@@ -1,5 +1,5 @@
 import { DesktopNotification } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Electron from "electron";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -16,7 +16,7 @@ import {
 } from "../channels.ts";
 
 export const installNotifications = Effect.fn("desktop.ipc.installNotifications")(function* () {
-  const platform = yield* HostProcessPlatform;
+  const platform = yield* HostProcess.Platform;
   if (platform !== "linux") return;
   const ipc = yield* DesktopIpc.DesktopIpc;
   const app = yield* ElectronApp.ElectronApp;

@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import reconcileSchema from "./Migrations/055_ReconcileForkSchema.ts";
 
@@ -15,6 +15,9 @@ export const reconcileForkMigrationHistory = Effect.fn("reconcileForkMigrationHi
       readonly migration_id: number;
       readonly name: string;
     }>`SELECT migration_id, name FROM effect_sql_migrations`;
+    // The previous Science release used upstream's next migration id. Free it
+    // before the loader advances, so scheduled-task webhooks are not skipped.
+    yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = 57 AND name = 'ScienceMessageModelSelection'`;
     const forkNames = new Set([
       "ProjectionThreadMessageModelSelection",
       "RepairProjectionThreadTitleState",

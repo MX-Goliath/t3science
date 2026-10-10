@@ -3,6 +3,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAtomValue } from "@effect/atom-react";
 
 import { readLocalApi } from "../localApi";
 import type { SidebarProjectGroupMember } from "../sidebarProjectGrouping";
@@ -37,6 +38,9 @@ export function useProjectConversationStorage(
     [member.environmentId, member.id],
   );
   const state = useEnvironmentQuery(queryAtom);
+  const canSetStorage = useAtomValue(
+    projectEnvironment.setConversationStorage.permissionAtom(member.environmentId),
+  );
   const setConversationStorage = useAtomCommand(projectEnvironment.setConversationStorage, {
     reportFailure: false,
   });
@@ -50,6 +54,7 @@ export function useProjectConversationStorage(
 
   const updateEnabled = useCallback(
     async (nextEnabled: boolean) => {
+      if (!canSetStorage) return;
       if (nextEnabled) {
         const confirmed = await readLocalApi()?.dialogs.confirm(
           [
@@ -92,12 +97,12 @@ export function useProjectConversationStorage(
           : "Existing exported files were kept, but they will no longer be updated or imported automatically.",
       });
     },
-    [member.environmentId, member.id, setConversationStorage, state],
+    [canSetStorage, member.environmentId, member.id, setConversationStorage, state],
   );
 
   return {
     enabled,
-    busy: saving || state.isPending,
+    busy: saving || state.isPending || !canSetStorage,
     error: state.error ?? null,
     setEnabled: (nextEnabled: boolean) => void updateEnabled(nextEnabled),
   };
