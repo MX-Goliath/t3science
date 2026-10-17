@@ -1,3 +1,4 @@
+import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { useState } from "react";
 
 import {
@@ -47,25 +48,27 @@ export function NotificationSettings() {
                 return;
               }
               setRequesting(true);
-              try {
-                const granted = native
-                  ? await native.isSupported()
-                  : (await Notification.requestPermission()) === "granted";
-                if (!granted) {
-                  setPermissionMessage(
-                    native
-                      ? "System notifications are unavailable. Check that libnotify is installed and notifications are enabled in your desktop settings."
-                      : "Allow notifications in your browser or system settings, then choose this option again. Sound only is still available.",
-                  );
-                  return;
-                }
-              } catch {
+              const permission = await settlePromise(async () =>
+                native
+                  ? (await native.isSupported())
+                    ? "granted"
+                    : "denied"
+                  : Notification.requestPermission(),
+              );
+              setRequesting(false);
+              if (permission._tag === "Failure") {
                 setPermissionMessage(
                   "Notifications are unavailable. Sound only is still available.",
                 );
                 return;
-              } finally {
-                setRequesting(false);
+              }
+              if (permission.value !== "granted") {
+                setPermissionMessage(
+                  native
+                    ? "System notifications are unavailable. Check that libnotify is installed and notifications are enabled in your desktop settings."
+                    : "Allow notifications in your browser or system settings, then choose this option again. Sound only is still available.",
+                );
+                return;
               }
             }
             updateSettings({ notificationMode: value });

@@ -3,7 +3,7 @@ import { remainingPercent } from "@t3tools/shared/usageLimits";
 import { View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 
 function UsageWindow(props: { window: ServerProviderUsageWindow; providerLabel: string }) {
   const remaining = remainingPercent(props.window);

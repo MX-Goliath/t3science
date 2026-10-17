@@ -3,7 +3,7 @@
 import { EnvironmentId } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useShallow } from "zustand/react/shallow";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { previewBridge } from "~/components/preview/previewBridge";
 import { useClientSettings } from "~/hooks/useSettings";
@@ -40,29 +40,21 @@ function MountedWebChatBrowser() {
   const projects = useProjects();
   const threads = useThreadShells();
   const threadLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
-  const visitedThreads = useMemo(
-    () =>
-      threads.flatMap((thread) => {
-        const lastVisitedAt =
-          threadLastVisitedAtById[scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))];
-        return lastVisitedAt ? [{ ...thread, lastVisitedAt }] : [];
-      }),
-    [threadLastVisitedAtById, threads],
-  );
-  const recentlyVisitedLocalProjectRoot = useMemo(
-    () =>
-      findMostRecentlyVisitedLocalProjectRoot({
-        primaryEnvironmentId,
-        projects,
-        threads: visitedThreads,
-      }),
-    [primaryEnvironmentId, projects, visitedThreads],
-  );
+  const visitedThreads = threads.flatMap((thread) => {
+    const lastVisitedAt =
+      threadLastVisitedAtById[scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))];
+    return lastVisitedAt ? [{ ...thread, lastVisitedAt }] : [];
+  });
+  const recentlyVisitedLocalProjectRoot = findMostRecentlyVisitedLocalProjectRoot({
+    primaryEnvironmentId,
+    projects,
+    threads: visitedThreads,
+  });
   const downloadDirectory = recentlyVisitedLocalProjectRoot;
   const config = usePreviewWebviewConfig(WEB_CHAT_BROWSER_SESSION_SCOPE);
   const tabLeaseRef = useRef<AcquiredDesktopTab | null>(null);
   const webviewRef = useRef<HTMLElementTagNameMap["webview"] | null>(null);
-  const desiredUrlRef = useRef(getWebChatProviderDefinition(provider).url);
+  const desiredUrl = getWebChatProviderDefinition(provider).url;
   const lastNavigatedUrlRef = useRef<string | null>(null);
   const [registrationVersion, setRegistrationVersion] = useState(0);
   const presentation = useBrowserSurfaceStore(
@@ -75,8 +67,6 @@ function MountedWebChatBrowser() {
       };
     }),
   );
-
-  desiredUrlRef.current = getWebChatProviderDefinition(provider).url;
 
   useEffect(() => {
     const lease = acquireDesktopTab(WEB_CHAT_BROWSER_TAB_ID);
@@ -121,14 +111,15 @@ function MountedWebChatBrowser() {
     };
   }, []);
 
-  const setWebviewRef = useCallback((node: HTMLElement | null) => {
+  const setWebviewRef = (node: HTMLElement | null) => {
     webviewRef.current = node as HTMLElementTagNameMap["webview"] | null;
     if (node && !node.hasAttribute("allowpopups")) node.setAttribute("allowpopups", "true");
-  }, []);
+  };
 
+  const partition = config?.partition;
   useEffect(() => {
-    lastNavigatedUrlRef.current = null;
-  }, [config?.partition]);
+    if (partition !== undefined) lastNavigatedUrlRef.current = null;
+  }, [partition]);
 
   useEffect(() => {
     const webview = webviewRef.current;
@@ -166,13 +157,12 @@ function MountedWebChatBrowser() {
   useEffect(() => {
     const bridge = previewBridge;
     if (!bridge || registrationVersion === 0) return;
-    const desiredUrl = desiredUrlRef.current;
     if (lastNavigatedUrlRef.current === desiredUrl) return;
     lastNavigatedUrlRef.current = desiredUrl;
     void bridge.navigate(WEB_CHAT_BROWSER_TAB_ID, desiredUrl).catch(() => {
       if (lastNavigatedUrlRef.current === desiredUrl) lastNavigatedUrlRef.current = null;
     });
-  }, [provider, registrationVersion]);
+  }, [desiredUrl, registrationVersion]);
 
   if (!config) return null;
 

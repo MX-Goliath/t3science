@@ -40,6 +40,7 @@ export function useWorkingRowSettledTail(input: {
   const settledNow = input.latestTurnSettled && !input.isWorking && settledTurnState !== null;
 
   useLayoutEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect -- Arm the terminal animation before paint when the external run settles.
     setTail((current) =>
       observeSettledTail(current, { key, settled: settledNow, settledTurnState }, Date.now()),
     );

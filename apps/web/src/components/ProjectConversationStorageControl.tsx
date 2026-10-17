@@ -2,7 +2,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 
 import { readLocalApi } from "../localApi";
@@ -29,14 +29,10 @@ export interface ProjectConversationStorageState {
 export function useProjectConversationStorage(
   member: SidebarProjectGroupMember,
 ): ProjectConversationStorageState {
-  const queryAtom = useMemo(
-    () =>
-      projectEnvironment.conversationStorage({
-        environmentId: member.environmentId,
-        input: { projectId: member.id },
-      }),
-    [member.environmentId, member.id],
-  );
+  const queryAtom = projectEnvironment.conversationStorage({
+    environmentId: member.environmentId,
+    input: { projectId: member.id },
+  });
   const state = useEnvironmentQuery(queryAtom);
   const canSetStorage = useAtomValue(
     projectEnvironment.setConversationStorage.permissionAtom(member.environmentId),
@@ -48,57 +44,54 @@ export function useProjectConversationStorage(
   const [optimisticEnabled, setOptimisticEnabled] = useState<boolean | null>(null);
   const enabled = optimisticEnabled ?? state.data?.enabled ?? false;
 
-  useEffect(() => {
-    if (state.data?.enabled === optimisticEnabled) setOptimisticEnabled(null);
-  }, [optimisticEnabled, state.data?.enabled]);
+  if (optimisticEnabled !== null && state.data?.enabled === optimisticEnabled) {
+    setOptimisticEnabled(null);
+  }
 
-  const updateEnabled = useCallback(
-    async (nextEnabled: boolean) => {
-      if (!canSetStorage) return;
-      if (nextEnabled) {
-        const confirmed = await readLocalApi()?.dialogs.confirm(
-          [
-            "Save this project's conversations inside the project directory?",
-            "Existing conversations and image attachments will be copied to .t3/conversations. Conversation text can contain sensitive data.",
-          ].join("\n\n"),
+  const updateEnabled = async (nextEnabled: boolean) => {
+    if (!canSetStorage) return;
+    if (nextEnabled) {
+      const confirmed = await readLocalApi()?.dialogs.confirm(
+        [
+          "Save this project's conversations inside the project directory?",
+          "Existing conversations and image attachments will be copied to .t3/conversations. Conversation text can contain sensitive data.",
+        ].join("\n\n"),
+      );
+      if (!confirmed) return;
+    }
+
+    setSaving(true);
+    const result = await setConversationStorage({
+      environmentId: member.environmentId,
+      input: { projectId: member.id, enabled: nextEnabled },
+    });
+    setSaving(false);
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Failed to update local conversation storage",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
         );
-        if (!confirmed) return;
       }
+      return;
+    }
 
-      setSaving(true);
-      const result = await setConversationStorage({
-        environmentId: member.environmentId,
-        input: { projectId: member.id, enabled: nextEnabled },
-      });
-      setSaving(false);
-      if (result._tag === "Failure") {
-        if (!isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Failed to update local conversation storage",
-              description: error instanceof Error ? error.message : "An error occurred.",
-            }),
-          );
-        }
-        return;
-      }
-
-      setOptimisticEnabled(result.value.enabled);
-      state.refresh();
-      toastManager.add({
-        type: "success",
-        title: result.value.enabled
-          ? "Local conversation storage enabled"
-          : "Local conversation storage disabled",
-        description: result.value.enabled
-          ? `${result.value.exportedThreadCount} conversation${result.value.exportedThreadCount === 1 ? "" : "s"} saved to .t3/conversations.`
-          : "Existing exported files were kept, but they will no longer be updated or imported automatically.",
-      });
-    },
-    [canSetStorage, member.environmentId, member.id, setConversationStorage, state],
-  );
+    setOptimisticEnabled(result.value.enabled);
+    state.refresh();
+    toastManager.add({
+      type: "success",
+      title: result.value.enabled
+        ? "Local conversation storage enabled"
+        : "Local conversation storage disabled",
+      description: result.value.enabled
+        ? `${result.value.exportedThreadCount} conversation${result.value.exportedThreadCount === 1 ? "" : "s"} saved to .t3/conversations.`
+        : "Existing exported files were kept, but they will no longer be updated or imported automatically.",
+    });
+  };
 
   return {
     enabled,

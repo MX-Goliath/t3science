@@ -31,13 +31,6 @@ export function resolveWorkingPetAnimation(input: {
   return "running";
 }
 
-// ---------------------------------------------------------------------------
-// Settled tail — the working row lingers after the active turn settles so the
-// pet can play its terminal animation. The lifecycle below is pure: the hook
-// applies one observation per relevant change (in a layout effect, so the
-// settled row never drops out for a painted frame) and a timeout expires it.
-// ---------------------------------------------------------------------------
-
 export interface SettledTailObservation {
   /** "threadId:turnId" — the observation's scope. */
   readonly key: string;

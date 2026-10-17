@@ -1,7 +1,6 @@
 import { DESKTOP_PRODUCTION_SCHEME, DESKTOP_DEVELOPMENT_SCHEME } from "./desktopProductIdentity.ts";
 import { isLoopbackHost } from "./preview.ts";
 
-/** Only return to a local client or the hosted T3 client, never an arbitrary OAuth-supplied URL. */
 export function providerAuthReturnUrl(value: string | undefined): string | undefined {
   if (!value) return undefined;
   try {

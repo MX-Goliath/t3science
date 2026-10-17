@@ -9,7 +9,15 @@ import type { CitePdf, PdfCitation } from "./pdfCitation";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
-export default function PdfDocumentPreview({
+export default function PdfDocumentPreview(props: {
+  src: string;
+  title: string;
+  onCite?: CitePdf | undefined;
+}) {
+  return <PdfDocumentPreviewContent key={props.src} {...props} />;
+}
+
+function PdfDocumentPreviewContent({
   src,
   title,
   onCite,
@@ -23,9 +31,6 @@ export default function PdfDocumentPreview({
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let disposed = false;
-    setPdf(null);
-    setPage(1);
-    setError(null);
     const task = getDocument({
       url: src,
       useWorkerFetch: false,
@@ -106,6 +111,14 @@ function PdfPage({
   const [region, setRegion] = useState<PdfCitation["region"]>();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [renderedWidth, setRenderedWidth] = useState(width);
+  if (renderedWidth !== width) {
+    setRenderedWidth(width);
+    setReady(false);
+    setText("");
+    setRegion(undefined);
+    setError(null);
+  }
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
@@ -116,10 +129,6 @@ function PdfPage({
   useEffect(() => {
     let disposed = false;
     let cancel = () => {};
-    setReady(false);
-    setText("");
-    setRegion(undefined);
-    setError(null);
     const canvas = canvasRef.current!;
     const container = textRef.current!;
     container.replaceChildren();

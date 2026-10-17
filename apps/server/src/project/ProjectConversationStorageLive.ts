@@ -473,7 +473,7 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
           }
         : snapshot.thread;
       yield* copyAttachments(project.workspaceRoot, snapshot.messages, true);
-      const uuid = yield* crypto.randomUUIDv4;
+      const uuid = yield* crypto.randomUUIDv4();
       const occurredAt = yield* DateTime.now;
       const importedEvents: ReadonlyArray<OrchestrationV2DomainEvent> = [
         {

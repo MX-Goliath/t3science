@@ -1,5 +1,5 @@
 import { TimerIcon } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
@@ -50,9 +50,23 @@ export function ScheduleSendDialog(props: {
   onOpenChange: (open: boolean) => void;
   onSchedule: (scheduledAt: string) => void;
 }) {
-  const [dateValue, setDateValue] = useState("");
-  const [timeValue, setTimeValue] = useState("");
-  const [selectedPreset, setSelectedPreset] = useState<SchedulePreset | null>(null);
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      {props.open ? (
+        <ScheduleSendForm onOpenChange={props.onOpenChange} onSchedule={props.onSchedule} />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function ScheduleSendForm(props: {
+  onOpenChange: (open: boolean) => void;
+  onSchedule: (scheduledAt: string) => void;
+}) {
+  const [initialDate] = useState(() => roundToNextFiveMinutes(new Date(Date.now() + 30 * 60_000)));
+  const [dateValue, setDateValue] = useState(toLocalDateValue(initialDate));
+  const [timeValue, setTimeValue] = useState(toLocalTimeValue(initialDate));
+  const [selectedPreset, setSelectedPreset] = useState<SchedulePreset | null>("thirty-minutes");
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const setSelectedDate = (date: Date, preset: SchedulePreset) => {
@@ -63,22 +77,14 @@ export function ScheduleSendDialog(props: {
     setValidationError(null);
   };
 
-  useEffect(() => {
-    if (!props.open) return;
-    setSelectedDate(new Date(Date.now() + 30 * 60_000), "thirty-minutes");
-  }, [props.open]);
-
-  const selectedDate = useMemo(
-    () => parseLocalSchedule(dateValue, timeValue),
-    [dateValue, timeValue],
-  );
-  const selectedDateLabel = useMemo(() => {
+  const selectedDate = parseLocalSchedule(dateValue, timeValue);
+  const selectedDateLabel = (() => {
     if (!selectedDate) return null;
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(selectedDate);
-  }, [selectedDate]);
+  })();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -92,111 +98,109 @@ export function ScheduleSendDialog(props: {
   };
 
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogPopup className="max-w-sm overflow-hidden" bottomStickOnMobile={false}>
-        <form className="contents" onSubmit={submit}>
-          <DialogHeader>
-            <DialogTitle>Schedule message</DialogTitle>
-            <DialogDescription>Choose when this prompt should be sent.</DialogDescription>
-          </DialogHeader>
+    <DialogPopup className="max-w-sm overflow-hidden" bottomStickOnMobile={false}>
+      <form className="contents" onSubmit={submit}>
+        <DialogHeader>
+          <DialogTitle>Schedule message</DialogTitle>
+          <DialogDescription>Choose when this prompt should be sent.</DialogDescription>
+        </DialogHeader>
 
-          <div className="space-y-4 px-5 pt-1 pb-5">
-            <div className="grid grid-cols-3 gap-2" aria-label="Quick schedule options">
-              {[
-                {
-                  id: "thirty-minutes" as const,
-                  label: "30 min",
-                  date: () => new Date(Date.now() + 30 * 60_000),
-                },
-                {
-                  id: "one-hour" as const,
-                  label: "1 hour",
-                  date: () => new Date(Date.now() + 60 * 60_000),
-                },
-                {
-                  id: "tomorrow" as const,
-                  label: "Tomorrow",
-                  date: () => tomorrowAtNine(new Date()),
-                },
-              ].map((preset) => (
-                <Button
-                  key={preset.id}
-                  type="button"
-                  size="sm"
-                  variant={selectedPreset === preset.id ? "secondary" : "outline"}
-                  aria-pressed={selectedPreset === preset.id}
-                  onClick={() => setSelectedDate(preset.date(), preset.id)}
-                >
-                  {preset.label}
-                </Button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-3">
-              <label className="space-y-1.5 text-sm font-medium" htmlFor="scheduled-send-date">
-                <span className="block">Date</span>
-                <Input
-                  nativeInput
-                  id="scheduled-send-date"
-                  type="date"
-                  min={toLocalDateValue(new Date())}
-                  value={dateValue}
-                  onChange={(event) => {
-                    setDateValue(event.currentTarget.value);
-                    setSelectedPreset(null);
-                    setValidationError(null);
-                  }}
-                  aria-invalid={validationError ? true : undefined}
-                />
-              </label>
-              <label className="space-y-1.5 text-sm font-medium" htmlFor="scheduled-send-time">
-                <span className="block">Time</span>
-                <Input
-                  nativeInput
-                  id="scheduled-send-time"
-                  type="time"
-                  step={300}
-                  value={timeValue}
-                  onChange={(event) => {
-                    setTimeValue(event.currentTarget.value);
-                    setSelectedPreset(null);
-                    setValidationError(null);
-                  }}
-                  aria-invalid={validationError ? true : undefined}
-                />
-              </label>
-            </div>
-
-            <div
-              className={cn(
-                "flex min-h-10 items-center gap-2.5 rounded-lg border px-3 text-sm",
-                validationError
-                  ? "border-destructive/40 bg-destructive/5 text-destructive-foreground"
-                  : "border-primary/20 bg-primary/5 text-foreground",
-              )}
-            >
-              <TimerIcon
-                className={cn(
-                  "size-4 shrink-0",
-                  validationError ? "text-destructive-foreground" : "text-primary",
-                )}
-                aria-hidden="true"
-              />
-              <span>{validationError ?? selectedDateLabel ?? "Choose a date and time"}</span>
-            </div>
-            <p className="text-xs text-secondary-label">
-              Runs on this device while T3 Science is open.
-            </p>
+        <div className="space-y-4 px-5 pt-1 pb-5">
+          <div className="grid grid-cols-3 gap-2" aria-label="Quick schedule options">
+            {[
+              {
+                id: "thirty-minutes" as const,
+                label: "30 min",
+                date: () => new Date(Date.now() + 30 * 60_000),
+              },
+              {
+                id: "one-hour" as const,
+                label: "1 hour",
+                date: () => new Date(Date.now() + 60 * 60_000),
+              },
+              {
+                id: "tomorrow" as const,
+                label: "Tomorrow",
+                date: () => tomorrowAtNine(new Date()),
+              },
+            ].map((preset) => (
+              <Button
+                key={preset.id}
+                type="button"
+                size="sm"
+                variant={selectedPreset === preset.id ? "secondary" : "outline"}
+                aria-pressed={selectedPreset === preset.id}
+                onClick={() => setSelectedDate(preset.date(), preset.id)}
+              >
+                {preset.label}
+              </Button>
+            ))}
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => props.onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Schedule</Button>
-          </DialogFooter>
-        </form>
-      </DialogPopup>
-    </Dialog>
+          <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-3">
+            <label className="space-y-1.5 text-sm font-medium" htmlFor="scheduled-send-date">
+              <span className="block">Date</span>
+              <Input
+                nativeInput
+                id="scheduled-send-date"
+                type="date"
+                min={toLocalDateValue(new Date())}
+                value={dateValue}
+                onChange={(event) => {
+                  setDateValue(event.currentTarget.value);
+                  setSelectedPreset(null);
+                  setValidationError(null);
+                }}
+                aria-invalid={validationError ? true : undefined}
+              />
+            </label>
+            <label className="space-y-1.5 text-sm font-medium" htmlFor="scheduled-send-time">
+              <span className="block">Time</span>
+              <Input
+                nativeInput
+                id="scheduled-send-time"
+                type="time"
+                step={300}
+                value={timeValue}
+                onChange={(event) => {
+                  setTimeValue(event.currentTarget.value);
+                  setSelectedPreset(null);
+                  setValidationError(null);
+                }}
+                aria-invalid={validationError ? true : undefined}
+              />
+            </label>
+          </div>
+
+          <div
+            className={cn(
+              "flex min-h-10 items-center gap-2.5 rounded-lg border px-3 text-sm",
+              validationError
+                ? "border-destructive/40 bg-destructive/5 text-destructive-foreground"
+                : "border-primary/20 bg-primary/5 text-foreground",
+            )}
+          >
+            <TimerIcon
+              className={cn(
+                "size-4 shrink-0",
+                validationError ? "text-destructive-foreground" : "text-primary",
+              )}
+              aria-hidden="true"
+            />
+            <span>{validationError ?? selectedDateLabel ?? "Choose a date and time"}</span>
+          </div>
+          <p className="text-xs text-secondary-label">
+            Runs on this device while T3 Science is open.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => props.onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="submit">Schedule</Button>
+        </DialogFooter>
+      </form>
+    </DialogPopup>
   );
 }
