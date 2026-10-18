@@ -295,7 +295,10 @@ export function makeMcpAppHost(options: McpAppHostOptions): McpAppHost {
           typeof mode === "string" &&
           options.hostContext().availableDisplayModes.includes(mode as McpAppDisplayMode) &&
           (appDisplayModes === undefined || appDisplayModes.includes(mode));
-        if (!allowed || mode === current) {
+        // Apps can ask during initialization or after every refresh. Opening
+        // full screen belongs to the reader's host control, so those requests
+        // must not cover the chat or undo the reader's return to it.
+        if (!allowed || mode === current || mode === "fullscreen") {
           respond(id, { mode: current });
           return;
         }

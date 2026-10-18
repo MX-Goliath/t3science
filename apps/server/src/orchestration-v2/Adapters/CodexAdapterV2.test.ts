@@ -2078,6 +2078,140 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       };
     });
 
+  it.effect.each([
+    "full-access",
+    "supervised",
+    "ordinary-form",
+    "explicit-approval",
+    "explicit-never",
+    "openai/form",
+    "openaiForm",
+  ] as const)("handles repeated MCP tool approvals with %s policy", (scenario) =>
+    Effect.gen(function* () {
+      const scenarioId = scenario.replaceAll("/", "-");
+      const nativeThreadId = `mcp-${scenarioId}-thread`;
+      const nativeTurnId = `mcp-${scenarioId}-turn`;
+      const prompt = "Inspect the Blender viewport and update the scene.";
+      const runtimePolicy = {
+        ...CODEX_TEST_RUNTIME_POLICY,
+        runtimeMode:
+          scenario === "supervised" || scenario === "explicit-never"
+            ? ("approval-required" as const)
+            : ("full-access" as const),
+        ...(scenario === "explicit-approval" ? { approvalPolicy: "on-request" } : {}),
+        ...(scenario === "explicit-never" ? { approvalPolicy: "never" } : {}),
+      };
+      const requiresApproval =
+        scenario === "supervised" ||
+        scenario === "ordinary-form" ||
+        scenario === "explicit-approval";
+      const preamble = codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt });
+      const turnParams = yield* CodexAdapterV2.buildCodexTurnStartParams({
+        nativeThreadId,
+        codexInput: [{ type: "text", text: prompt }],
+        runtimePolicy,
+        modelSelection: CODEX_TEST_MODEL_SELECTION,
+      });
+      const transcript = makeCodexReplayTranscript({
+        scenario: `mcp-approvals-${scenarioId}`,
+        entries: [
+          ...preamble.map((entry) =>
+            entry.type === "expect_outbound" && entry.label === "turn/start"
+              ? { ...entry, frame: { id: 3, method: "turn/start", params: turnParams } }
+              : entry,
+          ),
+          ...["get_viewport_screenshot", "get_viewport_screenshot", "execute_blender_code"].flatMap(
+            (tool, index): Array<CodexReplay.CodexAppServerReplayEntry> => [
+              {
+                type: "emit_inbound",
+                label: `mcp-approval-${index}`,
+                frame: {
+                  id: `mcp_tool_call_approval_${index}`,
+                  method: "mcpServer/elicitation/request",
+                  params: {
+                    threadId: nativeThreadId,
+                    turnId: nativeTurnId,
+                    serverName: "blender",
+                    mode:
+                      scenario === "openai/form" || scenario === "openaiForm" ? scenario : "form",
+                    message: `Allow Blender to call ${tool}?`,
+                    _meta: {
+                      ...(scenario === "ordinary-form"
+                        ? {}
+                        : { codex_approval_kind: "mcp_tool_call" }),
+                      tool_name: tool,
+                      persist: ["session", "always"],
+                    },
+                    requestedSchema: {
+                      type: "object",
+                      properties: { __approval: { type: "string", enum: ["approve"] } },
+                      required: ["__approval"],
+                    },
+                  },
+                },
+              },
+              {
+                type: "expect_outbound",
+                label: `mcp-response-${index}`,
+                frame: {
+                  id: `mcp_tool_call_approval_${index}`,
+                  result: { action: "accept", content: { __approval: "approve" } },
+                },
+              },
+            ],
+          ),
+          {
+            type: "emit_inbound",
+            label: "turn/completed",
+            frame: {
+              method: "turn/completed",
+              params: {
+                threadId: nativeThreadId,
+                turn: makeCodexReplayTurn({ id: nativeTurnId, status: "completed" }),
+              },
+            },
+          },
+        ],
+      });
+      const runtimeReady = yield* Deferred.make<ProviderAdapter.ProviderAdapterV2SessionRuntime>();
+      const harness = yield* makeCodexReplayHarness(transcript, (event) =>
+        event.type === "runtime_request.updated" && event.runtimeRequest.status === "pending"
+          ? Deferred.await(runtimeReady).pipe(
+              Effect.flatMap((runtime) =>
+                runtime.respondToRuntimeRequest({
+                  requestId: event.runtimeRequest.id,
+                  decision: "accept",
+                }),
+              ),
+              Effect.orDie,
+            )
+          : Effect.void,
+      );
+      yield* Deferred.succeed(runtimeReady, harness.runtime);
+      yield* harness.runtime.startTurn({
+        ...makeCodexTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make(`mcp-${scenarioId}-attempt`),
+          text: prompt,
+        }),
+        runtimePolicy,
+      });
+      yield* harness.firstTerminal;
+      assert.lengthOf(
+        harness.events.filter((event) => event.type === "runtime_request.updated"),
+        requiresApproval ? 3 : 0,
+      );
+      assert.equal(harness.terminalEvents()[0]?.status, "completed");
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+
   it.effect.each(["supported", "unsupported", "invalid"] as const)(
     "delivers native history with %s app-server protocol",
     (response) =>

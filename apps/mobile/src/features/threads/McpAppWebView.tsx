@@ -249,6 +249,26 @@ export function ThreadMcpApp(props: {
   const webView = useRef<WebView<object>>(null);
   const hostRef = useRef<McpAppHost | null>(null);
 
+  const openFullscreen = async () => {
+    if (latest.current.awaitingUser || !latest.current.navigation.isFocused()) return;
+    // Mobile opens a fresh view; let the inline document save before leaving.
+    await hostRef.current?.teardown();
+    if (latest.current.awaitingUser || !latest.current.navigation.isFocused()) {
+      openNewDocument.current((value) => value + 1);
+      return;
+    }
+    const current = latest.current.props;
+    setPresentedFullscreen(true);
+    latest.current.navigation.navigate("ThreadMcpApp", {
+      environmentId: String(current.environmentId),
+      threadId: String(current.threadId),
+      conversationThreadId: String(current.conversationThreadId),
+      itemId: String(current.itemId),
+      revision: current.revision,
+    });
+  };
+
+  // One host per loaded document.
   useEffect(() => {
     if (uri === null) return;
     const scope = () => {
@@ -296,7 +316,7 @@ export function ThreadMcpApp(props: {
         if (info._tag !== "Success") throw commandFailure(info);
         if (!info.value.callable) throw new McpAppHostRefusal("This app cannot call that tool.");
         if (
-          !info.value.readOnly &&
+          (info.value.requiresApproval ?? !info.value.readOnly) &&
           !(await confirm(
             `Allow ${app.server} to run ${info.value.title ?? name}?`,
             JSON.stringify(args, null, 2),
@@ -360,30 +380,6 @@ export function ThreadMcpApp(props: {
       },
       requestDisplayMode: async (mode) => {
         const current = latest.current.props;
-        if (
-          mode === "fullscreen" &&
-          (latest.current.awaitingUser || !latest.current.navigation.isFocused())
-        ) {
-          return current.displayMode ?? "inline";
-        }
-        if (mode === "fullscreen" && current.displayMode !== "fullscreen") {
-          await hostRef.current?.teardown();
-          // The wait may have let an approval arrive, or the user moved to
-          // another screen; either way the view reloads inline.
-          if (latest.current.awaitingUser || !latest.current.navigation.isFocused()) {
-            openNewDocument.current((value) => value + 1);
-            return "inline";
-          }
-          setPresentedFullscreen(true);
-          latest.current.navigation.navigate("ThreadMcpApp", {
-            environmentId: String(current.environmentId),
-            threadId: String(current.threadId),
-            conversationThreadId: String(current.conversationThreadId),
-            itemId: String(current.itemId),
-            revision: current.revision,
-          });
-          return "fullscreen";
-        }
         if (mode === "inline" && current.displayMode === "fullscreen") {
           await hostRef.current?.teardown();
           current.onExitFullscreen?.();
@@ -499,7 +495,23 @@ export function ThreadMcpApp(props: {
   }
 
   return (
-    <View style={fullscreen ? { flex: 1 } : { height, marginBottom: ROW_BOTTOM_MARGIN }}>
+    <View
+      style={fullscreen ? { flex: 1 } : { height: height + 40, marginBottom: ROW_BOTTOM_MARGIN }}
+    >
+      {!fullscreen ? (
+        <View className="h-10 flex-row items-center justify-between gap-3 px-3">
+          <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+            {app.server}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={awaitingUser || navigatedAway || crashed || uri === null}
+            onPress={() => void openFullscreen()}
+          >
+            <Text className="text-sm text-foreground">Expand</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {navigatedAway ? (
         <View className="flex-1 items-center justify-center">
           <Text className="text-sm text-foreground-muted">

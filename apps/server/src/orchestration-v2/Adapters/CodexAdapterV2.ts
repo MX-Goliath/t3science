@@ -102,6 +102,7 @@ import {
 } from "../../provider/CodexDeveloperInstructions.ts";
 import {
   describeMcpElicitation,
+  shouldAutoApproveMcpToolElicitation,
   toMcpElicitationResponse,
 } from "../../provider/CodexMcpElicitation.ts";
 import {
@@ -5255,6 +5256,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               return {
                 action: "decline",
               } satisfies CodexSchema.McpServerElicitationRequestResponse;
+            }
+
+            if (shouldAutoApproveMcpToolElicitation(payload, context.input.runtimePolicy)) {
+              return toMcpElicitationResponse(payload, "accept");
             }
 
             const nativeRequestId =

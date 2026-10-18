@@ -66,6 +66,10 @@ function setup(overrides: Partial<Parameters<typeof makeMcpAppHost>[0]> = {}) {
     setTheme: (next: "light" | "dark") => {
       theme = next;
     },
+    setDisplayMode: (next: "inline" | "fullscreen") => {
+      mode = next;
+      host.updateHostContext();
+    },
   };
 }
 
@@ -279,9 +283,10 @@ describe("makeMcpAppHost", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("switches display mode only to one both sides offer, and tells the app", async () => {
-    const { host, sent } = setup();
+  it("lets the reader expand an app and the app return inline only when both sides offer it", async () => {
+    const { host, sent, setDisplayMode } = setup();
     initialize(host, { availableDisplayModes: ["inline", "fullscreen"] });
+    setDisplayMode("fullscreen");
     sent.length = 0;
     host.receive({
       jsonrpc: "2.0",
@@ -293,26 +298,98 @@ describe("makeMcpAppHost", () => {
       jsonrpc: "2.0",
       id: 2,
       method: "ui/request-display-mode",
-      params: { mode: "fullscreen" },
+      params: { mode: "inline" },
     });
     await flush();
     host.updateHostContext();
-    expect(sent.find((m) => m.id === 1)?.result).toEqual({ mode: "inline" });
-    expect(sent.find((m) => m.id === 2)?.result).toEqual({ mode: "fullscreen" });
+    expect(sent.find((m) => m.id === 1)?.result).toEqual({ mode: "fullscreen" });
+    expect(sent.find((m) => m.id === 2)?.result).toEqual({ mode: "inline" });
     expect(sent.find((m) => m.method === "ui/notifications/host-context-changed")?.params).toEqual({
-      displayMode: "fullscreen",
+      displayMode: "inline",
     });
 
+    // An app that declared only fullscreen cannot request inline itself.
     const declined = setup();
-    initialize(declined.host, { availableDisplayModes: ["inline"] });
+    initialize(declined.host, { availableDisplayModes: ["fullscreen"] });
+    declined.setDisplayMode("fullscreen");
     declined.host.receive({
       jsonrpc: "2.0",
       id: 3,
       method: "ui/request-display-mode",
-      params: { mode: "fullscreen" },
+      params: { mode: "inline" },
     });
     await flush();
-    expect(declined.sent.find((m) => m.id === 3)?.result).toEqual({ mode: "inline" });
+    expect(declined.sent.find((m) => m.id === 3)?.result).toEqual({ mode: "fullscreen" });
+  });
+
+  it("keeps a fullscreen-only viewport inline while delivering screenshots before and after manual expansion", async () => {
+    const screenshot = { type: "image", data: "c2NyZWVuc2hvdA==", mimeType: "image/png" };
+    const { host, sent, setDisplayMode } = setup({
+      callTool: async () => ({ content: [screenshot] }),
+    });
+    initialize(host, { availableDisplayModes: ["fullscreen"] });
+    for (const id of [1, 2]) {
+      host.receive({
+        jsonrpc: "2.0",
+        id,
+        method: "ui/request-display-mode",
+        params: { mode: "fullscreen" },
+      });
+    }
+    for (const id of [3, 4]) {
+      host.receive({
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: { name: "viewport_capture", arguments: { auto: true } },
+      });
+    }
+    await flush();
+    expect(sent.filter((message) => message.id === 1 || message.id === 2)).toEqual([
+      { jsonrpc: "2.0", id: 1, result: { mode: "inline" } },
+      { jsonrpc: "2.0", id: 2, result: { mode: "inline" } },
+    ]);
+    for (const id of [3, 4]) {
+      expect(sent.find((message) => message.id === id)?.result).toEqual({ content: [screenshot] });
+    }
+    host.setToolCall({ arguments: {}, result: { content: [screenshot] } });
+    expect(
+      sent.find((message) => message.method === "ui/notifications/tool-result")?.params,
+    ).toEqual({
+      content: [screenshot],
+    });
+
+    setDisplayMode("fullscreen");
+    setDisplayMode("inline");
+    host.receive({
+      jsonrpc: "2.0",
+      id: 5,
+      method: "ui/request-display-mode",
+      params: { mode: "fullscreen" },
+    });
+    host.receive({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: { name: "viewport_capture", arguments: { auto: true } },
+    });
+    await flush();
+    expect(sent.find((message) => message.id === 5)?.result).toEqual({ mode: "inline" });
+    expect(sent.find((message) => message.id === 6)?.result).toEqual({ content: [screenshot] });
+    expect(
+      sent.filter((message) => message.method === "ui/notifications/host-context-changed"),
+    ).toEqual([
+      {
+        jsonrpc: "2.0",
+        method: "ui/notifications/host-context-changed",
+        params: { displayMode: "fullscreen" },
+      },
+      {
+        jsonrpc: "2.0",
+        method: "ui/notifications/host-context-changed",
+        params: { displayMode: "inline" },
+      },
+    ]);
   });
 
   it("forwards model context and download requests, and declares both", async () => {

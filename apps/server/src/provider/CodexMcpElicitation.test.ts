@@ -3,7 +3,11 @@ import * as NodeAssert from "node:assert/strict";
 import { describe, it } from "vite-plus/test";
 import type * as EffectCodexSchema from "effect-codex-app-server/schema";
 
-import { describeMcpElicitation, toMcpElicitationResponse } from "./CodexMcpElicitation.ts";
+import {
+  describeMcpElicitation,
+  shouldAutoApproveMcpToolElicitation,
+  toMcpElicitationResponse,
+} from "./CodexMcpElicitation.ts";
 
 describe("Codex MCP elicitation approvals", () => {
   const request = {
@@ -31,6 +35,60 @@ describe("Codex MCP elicitation approvals", () => {
       required: ["approval"],
     },
   } satisfies EffectCodexSchema.McpServerElicitationRequestParams;
+
+  it("auto-approves tagged tool requests only when the active policy disables approvals", () => {
+    const toolRequest = {
+      ...request,
+      _meta: { codex_approval_kind: "mcp_tool_call" },
+    };
+    for (const runtimeMode of [
+      "approval-required",
+      "auto-accept-edits",
+      "auto",
+      "full-access",
+    ] as const) {
+      NodeAssert.equal(
+        shouldAutoApproveMcpToolElicitation(toolRequest, { runtimeMode }),
+        runtimeMode === "full-access",
+      );
+      NodeAssert.equal(
+        shouldAutoApproveMcpToolElicitation(toolRequest, { runtimeMode, approvalPolicy: "never" }),
+        true,
+      );
+      NodeAssert.equal(
+        shouldAutoApproveMcpToolElicitation(toolRequest, {
+          runtimeMode,
+          approvalPolicy: "on-request",
+        }),
+        false,
+      );
+    }
+  });
+
+  it("keeps ordinary forms and URL elicitations interactive in Full access", () => {
+    const policy = { runtimeMode: "full-access" as const };
+    NodeAssert.equal(shouldAutoApproveMcpToolElicitation(request, policy), false);
+    NodeAssert.equal(
+      shouldAutoApproveMcpToolElicitation({ ...request, _meta: null }, policy),
+      false,
+    );
+    NodeAssert.equal(
+      shouldAutoApproveMcpToolElicitation(
+        {
+          mode: "url",
+          message: "Sign in",
+          serverName: "blender",
+          threadId: request.threadId,
+          turnId: request.turnId,
+          elicitationId: "sign-in",
+          url: "https://example.com/authorize",
+          _meta: { codex_approval_kind: "mcp_tool_call" },
+        },
+        policy,
+      ),
+      false,
+    );
+  });
 
   it("preserves the app name and advertised persistence choices", () => {
     NodeAssert.deepStrictEqual(describeMcpElicitation(request), {

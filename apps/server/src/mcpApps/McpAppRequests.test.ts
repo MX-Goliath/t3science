@@ -6,6 +6,7 @@ import {
   type McpAppRequestError,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2TurnItem,
+  type RuntimeMode,
 } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
@@ -68,6 +69,7 @@ function makeLayer(input: {
   readonly item: OrchestrationV2TurnItem | null;
   readonly mcpApps?: ProviderAdapter.ProviderAdapterV2McpApps;
   readonly live?: boolean;
+  readonly runtimeMode?: RuntimeMode;
 }) {
   return McpAppRequests.layer.pipe(
     Layer.provide(
@@ -87,6 +89,7 @@ function makeLayer(input: {
           getThreadRecords: (id: ThreadId) =>
             Effect.succeed({
               thread: {
+                runtimeMode: input.runtimeMode ?? "full-access",
                 lineage:
                   deepParent(id) !== null
                     ? {
@@ -138,6 +141,7 @@ describe("McpAppRequests", () => {
     listTools: () =>
       Effect.succeed([
         { name: "refresh", annotations: { readOnlyHint: true } },
+        { name: "viewport_capture" },
         { name: "model_only", _meta: { ui: { visibility: ["model"] } } },
       ]),
     callTool: (input) =>
@@ -162,10 +166,75 @@ describe("McpAppRequests", () => {
       assert.deepEqual(yield* requests.toolInfo({ threadId, itemId, name: "refresh" }), {
         callable: true,
         readOnly: true,
+        requiresApproval: false,
         tool: { name: "refresh", annotations: { readOnlyHint: true } },
       });
     }).pipe(Effect.provide(makeLayer({ item: appItem({ t3McpApp: app }), mcpApps }))),
   );
+
+  it.effect("lets MCP apps call viewport_capture in Full access without a read-only hint", () =>
+    Effect.gen(function* () {
+      const requests = yield* McpAppRequests.McpAppRequests;
+      const info = yield* requests.toolInfo({ threadId, itemId, name: "viewport_capture" });
+      assert.deepEqual(info, {
+        callable: true,
+        readOnly: false,
+        requiresApproval: false,
+        tool: { name: "viewport_capture" },
+      });
+      for (let capture = 0; capture < 2; capture++) {
+        const result = yield* requests.callTool({
+          threadId,
+          itemId,
+          name: "viewport_capture",
+          arguments: { auto: false },
+        });
+        assert.deepEqual(result, { content: [{ type: "text", text: "ok" }] });
+        assert.deepEqual(calls.at(-1), { server: "blender", tool: "viewport_capture" });
+      }
+    }).pipe(
+      Effect.provide(
+        makeLayer({
+          item: {
+            ...appItem({
+              t3McpApp: {
+                ...app,
+                server: "blender",
+                tool: "viewport_capture",
+                resourceUri: "ui://blender/viewport",
+              },
+            }),
+            toolName: "blender.viewport_capture",
+          },
+          mcpApps,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("uses the current thread mode when an app checks tool approval", () => {
+    const fixture = {
+      item: appItem({ t3McpApp: app }),
+      mcpApps,
+      runtimeMode: "full-access" as RuntimeMode,
+    };
+    return Effect.gen(function* () {
+      const requests = yield* McpAppRequests.McpAppRequests;
+      for (const runtimeMode of [
+        "approval-required",
+        "auto-accept-edits",
+        "auto",
+        "full-access",
+      ] as const) {
+        fixture.runtimeMode = runtimeMode;
+        const capture = yield* requests.toolInfo({ threadId, itemId, name: "viewport_capture" });
+        assert.equal(capture.requiresApproval, runtimeMode !== "full-access");
+        assert.equal(capture.readOnly, false);
+        const refresh = yield* requests.toolInfo({ threadId, itemId, name: "refresh" });
+        assert.equal(refresh.requiresApproval, false);
+      }
+    }).pipe(Effect.provide(makeLayer(fixture)));
+  });
 
   it.effect("refuses tools hidden from apps or missing from the server", () =>
     Effect.gen(function* () {

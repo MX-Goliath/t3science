@@ -1,9 +1,14 @@
-import type { ProviderApprovalDecision, ProviderApprovalOption } from "@t3tools/contracts";
+import type {
+  ProviderApprovalDecision,
+  ProviderApprovalOption,
+  RuntimeMode,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import type * as EffectCodexSchema from "effect-codex-app-server/schema";
 
 const NullableMcpElicitationString = Schema.NullOr(Schema.String);
 const McpElicitationMetadata = Schema.Struct({
+  codex_approval_kind: Schema.optionalKey(NullableMcpElicitationString),
   app: Schema.optionalKey(NullableMcpElicitationString),
   app_name: Schema.optionalKey(NullableMcpElicitationString),
   appName: Schema.optionalKey(NullableMcpElicitationString),
@@ -54,6 +59,21 @@ const McpElicitationForm = Schema.Struct({
 });
 const isMcpElicitationMetadata = Schema.is(McpElicitationMetadata);
 const isMcpElicitationForm = Schema.is(McpElicitationForm);
+
+/** Tool approvals honor Full access; other MCP forms still require user input. */
+export function shouldAutoApproveMcpToolElicitation(
+  payload: EffectCodexSchema.McpServerElicitationRequestParams,
+  runtimePolicy: { readonly runtimeMode: RuntimeMode; readonly approvalPolicy?: unknown },
+): boolean {
+  return (
+    payload.mode !== "url" &&
+    isMcpElicitationMetadata(payload._meta) &&
+    payload._meta.codex_approval_kind === "mcp_tool_call" &&
+    (runtimePolicy.approvalPolicy === undefined
+      ? runtimePolicy.runtimeMode === "full-access"
+      : runtimePolicy.approvalPolicy === "never")
+  );
+}
 
 type McpElicitationPersistenceDecision = Extract<
   ProviderApprovalDecision,

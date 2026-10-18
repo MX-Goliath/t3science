@@ -105,7 +105,7 @@ const make = Effect.gen(function* () {
     if (runtime === undefined) return yield* fail(input.threadId, "session-stopped");
     const mcpApps: ProviderAdapter.ProviderAdapterV2McpApps | undefined = runtime.mcpApps;
     if (mcpApps === undefined) return yield* fail(input.threadId, "provider-unsupported");
-    return { app, providerThread, mcpApps };
+    return { app, providerThread, mcpApps, runtimeMode: projection.thread.runtimeMode };
   });
 
   const findTool = Effect.fn("McpAppRequests.findTool")(function* (
@@ -123,9 +123,12 @@ const make = Effect.gen(function* () {
     const resolved = yield* resolve(input);
     const tool = yield* findTool(input.threadId, resolved, input.name);
     const title = tool === undefined ? undefined : toolTitle(tool);
+    const callable = tool !== undefined && mcpAppToolCallableByApp(tool._meta);
+    const readOnly = tool !== undefined && readOnlyHint(tool);
     return {
-      callable: tool !== undefined && mcpAppToolCallableByApp(tool._meta),
-      readOnly: tool !== undefined && readOnlyHint(tool),
+      callable,
+      readOnly,
+      requiresApproval: callable && !readOnly && resolved.runtimeMode !== "full-access",
       ...(title === undefined ? {} : { title }),
       ...(tool === undefined ? {} : { tool }),
     } satisfies McpAppToolInfo;

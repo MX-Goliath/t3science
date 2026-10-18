@@ -32,9 +32,14 @@ export const McpAppToolInfoInput = Schema.Struct({
 });
 export type McpAppToolInfoInput = typeof McpAppToolInfoInput.Type;
 
+/**
+ * Whether an app can call a tool and whether the thread requires confirmation.
+ */
 export const McpAppToolInfo = Schema.Struct({
   callable: Schema.Boolean,
   readOnly: Schema.Boolean,
+  /** Older environments omit this; clients then fall back to the read-only hint. */
+  requiresApproval: Schema.optional(Schema.Boolean),
   title: Schema.optional(Schema.String),
   tool: Schema.optional(Schema.Unknown),
 });

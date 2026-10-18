@@ -18,7 +18,7 @@ import {
   mcpAppFileName,
   type McpAppReference,
 } from "@t3tools/shared/mcpApp";
-import { Minimize2Icon } from "lucide-react";
+import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
@@ -292,7 +292,7 @@ export function McpAppFrame(props: {
         const info = await latest.current.toolInfo({ environmentId, input: { ...input, name } });
         if (info._tag !== "Success") throw commandFailure(info);
         if (!info.value.callable) throw new McpAppHostRefusal("This app cannot call that tool.");
-        if (!info.value.readOnly) {
+        if (info.value.requiresApproval ?? !info.value.readOnly) {
           const approved = await ask(
             `Allow ${app.server} to run ${info.value.title ?? name}?\n${JSON.stringify(args, null, 2)}`,
           );
@@ -340,15 +340,6 @@ export function McpAppFrame(props: {
         if (result._tag !== "Success") throw commandFailure(result);
       },
       requestDisplayMode: async (mode) => {
-        const otherFullscreen = document.querySelector("[data-mcp-app-fullscreen]");
-        if (
-          mode === "fullscreen" &&
-          (latest.current.props.awaitingUser === true ||
-            isConfirmDialogActive() ||
-            (otherFullscreen !== null && otherFullscreen !== boxRef.current))
-        ) {
-          return latest.current.displayMode;
-        }
         setDisplayMode(mode);
         return mode;
       },
@@ -441,56 +432,78 @@ export function McpAppFrame(props: {
   return (
     // The row keeps its inline height while the app is full screen, so the
     // timeline does not jump; the box itself is what goes full screen.
-    <div style={{ height }}>
-      <div
-        ref={boxRef}
-        // Full screen is the same box shown in the browser's top layer: moving
-        // the frame to another parent would reload the app, and the timeline's
-        // rows contain fixed positioning, which the top layer escapes.
-        {...(fullscreenSupported ? { popover: "manual" as const } : {})}
-        data-mcp-app-fullscreen={fullscreen ? "" : undefined}
-        className={cn(
-          "relative size-full overflow-hidden",
-          app.prefersBorder === true && !fullscreen && "rounded-lg border border-border",
-          fullscreen
-            ? "fixed inset-0 m-0 flex h-dvh max-h-none w-dvw max-w-none flex-col border-0 bg-background p-0"
-            : "block! static! m-0 border-0 bg-transparent p-0 text-inherit",
-        )}
-      >
-        {fullscreen ? (
-          <div className="flex h-10 shrink-0 items-center justify-between border-border border-b px-3 text-sm">
-            <span className="truncate">{app.server}</span>
-            <Button
-              aria-label="Exit full screen"
-              size="icon-sm"
-              variant="ghost"
-              onClick={() => setDisplayMode("inline")}
-            >
-              <Minimize2Icon className="size-4" />
-            </Button>
-          </div>
-        ) : null}
-        {navigatedAway ? (
-          <p className="flex size-full items-center justify-center text-muted-foreground text-xs">
-            The {app.server} app left its page and was stopped
-          </p>
-        ) : src !== null ? (
-          <iframe
-            ref={frameRef}
-            src={src}
-            title={`${app.server} app`}
-            // Never allow-same-origin: the opaque origin keeps the app out of the session.
-            sandbox="allow-scripts allow-forms"
-            allow={mcpAppAllowAttribute(app.permissions)}
-            onLoad={onFrameLoad}
-            className={cn("block w-full border-0", fullscreen ? "min-h-0 flex-1" : "h-full")}
-            style={{ colorScheme: theme.appearance }}
-          />
-        ) : asset._tag === "Failure" || mintFailed ? (
-          <p className="flex size-full items-center justify-center text-muted-foreground text-xs">
-            Unable to load the {app.server} app
-          </p>
-        ) : null}
+    <div>
+      {fullscreenSupported ? (
+        <div className="flex h-10 items-center justify-between gap-3 px-3 text-sm">
+          <span className="min-w-0 truncate">{app.server}</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={props.awaitingUser === true || navigatedAway || src === null}
+            onClick={() => {
+              if (
+                !isConfirmDialogActive() &&
+                document.querySelector("[data-mcp-app-fullscreen]") === null
+              ) {
+                setDisplayMode("fullscreen");
+              }
+            }}
+          >
+            <Maximize2Icon className="size-4" />
+            Expand
+          </Button>
+        </div>
+      ) : null}
+      <div style={{ height }}>
+        <div
+          ref={boxRef}
+          // Full screen is the same box shown in the browser's top layer: moving
+          // the frame to another parent would reload the app, and the timeline's
+          // rows contain fixed positioning, which the top layer escapes.
+          {...(fullscreenSupported ? { popover: "manual" as const } : {})}
+          data-mcp-app-fullscreen={fullscreen ? "" : undefined}
+          className={cn(
+            "relative size-full overflow-hidden",
+            app.prefersBorder === true && !fullscreen && "rounded-lg border border-border",
+            fullscreen
+              ? "fixed inset-0 m-0 flex h-dvh max-h-none w-dvw max-w-none flex-col border-0 bg-background p-0"
+              : // A closed popover is hidden; inline, the box is a plain block.
+                "block! static! m-0 border-0 bg-transparent p-0 text-inherit",
+          )}
+        >
+          {fullscreen ? (
+            // The top layer covers the workspace header, including its native
+            // window-control insets. Keep the way back to chat clear of them.
+            <div className="mt-(--workspace-controls-top) flex h-(--workspace-topbar-height) shrink-0 items-center justify-between gap-3 border-border border-b pr-(--workspace-controls-right) pl-(--workspace-controls-left) text-sm [-webkit-app-region:no-drag]">
+              <span className="min-w-0 truncate">{app.server}</span>
+              <Button size="sm" variant="ghost" onClick={() => setDisplayMode("inline")}>
+                <Minimize2Icon className="size-4" />
+                Back to chat
+              </Button>
+            </div>
+          ) : null}
+          {navigatedAway ? (
+            <p className="flex size-full items-center justify-center text-muted-foreground text-xs">
+              The {app.server} app left its page and was stopped
+            </p>
+          ) : src !== null ? (
+            <iframe
+              ref={frameRef}
+              src={src}
+              title={`${app.server} app`}
+              // Never allow-same-origin: the opaque origin keeps the app out of the session.
+              sandbox="allow-scripts allow-forms"
+              allow={mcpAppAllowAttribute(app.permissions)}
+              onLoad={onFrameLoad}
+              className={cn("block w-full border-0", fullscreen ? "min-h-0 flex-1" : "h-full")}
+              style={{ colorScheme: theme.appearance }}
+            />
+          ) : asset._tag === "Failure" || mintFailed ? (
+            <p className="flex size-full items-center justify-center text-muted-foreground text-xs">
+              Unable to load the {app.server} app
+            </p>
+          ) : null}
+        </div>
       </div>
     </div>
   );
