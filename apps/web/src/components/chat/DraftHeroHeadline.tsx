@@ -41,6 +41,8 @@ import {
 } from "../ui/combobox";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { InlineButton } from "../ui/button";
+import { DraftProjectName } from "./DraftProjectName";
+import { DraftHeroProjectHeading } from "./DraftHeroProjectHeading";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 
 const ADD_PROJECT_VALUE = "add-project";
@@ -258,13 +260,14 @@ export function DraftHeroHeadline({
             <ComboboxTrigger
               render={<InlineButton tone="picker" />}
               data-draft-project-trigger=""
-              className="pointer-events-auto max-w-64 align-baseline"
+              className="pointer-events-auto min-w-0 max-w-full align-baseline"
             />
           }
         >
-          <span className="min-w-0 truncate">
-            {isScratchDraft ? "No project" : (activeProjectDisplayName ?? "Choose a project")}
-          </span>
+          <DraftProjectName
+            value={isScratchDraft ? "No project" : (activeProjectDisplayName ?? "Choose a project")}
+            singleLine
+          />
         </TooltipTrigger>
         {activeProjectDisplayName && !isScratchDraft ? (
           <TooltipPopup side="top">{activeProjectDisplayName}</TooltipPopup>
@@ -289,8 +292,8 @@ export function DraftHeroHeadline({
                   <ProjectFavicon project={entry.group} className="size-4 shrink-0" />
                 ) : null}
                 <Tooltip>
-                  <TooltipTrigger render={<span className="min-w-0 flex-1 truncate text-sm" />}>
-                    {item.label}
+                  <TooltipTrigger render={<span className="min-w-0 flex-1 text-sm" />}>
+                    <DraftProjectName value={item.label} />
                   </TooltipTrigger>
                   <TooltipPopup side="top">{item.label}</TooltipPopup>
                 </Tooltip>
@@ -311,31 +314,18 @@ export function DraftHeroHeadline({
     <button
       type="button"
       onClick={openAddProject}
-      className="pointer-events-auto inline cursor-pointer border-muted-foreground/35 border-b border-dotted text-muted-foreground/60 transition-colors hover:border-muted-foreground/60 hover:text-muted-foreground/80 focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="pointer-events-auto inline min-w-0 max-w-full cursor-pointer border-muted-foreground/35 border-b border-dotted text-muted-foreground/60 transition-colors hover:border-muted-foreground/60 hover:text-muted-foreground/80 focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
-      {activeProjectTitle ?? "Add a project"}
+      <DraftProjectName value={activeProjectTitle ?? "Add a project"} singleLine />
     </button>
   );
 
-  if (isGeneralChat) {
+  if (isGeneralChat)
     return (
       <h1 className="mx-auto w-full max-w-5xl text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
         What can I help you with?
       </h1>
     );
-  }
-  // The composer hero is a sentence, so the heading's accessible name must be
-  // a complete sentence too. The project picker is a control rendered inline
-  // in the h1; without an explicit label its widget state bleeds into the
-  // announced phrase.
-  const headingLabel = isScratchDraft
-    ? "What should we work on?"
-    : hasResolvedProject
-      ? `What should we build in ${activeProjectDisplayName}?`
-      : canChooseProject
-        ? `${activeProjectDisplayName ?? "Choose a project"} to start`
-        : "Add a project to start";
-
   const noProjectShortcut = shortcutLabelForCommand(keybindings, "chat.newWithoutProject");
   const orStartWithoutProject =
     scratchWorkspaceRoot !== null && !isScratchDraft && (hasResolvedProject || canChooseProject) ? (
@@ -363,26 +353,26 @@ export function DraftHeroHeadline({
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
-      <h1
-        aria-label={headingLabel}
-        className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl"
-      >
-        {isScratchDraft ? (
-          <>What should we work on?</>
-        ) : hasResolvedProject ? (
+      {hasResolvedProject && !isScratchDraft ? (
+        <DraftHeroProjectHeading projectName={activeProjectDisplayName ?? "Choose a project"}>
           <span className="inline-flex items-center justify-center gap-2">
             <DraftHeroPet providerInstanceId={providerInstanceId} />
-            <span>What should we build in {projectSelector}?</span>
+            <span>{projectSelector}</span>
           </span>
-        ) : canChooseProject ? (
-          <>{projectSelector} to start</>
-        ) : (
-          <>Add a project to start</>
-        )}
-      </h1>
-      {}
+        </DraftHeroProjectHeading>
+      ) : (
+        <h1 className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
+          {isScratchDraft ? (
+            <>What should we work on?</>
+          ) : canChooseProject ? (
+            <>{projectSelector} to start</>
+          ) : (
+            <>Add a project to start</>
+          )}
+        </h1>
+      )}
       {scratchWorkspaceRoot === null ? null : (
-        <p className="mt-2 flex h-6 items-center text-sm">
+        <p className="mt-2 flex h-6 w-full items-center justify-center text-sm">
           {isScratchDraft ? projectSelector : orStartWithoutProject}
         </p>
       )}

@@ -1,4 +1,3 @@
-import type { CitePdf } from "./pdfCitation";
 import { filePreviewDelimiter } from "@t3tools/shared/delimitedPreview";
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
@@ -17,7 +16,7 @@ import { MorphIcon } from "~/components/MorphIcon";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { toastManager } from "~/components/ui/toast";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
-import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
+import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 
 import { AudioPreview } from "./AudioPreview";
@@ -58,7 +57,6 @@ export function AttachmentFilePreview(props: {
   htmlRender?: boolean;
   threadRef?: ScopedThreadRef;
   origin?: string;
-  onCitePdf?: CitePdf | undefined;
   onRemove?: () => void;
   onClose?: () => void;
 }) {
@@ -161,7 +159,6 @@ export function AttachmentFilePreview(props: {
   }, [url, needsText, revision, props.sizeBytes, props.file, refresh]);
   const failure = error ?? (needsText ? contentError : null);
   const wordWrap = useClientSettings((settings) => settings.wordWrap);
-  const updateClientSettings = useUpdateClientSettings();
   const showsRawText =
     failure === null &&
     needsText &&
@@ -227,7 +224,6 @@ export function AttachmentFilePreview(props: {
       src={url}
       title={props.name}
       pdf={kind === "pdf"}
-      onCitePdf={props.onCitePdf}
       htmlRender={props.htmlRender === true}
       threadRef={props.threadRef}
     />

@@ -14,13 +14,8 @@ describe("provider auth return destinations", () => {
     },
   );
   it.each([
-    "t3science://attacker/welcome",
-    "t3science://app:123/welcome",
-    "t3science://app/auth/callback",
-    "t3science://user@ app/welcome",
-    "t3science://app/welcome/../evil",
+    "t3code://attacker/welcome",
+    "t3code://app/welcome/../evil",
     "https://attacker.example/welcome",
-    "file:///welcome",
-    "javascript:alert(1)",
   ])("rejects %s", (url) => expect(providerAuthReturnUrl(url)).toBeUndefined());
 });

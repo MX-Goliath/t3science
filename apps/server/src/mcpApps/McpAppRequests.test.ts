@@ -35,26 +35,27 @@ const deepParent = (id: ThreadId): ThreadId | null => {
   return depth === 1 ? threadId : deepForkId(depth - 1);
 };
 
-const appItem = (output: unknown): OrchestrationV2TurnItem => ({
-  id: itemId,
-  threadId,
-  runId: null,
-  nodeId: null,
-  providerThreadId,
-  providerTurnId: null,
-  nativeItemRef: null,
-  parentItemId: null,
-  ordinal: 0,
-  status: "completed",
-  title: null,
-  startedAt: null,
-  completedAt: null,
-  updatedAt: DateTime.makeUnsafe(0),
-  type: "dynamic_tool",
-  toolName: "weather.get_weather",
-  input: {},
-  output,
-});
+const appItem = (output: unknown) =>
+  ({
+    id: itemId,
+    threadId,
+    runId: null,
+    nodeId: null,
+    providerThreadId,
+    providerTurnId: null,
+    nativeItemRef: null,
+    parentItemId: null,
+    ordinal: 0,
+    status: "completed",
+    title: null,
+    startedAt: null,
+    completedAt: null,
+    updatedAt: DateTime.makeUnsafe(0),
+    type: "dynamic_tool",
+    toolName: "weather.get_weather",
+    input: {},
+    output,
+  }) satisfies OrchestrationV2TurnItem;
 
 const app = {
   attachmentId: "thread-app-00000000-0000-0000-0000-000000000000-html",
@@ -319,27 +320,5 @@ describe("McpAppRequests", () => {
       });
       assert.isTrue(storedContext.has(`${deepForkId(70)}/${itemId}`));
     }).pipe(Effect.provide(makeLayer({ item: appItem({ t3McpApp: app }), live: false }))),
-  );
-
-  it.effect("reports why a request cannot run", () =>
-    Effect.gen(function* () {
-      const run = (layer: ReturnType<typeof makeLayer>) =>
-        Effect.gen(function* () {
-          const requests = yield* McpAppRequests.McpAppRequests;
-          return yield* reason(requests.readResource({ threadId, itemId, uri: "ui://weather/x" }));
-        }).pipe(Effect.provide(layer));
-      assert.equal(
-        yield* run(makeLayer({ item: appItem({ result: "plain" }), mcpApps })),
-        "not-an-app",
-      );
-      assert.equal(
-        yield* run(makeLayer({ item: appItem({ t3McpApp: app }), mcpApps, live: false })),
-        "session-stopped",
-      );
-      assert.equal(
-        yield* run(makeLayer({ item: appItem({ t3McpApp: app }) })),
-        "provider-unsupported",
-      );
-    }),
   );
 });

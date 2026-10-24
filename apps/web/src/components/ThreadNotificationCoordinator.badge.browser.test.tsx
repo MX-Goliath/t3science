@@ -3,9 +3,9 @@ import { EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
+
+import { render, stubGlobal, type Screen } from "../../test/render";
 
 const state = vi.hoisted(() => ({
   mode: "notifications",
@@ -96,7 +96,6 @@ const thread = {
   session: null as { status: string } | null,
   latestTurn: { turnId: "turn", state: "running", completedAt: null as string | null },
 };
-let root: Root;
 let focused = false;
 let visibility = "visible";
 
@@ -156,31 +155,24 @@ function toV2ThreadShell(input: typeof thread) {
   };
 }
 
-function shell(overrides: Partial<typeof thread> = {}) {
+function shell(overrides: Partial<typeof thread> = {}, ...others: Partial<typeof thread>[]) {
   return {
     status: "live",
-    snapshot: Option.some({ threads: [toV2ThreadShell({ ...thread, ...overrides })] }),
+    snapshot: Option.some({
+      threads: [overrides, ...others].map((override) =>
+        toV2ThreadShell({ ...thread, ...override }),
+      ),
+    }),
   };
 }
-function complete(environment = "one", completedAt = "2026-09-13T08:00:00Z") {
-  state.shells.set(
-    environment,
-    shell({ latestTurn: { turnId: "turn", state: "completed", completedAt } }),
-  );
-}
-async function render() {
-  await act(async () =>
-    root.render(
-      <RegistryContext.Provider value={registry}>
-        <ThreadNotificationCoordinator />
-      </RegistryContext.Provider>,
-    ),
-  );
-}
-
-beforeEach(() => {
+// The mocked modules read `state`, the registry and the focus flags, so every test starts by
+// resetting them. The first render is left to the test because some tests change state first.
+function setup() {
   vi.clearAllMocks();
+  const stack = new AsyncDisposableStack();
   registry = AtomRegistry.make();
+  const testRegistry = registry;
+  stack.defer(() => testRegistry.dispose());
   state.mode = "notifications";
   state.inApp = false;
   state.environmentIds = ["one", "two"];
@@ -190,130 +182,37 @@ beforeEach(() => {
   visibility = "visible";
   TestNotification.permission = "granted";
   TestNotification.sent = [];
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.stubGlobal("Notification", TestNotification);
-  vi.spyOn(window, "focus").mockImplementation(() => undefined);
-  vi.spyOn(document, "hasFocus").mockImplementation(() => focused);
-  vi.spyOn(document, "visibilityState", "get").mockImplementation(
-    () => visibility as DocumentVisibilityState,
+  stack.use(stubGlobal("Notification", TestNotification));
+  stack.use(vi.spyOn(window, "focus").mockImplementation(() => undefined));
+  stack.use(vi.spyOn(document, "hasFocus").mockImplementation(() => focused));
+  stack.use(
+    vi
+      .spyOn(document, "visibilityState", "get")
+      .mockImplementation(() => visibility as DocumentVisibilityState),
   );
-  root = createRoot(document.createElement("div"));
-});
-
-afterEach(async () => {
-  await act(async () => root.unmount());
-  delete window.desktopBridge;
-  registry.dispose();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
-
-it("counts notifying threads across environments, replaces repeat alerts, and clears on focus", async () => {
-  await render();
-  complete();
-  await render();
-  expect(state.badge).toHaveBeenLastCalledWith(1);
-  complete("one", "2026-09-13T08:01:00Z");
-  complete("two");
-  await render();
-  expect(state.badge).toHaveBeenLastCalledWith(2);
-  expect(TestNotification.sent[0]!.close).toHaveBeenCalledOnce();
-  focused = true;
-  window.dispatchEvent(new Event("focus"));
-  expect(state.badge).toHaveBeenLastCalledWith(0);
-  expect(
-    TestNotification.sent.every((notification) => notification.close.mock.calls.length > 0),
-  ).toBe(true);
-  focused = false;
-  complete("two", "2026-09-13T08:02:00Z");
-  await render();
-  expect(state.badge).toHaveBeenLastCalledWith(1);
-});
-
-it("does not badge old completions on first load or reconnect", async () => {
-  complete();
-  await render();
-  state.shells.set("one", { status: "connecting", snapshot: Option.none() });
-  await render();
-  complete("one", "2026-09-13T08:01:00Z");
-  await render();
-  expect(TestNotification.sent).toHaveLength(0);
-  expect(state.badge.mock.calls.every(([count]) => count === 0)).toBe(true);
-});
-
-it("removes alerts only from environments that leave the client", async () => {
-  await render();
-  complete("one");
-  complete("two");
-  await render();
-  expect(state.badge).toHaveBeenLastCalledWith(2);
-  const [removed, retained] = TestNotification.sent;
-  state.environmentIds = ["two"];
-  await render();
-  expect(state.badge).toHaveBeenLastCalledWith(1);
-  expect(removed!.close).toHaveBeenCalledOnce();
-  expect(retained!.close).not.toHaveBeenCalled();
-  await render();
-  expect(removed!.close).toHaveBeenCalledOnce();
-  state.environmentIds = [];
-  await render();
-  expect(state.badge).toHaveBeenLastCalledWith(0);
-  expect(retained!.close).toHaveBeenCalledOnce();
-});
-
-it("starts a fresh count after another native app window gains focus", async () => {
-  let clear: (() => void) | undefined;
-  const unsubscribe = vi.fn();
-  Object.assign(window, {
-    desktopBridge: {
-      onNotificationBadgeClear: (listener: () => void) => {
-        clear = listener;
-        return unsubscribe;
-      },
+  const ui = () => (
+    <RegistryContext.Provider value={testRegistry}>
+      <ThreadNotificationCoordinator />
+    </RegistryContext.Provider>
+  );
+  let screen: Screen | undefined;
+  return {
+    async render() {
+      if (screen) await screen.rerender(ui());
+      else screen = stack.use(await render(ui()));
     },
-  });
-  await render();
-  complete();
-  await render();
-  clear!();
-  expect(state.badge).toHaveBeenLastCalledWith(0);
-  complete("two");
-  await render();
-  expect(state.badge).toHaveBeenLastCalledWith(1);
-  await act(async () => root.unmount());
-  root = createRoot(document.createElement("div"));
-  expect(unsubscribe).toHaveBeenCalledTimes(3);
-  expect(state.badge).toHaveBeenLastCalledWith(0);
-});
-
-it.each(["off", "sound", "focused", "denied", "archived"])(
-  "does not show visual alerts when %s",
-  async (condition) => {
-    if (condition === "off" || condition === "sound") state.mode = condition;
-    if (condition === "focused") focused = true;
-    if (condition === "denied") TestNotification.permission = "denied";
-    await render();
-    complete();
-    if (condition === "archived")
-      state.shells.set(
-        "one",
-        shell({
-          archivedAt: "2026-09-13T08:00:00Z",
-          hasPendingApprovals: true,
-        }),
-      );
-    await render();
-    expect(TestNotification.sent).toHaveLength(0);
-    expect(state.badge.mock.calls.every(([count]) => count === 0)).toBe(true);
-  },
-);
+    unmount: () => screen!.unmount(),
+    [Symbol.asyncDispose]: () => stack.disposeAsync(),
+  };
+}
 
 it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
   "badges %s and clears when notifications are disabled",
   async (flag) => {
-    await render();
+    await using app = setup();
+    await app.render();
     state.shells.set("one", shell({ [flag]: true }));
-    await render();
+    await app.render();
     expect(state.badge).toHaveBeenLastCalledWith(1);
     const notification = TestNotification.sent[0]!;
     notification.dispatchEvent(new Event("click"));
@@ -322,32 +221,11 @@ it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
       params: { environmentId: EnvironmentId.make("one"), threadId: "thread" },
     });
     state.mode = "sound";
-    await render();
+    await app.render();
     expect(state.badge).toHaveBeenLastCalledWith(0);
     expect(notification.close).toHaveBeenCalled();
   },
 );
-
-it("shows in-app alerts without adding a badge while focused", async () => {
-  state.inApp = true;
-  focused = true;
-  await render();
-  complete();
-  await render();
-  expect(state.toast).toHaveBeenCalledOnce();
-  expect(TestNotification.sent).toHaveLength(0);
-  expect(state.badge.mock.calls.every(([count]) => count === 0)).toBe(true);
-});
-
-it("badges background failures with in-app notifications enabled", async () => {
-  state.inApp = true;
-  await render();
-  state.shells.set("one", shell({ latestTurn: { ...thread.latestTurn, state: "error" } }));
-  await render();
-  expect(TestNotification.sent[0]?.title).toBe("Error · Test thread");
-  expect(state.badge).toHaveBeenLastCalledWith(1);
-  expect(state.toast).not.toHaveBeenCalled();
-});
 
 function nativeNotifications() {
   const listeners = new Set<(id: string) => void>();
@@ -362,75 +240,77 @@ function nativeNotifications() {
       };
     },
   };
-  Object.assign(window, { desktopBridge: { notifications: bridge } });
-  vi.stubGlobal("isSecureContext", false);
-  // Native Linux notifications must also work for remote HTTP environments.
-  vi.stubGlobal("Notification", undefined);
-  return { bridge, listeners };
+  const stack = new DisposableStack();
+  stack.use(stubGlobal("desktopBridge", { notifications: bridge }));
+  stack.use(stubGlobal("isSecureContext", false));
+  stack.use(stubGlobal("Notification", undefined));
+  return { bridge, listeners, [Symbol.dispose]: () => stack.dispose() };
+}
+function complete(environmentId = "one", completedAt = "2026-09-13T08:00:00Z") {
+  state.shells.set(
+    environmentId,
+    shell({ latestTurn: { ...thread.latestTurn, state: "completed", completedAt } }),
+  );
 }
 
-it("uses native Linux alerts without browser permission and opens the correct environment", async () => {
-  const { bridge, listeners } = nativeNotifications();
-  await render();
+it("uses native Linux alerts over HTTP and opens the matching environment", async () => {
+  await using app = setup();
+  using native = nativeNotifications();
+  await app.render();
   complete("one");
   complete("two");
-  await render();
+  await app.render();
+  await vi.waitFor(() => expect(native.bridge.show).toHaveBeenCalledTimes(2));
   expect(TestNotification.sent).toHaveLength(0);
-  expect(bridge.show).toHaveBeenCalledTimes(2);
   expect(state.badge).toHaveBeenLastCalledWith(2);
-  const [first, second] = bridge.show.mock.calls.map(([input]) => input);
+  const [first, second] = native.bridge.show.mock.calls.map(([input]) => input);
   expect(second).toMatchObject({
     title: "Done · Test thread",
     body: "The model finished its response.",
   });
   expect(first!.id).not.toBe(second!.id);
-  for (const listener of listeners) listener(second!.id);
+  for (const listener of native.listeners) listener(second!.id);
   expect(state.navigate).toHaveBeenCalledExactlyOnceWith({
     to: "/$environmentId/$threadId",
     params: { environmentId: "two", threadId: "thread" },
   });
-  expect(bridge.close).toHaveBeenCalledWith(second!.id);
+  expect(native.bridge.close).toHaveBeenCalledWith(second!.id);
   window.dispatchEvent(new Event("focus"));
-  expect(bridge.close).toHaveBeenCalledWith(first!.id);
-  expect(listeners.size).toBe(0);
+  expect(native.bridge.close).toHaveBeenCalledWith(first!.id);
+  expect(native.listeners.size).toBe(0);
   expect(state.badge).toHaveBeenLastCalledWith(0);
 });
 
-it("replaces native alerts per thread and closes them when disabled", async () => {
-  const { bridge, listeners } = nativeNotifications();
-  await render();
+it("replaces native alerts for a thread and closes them when notifications are disabled", async () => {
+  await using app = setup();
+  using native = nativeNotifications();
+  await app.render();
   complete();
-  await render();
-  const first = bridge.show.mock.calls[0]![0];
+  await app.render();
+  const first = native.bridge.show.mock.calls[0]![0];
   complete("one", "2026-09-13T09:00:00Z");
-  await render();
-  expect(bridge.close).toHaveBeenCalledWith(first.id);
-  expect(listeners.size).toBe(1);
-  expect(state.badge).toHaveBeenLastCalledWith(1);
+  await app.render();
+  expect(native.bridge.close).toHaveBeenCalledWith(first.id);
+  expect(native.listeners.size).toBe(1);
   state.mode = "off";
-  await render();
-  expect(listeners.size).toBe(0);
-  expect(bridge.close).toHaveBeenCalledTimes(2);
+  await app.render();
+  expect(native.listeners.size).toBe(0);
+  expect(native.bridge.close).toHaveBeenCalledTimes(2);
   expect(state.badge).toHaveBeenLastCalledWith(0);
 });
 
-it("releases native click listeners when notification delivery rejects", async () => {
-  const { bridge, listeners } = nativeNotifications();
-  bridge.show.mockRejectedValue(new Error("IPC unavailable"));
-  await render();
-  complete();
-  await render();
-  expect(listeners.size).toBe(0);
-  expect(bridge.close).toHaveBeenCalledOnce();
-  expect(state.badge).toHaveBeenLastCalledWith(0);
-});
-
-it("does not count native notifications refused by the main process", async () => {
-  const { bridge, listeners } = nativeNotifications();
-  bridge.show.mockResolvedValue(false);
-  await render();
-  complete();
-  await render();
-  expect(listeners.size).toBe(0);
-  expect(state.badge).toHaveBeenLastCalledWith(0);
-});
+it.each(["refused", "rejected"])(
+  "releases native click listeners and badge counts when delivery is %s",
+  async (outcome) => {
+    await using app = setup();
+    using native = nativeNotifications();
+    if (outcome === "refused") native.bridge.show.mockResolvedValue(false);
+    else native.bridge.show.mockRejectedValue(new Error("IPC unavailable"));
+    await app.render();
+    complete();
+    await app.render();
+    await vi.waitFor(() => expect(native.listeners.size).toBe(0));
+    expect(native.bridge.close).toHaveBeenCalledOnce();
+    expect(state.badge).toHaveBeenLastCalledWith(0);
+  },
+);

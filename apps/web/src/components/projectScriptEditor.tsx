@@ -1,3 +1,4 @@
+import { readPromptUltrathink } from "./chat/TraitsPicker";
 import {
   AuthOrchestrationOperateScope,
   AuthSettingsWriteScope,
@@ -615,8 +616,8 @@ function ProjectScriptEditorForm({
                           planModeEnabled={false}
                           models={selectedModelEntry.models}
                           model={modelSelection.model}
-                          prompt={prompt}
-                          onPromptChange={setPrompt}
+                          promptUltrathink={readPromptUltrathink(prompt)}
+                          onPromptEdit={(edit) => setPrompt(edit)}
                           modelOptions={modelSelection.options ?? []}
 
                           triggerClassName="min-w-0 max-w-none"

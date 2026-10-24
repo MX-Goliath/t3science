@@ -1,12 +1,13 @@
+import "~/index.css";
 import {
   EnvironmentId,
   ProviderInstanceId,
   type ServerProviderUsageLimits,
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { act, type ReactNode } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { act, render } from "../../../test/render";
+import { page } from "vite-plus/test/browser";
+import { expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => ({ consume: vi.fn(), notify: vi.fn() }));
 vi.mock("../../state/session", async (importOriginal) => ({
@@ -21,70 +22,6 @@ vi.mock("../../state/server", async (importOriginal) => ({
 }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: state.notify } }));
 
-vi.mock("../ui/popover", async () => {
-  const { createContext, use, cloneElement } = await import("react");
-  const Context = createContext({ open: false, setOpen: (_open: boolean) => {} });
-  return {
-    Popover: ({
-      open,
-      onOpenChange,
-      children,
-    }: {
-      open: boolean;
-      onOpenChange: (open: boolean) => void;
-      children: ReactNode;
-    }) => <Context value={{ open, setOpen: onOpenChange }}>{children}</Context>,
-    PopoverTrigger: ({
-      render,
-      children,
-    }: {
-      render: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
-      children: ReactNode;
-    }) => {
-      const ctx = use(Context);
-      return cloneElement(
-        render,
-        { onMouseEnter: () => ctx.setOpen(true), onClick: () => ctx.setOpen(!ctx.open) },
-        children,
-      );
-    },
-    PopoverPopup: ({ children }: { children: ReactNode }) =>
-      use(Context).open ? <section data-popup>{children}</section> : null,
-  };
-});
-vi.mock("../ui/alert-dialog", async () => {
-  const { createContext, use, cloneElement } = await import("react");
-  const Context = createContext((_open: boolean) => {});
-  return {
-    AlertDialog: ({
-      open,
-      onOpenChange,
-      children,
-    }: {
-      open: boolean;
-      onOpenChange: (open: boolean) => void;
-      children: ReactNode;
-    }) => (open ? <Context value={onOpenChange}>{children}</Context> : null),
-    AlertDialogClose: ({
-      render,
-      children,
-    }: {
-      render: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
-      children: ReactNode;
-    }) => {
-      const setOpen = use(Context);
-      return cloneElement(render, { onClick: () => setOpen(false) }, children);
-    },
-    AlertDialogPopup: ({ children }: { children: ReactNode }) => (
-      <section role="alertdialog">{children}</section>
-    ),
-    AlertDialogHeader: "header",
-    AlertDialogTitle: "h2",
-    AlertDialogDescription: "p",
-    AlertDialogFooter: "footer",
-  };
-});
-
 import { ProviderUsageLimitsMeter } from "./ProviderUsageLimitsMeter";
 
 const environmentId = EnvironmentId.make("remote-environment");
@@ -97,8 +34,6 @@ const limits: ServerProviderUsageLimits = {
   ],
   resetCredits: { availableCount: 2, nextExpiresAt: "2026-10-04T07:00:00Z" },
 };
-let root: Root;
-let host: HTMLDivElement;
 function meter(nextLimits = limits, providerInstanceId = instanceId) {
   return (
     <ProviderUsageLimitsMeter
@@ -109,81 +44,63 @@ function meter(nextLimits = limits, providerInstanceId = instanceId) {
     />
   );
 }
-function button(label: string) {
-  return [...host.querySelectorAll("button")].find((node) => node.textContent === label)!;
-}
-function hover(label: string) {
-  const trigger = [...host.querySelectorAll("button")].find((node) =>
-    node.getAttribute("aria-label")?.startsWith(label),
-  )!;
-  act(() => trigger.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
-}
-beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-26T00:00:00Z"));
+function setup() {
   state.consume.mockReset();
   state.notify.mockReset();
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  act(() => root.render(meter()));
-});
-afterEach(async () => {
-  await act(async () => root.unmount());
-  host.remove();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
+}
 
-it("offers weekly credits on hover and keeps confirmation alive after the popover closes", async () => {
-  hover("Session");
-  expect(button("Use reset")).toBeUndefined();
-  hover("Weekly");
-  expect(host.textContent).toContain("2 reset credits banked · next expires in 8d 7h");
+it("requires confirmation before consuming a weekly reset credit and shows its result", async () => {
+  setup();
+  using _now = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-26T00:00:00Z"));
+  await using screen = await render(meter());
+  await screen.getByRole("button", { name: "Session Claude limit: 1% remaining" }).hover();
+  await expect
+    .element(page.getByRole("button", { name: "Use reset", exact: true }))
+    .not.toBeInTheDocument();
+  await screen.getByRole("button", { name: "Weekly Claude limit: 5% remaining" }).hover();
+  await expect
+    .element(page.getByText("2 reset credits banked · next expires in 8d 7h"))
+    .toBeVisible();
+  await page.getByRole("button", { name: "Use reset", exact: true }).click();
+  await expect.element(page.getByRole("button", { name: "Use credit", exact: true })).toBeVisible();
   expect(state.consume).not.toHaveBeenCalled();
-  act(() => button("Use reset").click());
-  expect(button("Use reset")).toBeUndefined();
-  expect(button("Use credit")).toBeDefined();
-  expect(state.consume).not.toHaveBeenCalled();
-  act(() => button("Cancel").click());
-  expect(button("Use credit")).toBeUndefined();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   expect(state.consume).not.toHaveBeenCalled();
 
   let finish!: (value: unknown) => void;
-  state.consume.mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
-  hover("Weekly");
-  act(() => button("Use reset").click());
-  act(() => button("Use credit").click());
+  const pending = new Promise<unknown>((resolve) => {
+    finish = resolve;
+  });
+  state.consume.mockReturnValue(pending);
+  await screen.getByRole("button", { name: "Weekly Claude limit: 5% remaining" }).hover();
+  await page.getByRole("button", { name: "Use reset", exact: true }).click();
+  await page.getByRole("button", { name: "Use credit", exact: true }).click();
   expect(state.consume).toHaveBeenCalledExactlyOnceWith({ environmentId, input: { instanceId } });
-  hover("Weekly");
-  expect(button("Using…").disabled).toBe(true);
-  await act(async () => {
-    finish(AsyncResult.success({ outcome: "reset" }));
-  });
-  expect(state.notify).toHaveBeenCalledWith({
-    type: "info",
-    title: "Reset applied. Your windows have cleared.",
-  });
-  act(() =>
-    root.render(
-      meter({
-        ...limits,
-        windows: limits.windows.map((window) => ({ ...window, usedPercent: 0 })),
-      }),
-    ),
+  await act(() => finish(AsyncResult.success({ outcome: "reset" })));
+  await vi.waitFor(() =>
+    expect(state.notify).toHaveBeenCalledWith({
+      type: "info",
+      title: "Reset applied. Your windows have cleared.",
+    }),
   );
-  expect(button("Use reset")).toBeUndefined();
+  await screen.rerender(
+    meter({ ...limits, windows: limits.windows.map((window) => ({ ...window, usedPercent: 0 })) }),
+  );
+  await screen.getByRole("button", { name: "Weekly Claude limit: 100% remaining" }).hover();
+  await expect
+    .element(page.getByRole("button", { name: "Use reset", exact: true }))
+    .not.toBeInTheDocument();
 });
 
-it("drops pending confirmation when the selected provider changes", () => {
-  hover("Weekly");
-  act(() => button("Use reset").click());
-  act(() => root.render(meter(limits, ProviderInstanceId.make("another-account"))));
-  expect(button("Use credit")).toBeUndefined();
+it("drops pending confirmation when the selected provider changes", async () => {
+  setup();
+  await using screen = await render(meter());
+  await screen.getByRole("button", { name: "Weekly Claude limit: 5% remaining" }).hover();
+  await page.getByRole("button", { name: "Use reset", exact: true }).click();
+  await expect.element(page.getByRole("button", { name: "Use credit", exact: true })).toBeVisible();
+  await screen.rerender(meter(limits, ProviderInstanceId.make("another-account")));
+  await expect
+    .element(page.getByRole("button", { name: "Use credit", exact: true }))
+    .not.toBeInTheDocument();
   expect(state.consume).not.toHaveBeenCalled();
 });

@@ -10,7 +10,6 @@ import type {
 } from "@t3tools/contracts";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { lazy, Suspense } from "react";
-import type { PdfCitation } from "../files/pdfCitation";
 import type { ComposerImageAttachment, DraftId } from "../../composerDraftStore";
 import type { ShortcutMatchContext } from "../../keybindings";
 import { type RightPanelSurface, useRightPanelStore } from "../../rightPanelStore";
@@ -50,7 +49,6 @@ export interface RightPanelPullRequestProps {
 }
 
 export interface RightPanelFileProps {
-  readonly onCitePdf?: (source: string, citation: PdfCitation) => boolean | Promise<boolean>;
   readonly projectName: string | null;
   readonly workspaceRoot: string | undefined;
   readonly availableEditors: ReadonlyArray<EditorId>;
@@ -113,6 +111,7 @@ export function RightPanelSurfaceContent(props: {
             mode="embedded"
             composerDraftTarget={props.composerDraftTarget}
             workspaceMutationId={props.workspaceMutationId}
+            visible={visible}
           />
         </Suspense>
       );
@@ -131,7 +130,7 @@ export function RightPanelSurfaceContent(props: {
         <PullRequestDetailPanel
           getShortcutContext={props.getShortcutContext}
           shortcutsEnabled={visible && props.activeSurfaceId === surface.id}
-          key={`${surface.host ?? ""}:${surface.repository}#${surface.number}`}
+          key={`${scopedThreadKey(threadRef)}:${surface.id}`}
           environmentId={props.environmentId}
           onSelectPullRequest={(reference) => {
             useRightPanelStore.getState().openPullRequest(threadRef, {
@@ -147,6 +146,10 @@ export function RightPanelSurfaceContent(props: {
             ...(surface.host ? { host: surface.host } : {}),
             repository: surface.repository,
             number: surface.number,
+          }}
+          initialTab={surface.detailTab ?? "summary"}
+          onTabChange={(tab) => {
+            useRightPanelStore.getState().setPullRequestDetailTab(threadRef, surface.id, tab);
           }}
           context={pullRequestPanelContext(
             {
@@ -188,13 +191,6 @@ export function RightPanelSurfaceContent(props: {
       return (
         <Suspense fallback={null}>
           <FilePreviewPanel
-            onCitePdf={(citation) => {
-              if (surface.kind !== "file") return false;
-              const source = surface.attachment
-                ? `${surface.attachment.name} (attachment ${surface.attachment.id})`
-                : surface.relativePath;
-              return source ? (props.files.onCitePdf?.(source, citation) ?? false) : false;
-            }}
             key={`${props.environmentId}:${
               attachment ? `attachment:${attachment.id}` : files.workspaceRoot
             }`}
@@ -205,6 +201,7 @@ export function RightPanelSurfaceContent(props: {
             composerDraftTarget={props.composerDraftTarget}
             keybindings={props.keybindings}
             availableEditors={files.availableEditors}
+            openInShortcutEnabled={visible}
             relativePath={surface.kind === "file" ? surface.relativePath : null}
             {...(attachment ? { attachment } : {})}
             revealLine={surface.kind === "file" ? (surface.revealLine ?? null) : null}
