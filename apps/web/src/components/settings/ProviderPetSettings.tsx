@@ -8,13 +8,7 @@ import { PET_ANIMATION_OPTIONS } from "../pets/petAnimations";
 import { useDesktopPets } from "../pets/useDesktopPets";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
-/**
- * Per-provider companion picker rendered inside a provider instance card.
- * Pets are a desktop-only feature installed on this device, so the whole
- * section disappears outside the desktop app; the assignment itself is keyed
- * by provider instance id and lives in the desktop's local pet state, not in
- * the environment's provider settings.
- */
+// Assignments live on this desktop device and are keyed by provider instance, independent of environment settings.
 export function ProviderPetSettings({
   instanceId,
   displayName,

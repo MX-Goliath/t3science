@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vite-plus/test";
-import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import {
   ProviderDriverKind,
   ProviderInstanceId,
@@ -325,7 +324,6 @@ describe("getComposerReasoningStep", () => {
         expected: { prompt: "Ultrathink:\nFix the bug", cursor: 20 },
       },
       {
-        // The prefix, not the draft's Medium, is the current level.
         prompt: "Ultrathink:\n  Fix the bug",
         modelOptions: selections(["effort", "medium"]),
         direction: -1,
@@ -346,7 +344,6 @@ describe("getComposerReasoningStep", () => {
       expect(result).toStrictEqual(expected);
       expect(result?.prompt.slice(result.cursor)).toMatch(/^bug/);
     }
-    // A caret in leading whitespace must not land inside the new prefix.
     expect(
       step({ ...CLAUDE, prompt: "   Fix", modelOptions: selections(["effort", "high"]) })?.cursor,
     ).toBe("Ultrathink:\n".length);

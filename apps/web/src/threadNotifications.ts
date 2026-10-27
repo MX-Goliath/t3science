@@ -1,6 +1,8 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { ClientSettings } from "@t3tools/contracts/settings";
 
+import { isWindowsPlatform } from "./lib/utils";
+
 import completionUrl from "./assets/notification-completion.mp3";
 import inputUrl from "./assets/notification-input.mp3";
 
@@ -28,6 +30,7 @@ export function showThreadNotification(
   tag: string,
   onClick: () => void,
   onFailure: () => void,
+  options: { requireInteraction?: boolean } = {},
 ): ThreadNotification | undefined {
   const native = window.desktopBridge?.notifications;
   if (native) {
@@ -59,7 +62,13 @@ export function showThreadNotification(
     return notification;
   }
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  const notification = new Notification(title, { body, tag, silent: true });
+  const notification = new Notification(title, {
+    body,
+    tag,
+    silent: true,
+    requireInteraction:
+      options.requireInteraction === true && isWindowsPlatform(navigator.platform),
+  });
   notification.addEventListener("click", onClick);
   return notification;
 }
@@ -152,10 +161,7 @@ export async function playNotificationSound(
     }
     const decoded = await buffer;
     if (!shouldPlay() || context.state !== "running") return;
-    // Threads that finish together each ask for this sound, and full-volume copies sum into
-    // clipping. One playback stands for the burst. Checked after the decode, since every caller
-    // in a burst is waiting on it. The other kind keeps its own slot, so an input alert is still
-    // heard over a completion.
+    // Coalesce same-sound bursts after decode to avoid clipping; input and completion alerts keep separate slots.
     if (context.currentTime < (playingUntil.get(url) ?? 0)) return;
     const source = context.createBufferSource();
     source.buffer = decoded;

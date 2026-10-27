@@ -63,7 +63,8 @@ function ScheduleSendForm(props: {
   onOpenChange: (open: boolean) => void;
   onSchedule: (scheduledAt: string) => void;
 }) {
-  const [initialDate] = useState(() => roundToNextFiveMinutes(new Date(Date.now() + 30 * 60_000)));
+  const [openedAt] = useState(() => new Date());
+  const initialDate = roundToNextFiveMinutes(new Date(openedAt.getTime() + 30 * 60_000));
   const [dateValue, setDateValue] = useState(toLocalDateValue(initialDate));
   const [timeValue, setTimeValue] = useState(toLocalTimeValue(initialDate));
   const [selectedPreset, setSelectedPreset] = useState<SchedulePreset | null>("thirty-minutes");
@@ -144,7 +145,7 @@ function ScheduleSendForm(props: {
                 nativeInput
                 id="scheduled-send-date"
                 type="date"
-                min={toLocalDateValue(new Date())}
+                min={toLocalDateValue(openedAt)}
                 value={dateValue}
                 onChange={(event) => {
                   setDateValue(event.currentTarget.value);

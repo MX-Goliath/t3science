@@ -253,10 +253,10 @@ export const makeProjectConversationStorage = Effect.gen(function* () {
   ) {
     const filePath = manifestPath(workspaceRoot);
     const raw = yield* fileSystem.readFileString(filePath).pipe(
-      Effect.map(Option.some),
+      Effect.asSome,
       Effect.catchTags({
         PlatformError: (cause) =>
-          cause.reason._tag === "NotFound" ? Effect.succeed(Option.none()) : Effect.fail(cause),
+          cause.reason._tag === "NotFound" ? Effect.succeedNone : Effect.fail(cause),
       }),
     );
     if (Option.isNone(raw)) return Option.none<Schema.Schema.Type<typeof Manifest>>();

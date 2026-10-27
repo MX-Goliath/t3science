@@ -22,6 +22,8 @@ import * as LegacyV1ThreadImporter from "./LegacyV1ThreadImporter.ts";
 import * as ProjectionMaintenance from "../ProjectionMaintenance.ts";
 import * as ProjectionStore from "../ProjectionStore.ts";
 
+const encodeModelSelection = Schema.encodeEffect(Schema.fromJsonString(ModelSelection));
+
 const layerDatabase = SqlitePersistence.layerMemory;
 const layerEventStoreProvided = EventStore.layer.pipe(Layer.provideMerge(layerDatabase));
 const layerProjectionStoreProvided = ProjectionStore.layer.pipe(Layer.provideMerge(layerDatabase));
@@ -314,7 +316,7 @@ it.layer(layerTest)("LegacyV1ThreadImporter", (it) => {
         model: "gpt-5",
         options: [{ id: "reasoningEffort", value: "high" }],
       };
-      yield* sql`UPDATE projection_thread_messages SET model_selection_json = ${yield* Schema.encodeEffect(Schema.fromJsonString(ModelSelection))(answerModel)} WHERE thread_id = ${threadId} AND role = 'assistant'`;
+      yield* sql`UPDATE projection_thread_messages SET model_selection_json = ${yield* encodeModelSelection(answerModel)} WHERE thread_id = ${threadId} AND role = 'assistant'`;
       const sourceMessages = yield* sql`
         SELECT * FROM projection_thread_messages WHERE thread_id = ${threadId} ORDER BY message_id
       `;

@@ -55,14 +55,7 @@ function isSettledTailActive(state: SettledTailState, now: number): boolean {
   return state.active !== null && state.expiresAt !== null && state.expiresAt > now;
 }
 
-/**
- * Fold one observation into the tail state. A tail arms exactly when the same
- * thread+turn is observed transitioning from unsettled to settled — never on
- * the first observation of an already-settled turn (mount, thread switch) —
- * and stays armed until `expiresAt` or until a newer observation (work,
- * turn, or thread change) arrives. Unchanged observations return the same
- * state reference so the hook can bail out without sliding the timer.
- */
+// Arm only when the same thread and turn settle while observed, and keep the deadline fixed across duplicate updates.
 export function observeSettledTail(
   state: SettledTailState,
   observation: SettledTailObservation,

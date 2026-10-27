@@ -3,8 +3,10 @@ import * as Schema from "effect/Schema";
 import { ProviderInstanceId, ServerSettings } from "@t3tools/contracts";
 import { migrateLegacyResponseStreaming } from "./legacyResponseStreaming.ts";
 
-const decode = (value: unknown) =>
-  Schema.decodeUnknownSync(ServerSettings)(migrateLegacyResponseStreaming(value));
+const decodeSettings = Schema.decodeUnknownSync(ServerSettings);
+const encodeSettings = Schema.encodeSync(ServerSettings);
+
+const decode = (value: unknown) => decodeSettings(migrateLegacyResponseStreaming(value));
 describe("legacy response streaming migration", () => {
   it("drops the old instance switch so selecting the new default survives reload", () => {
     const migrated = decode({
@@ -16,7 +18,7 @@ describe("legacy response streaming migration", () => {
     expect(migrated.providerInstances[ProviderInstanceId.make("work")]?.config).not.toHaveProperty(
       "enableLegacyTokenStreaming",
     );
-    const { responseStreamingMode: _, ...sparse } = Schema.encodeSync(ServerSettings)(migrated);
+    const { responseStreamingMode: _, ...sparse } = encodeSettings(migrated);
     expect(decode(sparse).responseStreamingMode).toBe("paragraph");
   });
   it("keeps upstream defaults when no legacy choice was saved", () => {

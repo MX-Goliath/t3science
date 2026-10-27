@@ -7,16 +7,7 @@ import {
   type SettledTurnState,
 } from "./workingPetAnimation";
 
-/**
- * The working row's settled tail: the terminal animation (jump / fail / wave)
- * shown for WORKING_ROW_SETTLED_TAIL_MS after the active thread's latest turn
- * settles, then the row goes away.
- *
- * The arming observation is applied in a layout effect, before paint, so the
- * settled row never drops out for a frame between the turn completing and the
- * tail taking over. The tail arms only for a turn observed settling in this
- * view — navigating to a thread whose turn already settled stays folded.
- */
+// Arm before paint so a settling turn keeps its working row for the terminal pet animation.
 export function useWorkingRowSettledTail(input: {
   /** Environment-scoped thread key. Thread IDs are only unique within an environment. */
   readonly threadKey: string | null;
@@ -39,6 +30,7 @@ export function useWorkingRowSettledTail(input: {
       : null;
   const settledNow = input.latestTurnSettled && !input.isWorking && settledTurnState !== null;
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- Observe the external run settling before paint to retain the terminal animation row.
   useLayoutEffect(() => {
     // eslint-disable-next-line react/set-state-in-effect -- Arm the terminal animation before paint when the external run settles.
     setTail((current) =>
@@ -46,6 +38,7 @@ export function useWorkingRowSettledTail(input: {
     );
   }, [key, settledNow, settledTurnState]);
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- Own and release the timeout that ends the terminal pet animation.
   useLayoutEffect(() => {
     if (tail.active === null || tail.expiresAt === null) {
       return;

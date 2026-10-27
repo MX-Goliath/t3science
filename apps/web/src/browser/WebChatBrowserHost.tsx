@@ -68,6 +68,7 @@ function MountedWebChatBrowser() {
     }),
   );
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- Acquire and release the persistent native browser tab.
   useEffect(() => {
     const lease = acquireDesktopTab(WEB_CHAT_BROWSER_TAB_ID);
     tabLeaseRef.current = lease;
@@ -77,6 +78,7 @@ function MountedWebChatBrowser() {
     };
   }, []);
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- Synchronize the native download directory with the current local project.
   useEffect(() => {
     const lease = tabLeaseRef.current;
     const bridge = previewBridge;
@@ -97,6 +99,7 @@ function MountedWebChatBrowser() {
     };
   }, [downloadDirectory]);
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- Subscribe to native browser navigation and release the listener.
   useEffect(() => {
     const bridge = previewBridge;
     if (!bridge) return;
@@ -117,10 +120,12 @@ function MountedWebChatBrowser() {
   };
 
   const partition = config?.partition;
+  // oxlint-disable-next-line t3code/react-effect-budget -- Reset native navigation after its browser partition changes.
   useEffect(() => {
     if (partition !== undefined) lastNavigatedUrlRef.current = null;
   }, [partition]);
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- Attach native webview lifecycle listeners and release them on unmount.
   useEffect(() => {
     const webview = webviewRef.current;
     const lease = tabLeaseRef.current;
@@ -154,6 +159,7 @@ function MountedWebChatBrowser() {
     };
   }, [config]);
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- Navigate the persistent native tab when its provider changes.
   useEffect(() => {
     const bridge = previewBridge;
     if (!bridge || registrationVersion === 0) return;

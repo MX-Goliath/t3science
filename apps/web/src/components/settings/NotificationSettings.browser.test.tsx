@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { render, stubGlobal } from "../../../test/render";
 import { page } from "vite-plus/test/browser";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => ({
   mode: "off",
@@ -26,44 +25,31 @@ vi.mock("./settingsLayout", () => ({
 }));
 import { NotificationSettings } from "./NotificationSettings";
 
-let root: Root;
-let host: HTMLDivElement;
 async function choose(value: string) {
   const labels: Record<string, string> = { off: "Off", notifications: "Notifications only" };
   await page.getByRole("combobox", { name: "Thread notifications" }).click();
   await page.getByRole("option", { name: labels[value]!, exact: true }).click();
 }
 
-beforeEach(async () => {
+function setup() {
   vi.clearAllMocks();
   state.mode = "off";
   state.supported.mockResolvedValue(true);
   state.requestPermission.mockResolvedValue("granted");
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  Object.defineProperty(window, "isSecureContext", { configurable: true, value: false });
-  Object.defineProperty(window, "desktopBridge", {
-    configurable: true,
-    value: { notifications: { isSupported: state.supported } },
-  });
-  vi.stubGlobal("Notification", { requestPermission: state.requestPermission });
-  await act(() => {
-    host = document.createElement("div");
-    document.body.append(host);
-    root = createRoot(host);
-    root.render(<NotificationSettings />);
-  });
-});
-
-afterEach(async () => {
-  await act(() => root.unmount());
-  host.remove();
-  Object.defineProperty(window, "desktopBridge", { configurable: true, value: undefined });
-  Object.defineProperty(window, "isSecureContext", { configurable: true, value: true });
-  vi.unstubAllGlobals();
-});
+}
+function nativeBridge() {
+  const stack = new DisposableStack();
+  stack.use(stubGlobal("isSecureContext", false));
+  stack.use(stubGlobal("desktopBridge", { notifications: { isSupported: state.supported } }));
+  stack.use(stubGlobal("Notification", { requestPermission: state.requestPermission }));
+  return stack;
+}
 
 it("enables native Linux notifications for remote HTTP without asking the browser", async () => {
-  vi.stubGlobal("Notification", undefined);
+  setup();
+  using _native = nativeBridge();
+  await using _screen = await render(<NotificationSettings />);
+  using _notification = stubGlobal("Notification", undefined);
   await choose("notifications");
   expect(state.supported).toHaveBeenCalledOnce();
   expect(state.requestPermission).not.toHaveBeenCalled();
@@ -71,28 +57,37 @@ it("enables native Linux notifications for remote HTTP without asking the browse
 });
 
 it("explains an unavailable native backend and allows retrying", async () => {
+  setup();
+  using _native = nativeBridge();
+  await using screen = await render(<NotificationSettings />);
   state.supported.mockResolvedValue(false);
   await choose("notifications");
   expect(state.update).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("libnotify");
+  await expect.element(screen.getByText(/libnotify/)).toBeVisible();
   state.supported.mockResolvedValue(true);
   await choose("notifications");
   expect(state.update).toHaveBeenCalledWith({ notificationMode: "notifications" });
 });
 
 it("can disable alerts even when the native service is unavailable", async () => {
+  setup();
+  using _native = nativeBridge();
+  await using screen = await render(<NotificationSettings />);
   state.supported.mockRejectedValue(new Error("IPC unavailable"));
   await choose("notifications");
   expect(state.update).not.toHaveBeenCalled();
   state.mode = "notifications";
-  await act(async () => root.render(<NotificationSettings />));
+  await screen.rerender(<NotificationSettings />);
   await choose("off");
   expect(state.update).toHaveBeenCalledWith({ notificationMode: "off" });
 });
 
 it("still requires permission in the browser", async () => {
-  Object.defineProperty(window, "desktopBridge", { configurable: true, value: undefined });
-  Object.defineProperty(window, "isSecureContext", { configurable: true, value: true });
+  setup();
+  using _bridge = stubGlobal("desktopBridge", undefined);
+  using _secure = stubGlobal("isSecureContext", true);
+  using _notification = stubGlobal("Notification", { requestPermission: state.requestPermission });
+  await using _screen = await render(<NotificationSettings />);
   state.requestPermission.mockResolvedValue("denied");
   await choose("notifications");
   expect(state.supported).not.toHaveBeenCalled();

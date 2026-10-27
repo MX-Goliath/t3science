@@ -37,7 +37,7 @@ describe("PetArchiveImporter", () => {
     } finally {
       await NodeFS.rm(petsDirectory, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 
   it("rejects backslash entry names before yauzl can normalize them", async () => {
     const petsDirectory = await NodeFS.mkdtemp(

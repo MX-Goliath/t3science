@@ -15,9 +15,7 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import {
   DESKTOP_APP_BASE_NAME,
   DESKTOP_APP_ID,
-  DESKTOP_DEVELOPMENT_LINUX_DESKTOP_ENTRY_NAME,
   DESKTOP_DEVELOPMENT_LINUX_WM_CLASS,
-  DESKTOP_PRODUCTION_LINUX_DESKTOP_ENTRY_NAME,
   DESKTOP_PRODUCTION_LINUX_WM_CLASS,
 } from "@t3tools/shared/desktopProductIdentity";
 import * as DesktopConfig from "./DesktopConfig.ts";
@@ -85,6 +83,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly linuxDesktopEntryName: string;
     readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
+    readonly desktopLauncherPath: Option.Option<string>;
     readonly appImagePath: Option.Option<string>;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
@@ -241,6 +240,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
       ? DESKTOP_DEVELOPMENT_LINUX_WM_CLASS
       : DESKTOP_PRODUCTION_LINUX_WM_CLASS,
     linuxApplicationsDir,
+    desktopLauncherPath: config.desktopLauncherPath,
     appImagePath: config.appImagePath,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),
     runtimeInfo: resolveDesktopRuntimeInfo({

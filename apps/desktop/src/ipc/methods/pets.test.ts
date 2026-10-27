@@ -2,7 +2,6 @@ import { DesktopPetsStateSchema, type DesktopPetsState } from "@t3tools/contract
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
@@ -111,7 +110,7 @@ describe("desktop pets IPC", () => {
     const windowLayer = Layer.succeed(
       ElectronWindow.ElectronWindow,
       ElectronWindow.ElectronWindow.of({
-        focusedMainOrFirst: Effect.succeed(Option.none()),
+        focusedMainOrFirst: Effect.succeedNone,
       } as unknown as ElectronWindow.ElectronWindow["Service"]),
     );
 

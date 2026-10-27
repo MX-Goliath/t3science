@@ -12,8 +12,9 @@ import { type ToolActivityIcon } from "@t3tools/contracts";
 import { liveThoughtLine } from "@t3tools/client-runtime/work-log/presentation";
 import { resolveWorkGroupScrollAnchor } from "@t3tools/client-runtime/work-log/scroll-anchor";
 import { observeResize } from "~/lib/observeResize";
+import { tickTextContent } from "~/lib/tickTextContent";
 import { observeVisibleAnimation } from "../../lib/visibleAnimation";
-import { memo, use, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, use, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { workEntryDisplayIndicatesToolFailure } from "../../session-logic";
 import ChatMarkdown from "../ChatMarkdown";
@@ -112,24 +113,11 @@ export const WorkGroupSection = memo(function WorkGroupSection({
 });
 
 function WorkingTimer({ createdAt }: { createdAt: string }) {
-  const textRef = useRef<HTMLSpanElement>(null);
-  const initialText = formatWorkingTimerNow(createdAt);
-
-  useEffect(() => {
-    const updateText = () => {
-      if (textRef.current) {
-        textRef.current.textContent = formatWorkingTimerNow(createdAt);
-      }
-    };
-    updateText();
-    const id = setInterval(updateText, 1000);
-    return () => clearInterval(id);
-  }, [createdAt]);
-
   return (
-    <span ref={textRef} className="tabular-nums">
-      {initialText}
-    </span>
+    <span
+      ref={tickTextContent(() => formatWorkingTimerNow(createdAt), true)}
+      className="tabular-nums"
+    />
   );
 }
 
@@ -296,9 +284,8 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     isWaitingForUser,
     isRevertingCheckpoint,
   } = use(TimelineRowActivityCtx);
-  // One span for every label so the setup-to-working handoff swaps text in
-  // place instead of remounting the row.
-  const shimmer = isPreparingWorktree || isCompacting;
+  const compacting = row.compacting ?? (isCompacting ? "Compacting…" : undefined);
+  const shimmer = isPreparingWorktree || compacting !== undefined;
   const label = settledTurnState ? (
     settledTurnState === "completed" ? (
       "Done"
@@ -311,8 +298,8 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     "Waiting for you…"
   ) : isPreparingWorktree ? (
     "Setting up worktree…"
-  ) : isCompacting ? (
-    <CompactingLabel />
+  ) : compacting !== undefined ? (
+    <CompactingLabel label={compacting} />
   ) : row.createdAt ? (
     <>
       Working for <WorkingTimer createdAt={row.createdAt} />
@@ -380,11 +367,11 @@ function BackgroundWorktreeSetupChip({ snapshot }: { snapshot: WorktreeSetupSnap
   );
 }
 
-function CompactingLabel() {
+function CompactingLabel({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <Minimize2Icon aria-hidden="true" className="size-3" />
-      Compacting…
+      {label}
     </span>
   );
 }

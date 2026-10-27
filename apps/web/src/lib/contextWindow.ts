@@ -48,9 +48,7 @@ export function formatProviderDisplayName(provider: string | null | undefined): 
   }
 }
 
-/** Prefers the provider's live usage report (#8144); falls back to the last compaction item. */
-/** Newest usage report across a thread's provider turns. Snapshots order turns
-    by provider thread, not time, so pick by timestamp. */
+/** Newest report by timestamp; snapshots order turns by provider thread. */
 export function latestProviderTurnTokenUsage(
   turns: ReadonlyArray<Pick<OrchestrationV2ProviderTurn, "tokenUsage">>,
   projection?: Pick<ThreadStructure, "thread" | "contextTransfers"> | null,

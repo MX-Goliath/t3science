@@ -35,6 +35,17 @@ import {
   portableConversationHistory,
 } from "./ProjectConversationStorageLive.ts";
 
+const encodePortableDocument = Schema.encodeEffect(
+  Schema.fromJsonString(PortableConversationDocument),
+);
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+const decodePortableDocument = Schema.decodeEffect(
+  Schema.fromJsonString(PortableConversationDocument),
+);
+const decodeManifestScripts = Schema.decodeEffect(
+  Schema.fromJsonString(Schema.Struct({ scripts: Schema.Array(ProjectScript) })),
+);
+
 const now = DateTime.makeUnsafe("2026-09-26T12:00:00Z");
 const projectId = ProjectId.make("project");
 const providerInstanceId = ProviderInstanceId.make("codex");
@@ -178,7 +189,7 @@ it.effect(
       yield* fs.makeDirectory(path.join(directory, "threads"), { recursive: true });
       yield* fs.writeFileString(
         path.join(directory, "threads", "portable-thread.json"),
-        yield* Schema.encodeEffect(Schema.fromJsonString(PortableConversationDocument))(legacy),
+        yield* encodePortableDocument(legacy),
       );
       const scripts = [
         {
@@ -193,7 +204,7 @@ it.effect(
       ];
       yield* fs.writeFileString(
         path.join(directory, "manifest.json"),
-        yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+        yield* encodeJson({
           schemaVersion: 1,
           enabled: true,
           updatedAt: DateTime.formatIso(now),
@@ -248,15 +259,15 @@ it.effect(
           const restored = yield* projections.getThreadProjection(thread.id);
           assert.equal(restored.messages[0]?.text, "Keep this answer");
           assert.deepStrictEqual(restored.messages[0]?.modelSelection, thread.modelSelection);
-          const exported = yield* Schema.decodeUnknownEffect(
-            Schema.fromJsonString(PortableConversationDocument),
-          )(yield* fs.readFileString(path.join(directory, "threads", "portable-thread.json")));
+          const exported = yield* decodePortableDocument(
+            yield* fs.readFileString(path.join(directory, "threads", "portable-thread.json")),
+          );
           assert.equal(exported.schemaVersion, 2);
           if (exported.schemaVersion === 2)
             assert.equal(exported.messages[0]?.text, "Keep this answer");
-          const manifest = yield* Schema.decodeUnknownEffect(
-            Schema.fromJsonString(Schema.Struct({ scripts: Schema.Array(ProjectScript) })),
-          )(yield* fs.readFileString(path.join(directory, "manifest.json")));
+          const manifest = yield* decodeManifestScripts(
+            yield* fs.readFileString(path.join(directory, "manifest.json")),
+          );
           assert.deepStrictEqual(manifest.scripts, scripts);
           assert.isFalse((yield* storage.setEnabled({ projectId, enabled: false })).enabled);
           assert.isTrue(yield* fs.exists(path.join(directory, "threads", "portable-thread.json")));

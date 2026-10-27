@@ -50,14 +50,7 @@ const BUNDLED_PETS = [
 
 const BUNDLED_PET_IDS = new Set<string>(BUNDLED_PETS.map((pet) => pet.id));
 
-/**
- * Seeded once, when no assignment map has ever been persisted (fresh
- * install, or an upgrade from the single-pet state format). A built-in
- * provider slot's instance id is its driver kind, so these ids pair the two
- * bundled pets with the providers they depict. Everything afterwards is the
- * user's: clearing an assignment is persisted as an absent entry and is
- * never re-seeded.
- */
+// Seed built-in assignments only when no map was saved; clearing an assignment must survive restarts.
 const DEFAULT_PET_ASSIGNMENTS: ReadonlyArray<readonly [string, string]> = [
   ["codex", "openai-codex"],
   ["claudeAgent", "claude"],

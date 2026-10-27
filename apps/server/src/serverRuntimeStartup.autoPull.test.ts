@@ -7,7 +7,6 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import { ProjectConversationStorage } from "./project/ProjectConversationStorage.ts";
 import * as Path from "effect/Path";
 import { HttpServer } from "effect/http";
@@ -140,7 +139,7 @@ it.effect("parks automatic pull until activation without delaying command readin
           }),
         }),
         Layer.mock(ProjectStore.ProjectStoreV2)({
-          getShell: () => Effect.succeed(Option.some(snapshot.projects[0]!)),
+          getShell: () => Effect.succeedSome(snapshot.projects[0]!),
           listShells: () => Effect.succeed(snapshot.projects),
         }),
         Layer.mock(ProjectService.ProjectService)({ snapshot: Effect.succeed(snapshot) }),

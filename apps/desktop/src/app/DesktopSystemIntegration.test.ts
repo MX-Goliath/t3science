@@ -113,7 +113,7 @@ function makeLayer(
             icns: Option.none(),
             png: Option.some("/app/icon.png"),
           }),
-          resolveResourcePath: () => Effect.succeed(Option.none()),
+          resolveResourcePath: () => Effect.succeedNone,
         }),
         FileSystem.layerNoop({
           makeDirectory: (path) => Effect.sync(() => recording.directories.push(path)),

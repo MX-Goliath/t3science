@@ -71,18 +71,13 @@ const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
-/**
- * Old settings files can hold both flags with conflicting values; an explicit false on either
- * side wins so a user's disable is never silently undone.
- */
+// Conflicting flags resolve to false to preserve user disables.
 const foldProviderInstanceEnabledFlags = (settings: ServerSettings): ServerSettings => {
   let changed = false;
   const providerInstances: Record<string, ProviderInstanceConfig> = {};
   for (const [instanceId, instance] of Object.entries(settings.providerInstances)) {
     const config = instance.config;
-    // Only fold boolean flags: a malformed `enabled` (e.g. `"false"`) must
-    // stay in the blob so driver schema validation flags it instead of the
-    // fold silently repairing the config.
+    // Leave malformed flags for driver schema validation rather than silently repairing them.
     if (
       config === null ||
       typeof config !== "object" ||
@@ -198,10 +193,7 @@ export class ServerSettingsService extends Context.Service<
 
     readonly streamChanges: Stream.Stream<ServerSettings>;
 
-    /**
-     * Use this before reading a snapshot when changes between the snapshot and
-     * a lazily started stream must not be lost.
-     */
+    /** Subscribe before reading a snapshot to retain changes before lazy stream startup. */
     readonly subscribeChanges: Effect.Effect<Stream.Stream<ServerSettings>, never, Scope.Scope>;
   }
 >()("t3/serverSettings/ServerSettingsService") {
@@ -274,7 +266,6 @@ const ServerSettingsJson = fromLenientJson(
         encode: (value) => value,
       }),
     ),
-  ).pipe(
     Schema.decodeTo(
       Schema.Struct({
         ...ServerSettings.fields,
@@ -495,9 +486,7 @@ interface LegacyProjectSettingsRow {
   readonly scripts: string;
 }
 
-/**
- * Marked with `projectSettingsFolded` so a later reset in the UI survives restarts.
- */
+// projectSettingsFolded prevents restarts from undoing later UI resets.
 function foldLegacyProjectSettings(
   settings: ServerSettings,
   rows: ReadonlyArray<LegacyProjectSettingsRow>,
@@ -530,8 +519,7 @@ function foldLegacyProjectSettings(
   for (const [projectId, value] of Object.entries(settings.projectAutoPullOverrides)) {
     set(projectId, "defaultAutoPull", value);
   }
-  // A stored null meant "reset to machine defaults", which is now plain
-  // inheritance; the project's own aggregate scripts must not resurface.
+  // A stored null resets to machine defaults, so the project's aggregate scripts must not resurface.
   const resetScripts = new Set<string>();
   for (const [projectId, value] of Object.entries(settings.projectScriptOverrides)) {
     if (value === null) resetScripts.add(projectId);
@@ -754,9 +742,7 @@ const make = Effect.gen(function* () {
     const folded = settingsFileTrusted
       ? foldLegacyProjectSettings(loaded, legacyProjectRows)
       : loaded;
-    // Copied, not moved: the old entry is removed only after the new file is written. A token
-    // that cannot be read or copied leaves the retired keys in place, so the migration runs again
-    // on the next load instead of dropping it.
+    // Remove retired keys only after copying secrets and writing the new file; failures retry on next load.
     const legacySecretsCopied = yield* Effect.forEach(
       settingsFileTrusted
         ? migrateLegacySourceControlSettings(folded, legacySourceControl).secretMoves
@@ -1090,9 +1076,7 @@ const make = Effect.gen(function* () {
 
     const revalidateAndEmitSafely = revalidateAndEmit.pipe(Effect.ignoreCause({ log: true }));
 
-    // A symlinked settings file is rewritten in its destination's directory,
-    // which a watch on the link's directory never sees. The link is resolved
-    // again whenever it changes, so repointing it moves the watch along.
+    // Watch symlink targets' directories for rewrites; re-resolve link changes to follow repointing.
     const watchLinkTarget = Effect.gen(function* () {
       const linkTargetPath = yield* resolveSymlinkTarget(settingsPath).pipe(
         Effect.provideService(FileSystem.FileSystem, fs),
@@ -1120,8 +1104,7 @@ const make = Effect.gen(function* () {
       ),
     );
 
-    // Editors emit multiple events per save (truncate, write, rename) and
-    // `fs.watch` can fire before the content has been flushed to disk.
+    // Saves emit multiple events; fs.watch may fire before content is flushed.
     const debouncedSettingsEvents = Stream.merge(
       watchFileChanges(settingsPath),
       linkTargetEvents,

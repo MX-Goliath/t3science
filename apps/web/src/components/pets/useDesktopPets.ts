@@ -32,6 +32,7 @@ export function useDesktopPets() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- Hydrate shared pet state from the native desktop bridge and detach on unmount.
   useEffect(() => {
     if (!bridge?.getDesktopPetsState || sharedState !== null) return;
     let active = true;
