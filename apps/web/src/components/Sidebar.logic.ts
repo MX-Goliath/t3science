@@ -15,7 +15,6 @@ import {
 import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
 import type { ContextMenuItem, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
-import { sortPinnedThreadsByOrderKey } from "@t3tools/client-runtime/state/thread-sort";
 import type { AsyncResult } from "effect/reactivity";
 import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
 import {
@@ -952,25 +951,6 @@ export {
   sortInboxThreadsByReturn,
   sortWorkingThreadsBySend,
 } from "@t3tools/client-runtime/state/thread-inbox";
-
-/** Legacy sidebar ordering within one project: pins form a stable block at
-    the top, while regular threads keep the user's selected sort order. */
-export function sortProjectThreadsWithPins<
-  T extends ThreadSortInput & {
-    readonly id: string;
-    readonly createdAt: string;
-    readonly pinnedAt?: string | null | undefined;
-    readonly pinOrderKey?: string | null | undefined;
-  },
->(threads: readonly T[], sortOrder: SidebarThreadSortOrder): T[] {
-  const pinned: T[] = [];
-  const unpinned: T[] = [];
-  for (const thread of threads) {
-    (thread.pinnedAt != null ? pinned : unpinned).push(thread);
-  }
-
-  return [...sortPinnedThreadsByOrderKey(pinned), ...sortThreads(unpinned, sortOrder)];
-}
 
 // Pinned-reorder key math and the keyed sort live in client-runtime
 // (state/thread-sort) so web and mobile compute identical pinned orders.

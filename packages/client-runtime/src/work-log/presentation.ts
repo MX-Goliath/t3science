@@ -279,33 +279,6 @@ export function countCompletedWorkCommands(
   return count;
 }
 
-/** Maps item and task status to the status shown on a work-log row. */
-export function extractWorkLogToolLifecycleStatus(
-  payloadValue: unknown,
-): WorkLogToolLifecycleStatus | undefined {
-  const payload = asRecord(payloadValue);
-  switch (payload?.status) {
-    case "pending":
-    case "running":
-    case "waiting":
-      return "inProgress";
-    case "cancelled":
-    case "interrupted":
-      return "stopped";
-    case "idle":
-      // A batch becomes idle when its parent turn ends. Other idle tasks can resume.
-      return payload.taskType === "subagent_batch" ? "stopped" : undefined;
-    case "inProgress":
-    case "completed":
-    case "failed":
-    case "declined":
-    case "stopped":
-      return payload.status;
-    default:
-      return undefined;
-  }
-}
-
 function workEntryIndicatesToolFailureFromOutput(
   entry: WorkLogPresentationEntry,
   includeCommand: boolean,

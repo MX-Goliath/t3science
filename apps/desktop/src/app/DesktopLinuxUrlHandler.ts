@@ -8,13 +8,9 @@ import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
-import { DESKTOP_LINUX_URL_HANDLER_DESKTOP_ENTRY_NAME } from "@t3tools/shared/desktopProductIdentity";
 import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
-
-// AppImage integrators choose the .desktop filename, so setDesktopName cannot identify it for protocol registration.
-export const URL_HANDLER_DESKTOP_ENTRY_NAME = DESKTOP_LINUX_URL_HANDLER_DESKTOP_ENTRY_NAME;
 const { logInfo, logWarning } = makeComponentLogger("desktop-linux-url-handler");
 
 export class DesktopLinuxUrlHandlerRegistrationError extends Schema.TaggedError<DesktopLinuxUrlHandlerRegistrationError>()(

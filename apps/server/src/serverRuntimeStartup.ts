@@ -252,7 +252,7 @@ export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
   );
 });
 
-export const ensureGeneralChatsProject = Effect.gen(function* () {
+const ensureGeneralChatsProject = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const projects = yield* ProjectService.ProjectService;
   const existing = yield* (yield* ProjectStore.ProjectStoreV2).getShell(GENERAL_CHATS_PROJECT_ID);

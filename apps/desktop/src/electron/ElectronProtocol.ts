@@ -23,7 +23,6 @@ import { isValidPetId } from "../pets/PetArchiveValidation.ts";
 const NodeFS = NodeFSP;
 
 export const DESKTOP_HOST = "app";
-export { DESKTOP_DEVELOPMENT_SCHEME, DESKTOP_PRODUCTION_SCHEME };
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;

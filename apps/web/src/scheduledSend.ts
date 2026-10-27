@@ -51,7 +51,7 @@ export function resolveRateLimitSchedule(
   };
 }
 
-export function scheduledSendTimeMs(scheduledSend: ScheduledSendState): number | null {
+function scheduledSendTimeMs(scheduledSend: ScheduledSendState): number | null {
   const value = Date.parse(scheduledSend.scheduledAt);
   return Number.isFinite(value) ? value : null;
 }

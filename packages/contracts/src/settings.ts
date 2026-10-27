@@ -159,7 +159,7 @@ export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationM
 
 export const WebChatProvider = Schema.Literals(["chatgpt", "claude", "grok", "perplexity"]);
 export type WebChatProvider = typeof WebChatProvider.Type;
-export const DEFAULT_WEB_CHAT_PROVIDER: WebChatProvider = "chatgpt";
+const DEFAULT_WEB_CHAT_PROVIDER: WebChatProvider = "chatgpt";
 
 const PersistedWebChatProvider = Schema.Literals([
   "chatgpt",
@@ -1334,13 +1334,6 @@ export const resolveProviderInstanceEnabled = (
   }
   return instance.enabled ?? configEnabled ?? defaultEnabledForDriver(instance.driver);
 };
-
-/** Upstream provider id used by OpenCode's Go subscription models and quota endpoint. */
-export const OPENCODE_GO_PROVIDER_ID = "opencode-go";
-
-export function isOpencodeGoModelSlug(slug: string | null | undefined): boolean {
-  return slug !== null && slug !== undefined && slug.startsWith(`${OPENCODE_GO_PROVIDER_ID}/`);
-}
 export const resolveProjectProviderInstanceEnabled = (
   settings: Pick<ServerSettings, "providerInstances" | "projectSettingsOverrides">,
   projectId: ProjectId | null,

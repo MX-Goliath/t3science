@@ -151,7 +151,18 @@ it.effect.each([
             capabilities: { repositoryIdentity: true },
           }),
         }),
-        Layer.mock(ProjectStore.ProjectStoreV2)({}),
+        Layer.mock(ProjectStore.ProjectStoreV2)({
+          getShell: (id) =>
+            Effect.succeedSome({
+              id,
+              title: "Existing project",
+              workspaceRoot: "/existing-project",
+              defaultModelSelection: null,
+              scripts: [],
+              createdAt: "2026-01-01T00:00:00Z",
+              updatedAt: "2026-01-01T00:00:00Z",
+            }),
+        }),
         Layer.mock(ProjectService.ProjectService)({
           bootstrap: () =>
             scenario === "project-failure"

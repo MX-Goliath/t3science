@@ -13,8 +13,8 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-export const APP_DISPLAY_NAME = isDevelopment ? "T3 Science (Dev)" : "T3 Science (Beta)";
-export const APP_BUNDLE_ID = isDevelopment
+const APP_DISPLAY_NAME = isDevelopment ? "T3 Science (Dev)" : "T3 Science (Beta)";
+const APP_BUNDLE_ID = isDevelopment
   ? `com.t3tools.t3science.dev.${devBundleIdSuffix || "local"}`
   : "com.t3tools.t3science";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3science-dev"] : ["t3science"];

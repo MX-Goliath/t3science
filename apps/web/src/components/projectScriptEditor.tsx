@@ -532,7 +532,9 @@ function ProjectScriptEditorForm({
                 }}
               >
                 <SelectTrigger id="script-kind">
-                  <SelectValue />
+                  <SelectValue>
+                    {kind === "prompt" ? "New chat prompt" : "Terminal command"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
                   <SelectItem value="command">Terminal command</SelectItem>

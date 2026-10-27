@@ -56,7 +56,7 @@ const GO_WINDOWS = [
 ] as const;
 
 /** Keep valid quota windows even when another window or its reset time is absent. */
-export function normalizeOpenCodeGoUsage(
+function normalizeOpenCodeGoUsage(
   payload: unknown,
   checkedAt = "1970-01-01T00:00:00.000Z",
 ): ServerProviderUsageLimits | undefined {
@@ -79,7 +79,7 @@ export function normalizeOpenCodeGoUsage(
   return windows.length > 0 ? makeUsageLimits({ checkedAt, windows }) : undefined;
 }
 
-export function resolveOpenCodeGoAuthFile(context: {
+function resolveOpenCodeGoAuthFile(context: {
   readonly environment: NodeJS.ProcessEnv;
   readonly platform: NodeJS.Platform;
   readonly homeDir: string;

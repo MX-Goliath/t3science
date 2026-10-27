@@ -1258,23 +1258,17 @@ const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
 });
 
-export const WsProjectsGetConversationStorageRpc = Rpc.make(
-  WS_METHODS.projectsGetConversationStorage,
-  {
-    payload: ProjectConversationStorageGetInput,
-    success: ProjectConversationStorageState,
-    error: Schema.Union([ProjectConversationStorageError, EnvironmentAuthorizationError]),
-  },
-);
+const WsProjectsGetConversationStorageRpc = Rpc.make(WS_METHODS.projectsGetConversationStorage, {
+  payload: ProjectConversationStorageGetInput,
+  success: ProjectConversationStorageState,
+  error: Schema.Union([ProjectConversationStorageError, EnvironmentAuthorizationError]),
+});
 
-export const WsProjectsSetConversationStorageRpc = Rpc.make(
-  WS_METHODS.projectsSetConversationStorage,
-  {
-    payload: ProjectConversationStorageSetInput,
-    success: ProjectConversationStorageState,
-    error: Schema.Union([ProjectConversationStorageError, EnvironmentAuthorizationError]),
-  },
-);
+const WsProjectsSetConversationStorageRpc = Rpc.make(WS_METHODS.projectsSetConversationStorage, {
+  payload: ProjectConversationStorageSetInput,
+  success: ProjectConversationStorageState,
+  error: Schema.Union([ProjectConversationStorageError, EnvironmentAuthorizationError]),
+});
 const WsProjectsMutateRpc = Rpc.make(WS_METHODS.projectsMutate, {
   payload: ProjectMutation,
   success: Project,

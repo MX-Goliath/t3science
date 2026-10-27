@@ -209,7 +209,7 @@ export function portableConversationHistory(
   return { messages, turnItems };
 }
 
-export const makeProjectConversationStorage = Effect.gen(function* () {
+const makeProjectConversationStorage = Effect.gen(function* () {
   const config = yield* ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;

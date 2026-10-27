@@ -88,7 +88,7 @@ export function renderLinuxAutostartDesktopEntry(input: {
   ].join("\n");
 }
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const appSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const assets = yield* DesktopAssets.DesktopAssets;
   const desktopWindow = yield* DesktopWindow.DesktopWindow;

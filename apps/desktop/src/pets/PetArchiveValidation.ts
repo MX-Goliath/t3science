@@ -3,16 +3,16 @@ import * as NodePath from "node:path";
 
 export const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
 export const MAX_EXTRACTED_BYTES = 200 * 1024 * 1024;
-export const MAX_ENTRY_BYTES = 100 * 1024 * 1024;
+const MAX_ENTRY_BYTES = 100 * 1024 * 1024;
 export const MAX_PET_JSON_BYTES = 128 * 1024;
 export const MAX_SPRITESHEET_BYTES = 25 * 1024 * 1024;
 export const MAX_ARCHIVE_ENTRIES = 10;
-export const OPENPETS_FRAME_WIDTH = 192;
-export const OPENPETS_FRAME_HEIGHT = 208;
-export const OPENPETS_COLUMNS = 8;
-export const OPENPETS_ROWS = 9;
-export const OPENPETS_SHEET_WIDTH = OPENPETS_FRAME_WIDTH * OPENPETS_COLUMNS;
-export const OPENPETS_SHEET_HEIGHT = OPENPETS_FRAME_HEIGHT * OPENPETS_ROWS;
+const OPENPETS_FRAME_WIDTH = 192;
+const OPENPETS_FRAME_HEIGHT = 208;
+const OPENPETS_COLUMNS = 8;
+const OPENPETS_ROWS = 9;
+const OPENPETS_SHEET_WIDTH = OPENPETS_FRAME_WIDTH * OPENPETS_COLUMNS;
+const OPENPETS_SHEET_HEIGHT = OPENPETS_FRAME_HEIGHT * OPENPETS_ROWS;
 
 const PET_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
@@ -40,7 +40,7 @@ export interface ZipEntryForValidation {
   readonly externalFileAttributes: number;
 }
 
-export function validatePetId(id: unknown): string {
+function validatePetId(id: unknown): string {
   if (typeof id !== "string" || !PET_ID_PATTERN.test(id)) {
     throw new Error("Pet id must contain only lowercase ASCII letters, digits, and hyphens.");
   }
