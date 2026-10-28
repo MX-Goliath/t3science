@@ -2,7 +2,7 @@ import { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 import type { ComponentProps } from "react";
 import { expect, it, vi } from "vite-plus/test";
-import { page } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 const state = vi.hoisted(() => ({
   projection: null as unknown,
@@ -71,6 +71,7 @@ it("previews assistant quotes as readable text and preserves the citation when e
   state.workflow = {
     activeRun: { id: "run:active" },
     canPromoteToSteer: true,
+    canReorder: true,
     queuedRuns: [
       {
         run: { id: "run:quote-only", userMessageId: "message:quote-only" },
@@ -96,4 +97,32 @@ it("previews assistant quotes as readable text and preserves the citation when e
   expect(onEditQueuedRun).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ text: quoteAndText }),
   );
+});
+
+it("keeps keyboard focus when moving into the collapsed part of the queue", async () => {
+  setup();
+  state.projection = { projection: { messages: [] } };
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    canReorder: true,
+    queuedRuns: ["first", "second", "third", "fourth"].map((id) => ({
+      run: { id: `run:${id}`, userMessageId: `message:${id}` },
+      text: id,
+      attachments: [],
+    })),
+  };
+  await using screen = await renderQueue();
+  await expect.element(screen.getByText("third", { exact: true })).not.toBeInTheDocument();
+  const grip = screen.getByRole("button", { name: /Reorder queued message 2 of 4/ });
+  await userEvent.click(grip);
+  await userEvent.keyboard("{ArrowDown}");
+
+  await expect.element(screen.getByText("third", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("fourth", { exact: true })).toBeVisible();
+  await expect.element(grip).toHaveFocus();
+  await expect.element(screen.getByRole("button", { name: "Show fewer" })).toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: "Send now", exact: true }).nth(3))
+    .toBeVisible();
 });

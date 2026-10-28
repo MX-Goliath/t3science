@@ -134,6 +134,7 @@ describe("thread workflows", () => {
     ]);
     expect(state.activeRun?.id).toBe("active");
     expect(state.canPromoteToSteer).toBe(true);
+    expect(state.canReorder).toBe(true);
     expect(state.canSendNow).toBe(false);
   });
 

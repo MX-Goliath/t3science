@@ -197,7 +197,7 @@ transcription or cancellation; only the message text is sent when you submit.
 
 ## Queued messages
 
-The send button follows **Settings → General → Follow-up behavior** while an agent
+The send button follows **Settings → Chat → Follow-up behavior** while an agent
 is working. Hold `Cmd` on macOS or `Ctrl` on Windows and Linux to use the other action.
 With an empty draft, the button interrupts the running turn.
 On web and desktop, the composer shows **Interrupt** while the agent is working and the draft is
@@ -211,6 +211,10 @@ On web and desktop, queued messages appear at the end of the thread as dashed me
 not been sent yet. On mobile they appear above the composer. Each shows its text and any attached
 images. **Send now** sends a message right away, into the running turn if there is one. You can
 also edit or remove it.
+
+Drag a queued message by its handle to change its place. On web and desktop, focus
+the handle and press the arrow keys to move it. On mobile, use the handle or the
+message menu's **Move up** and **Move down** actions.
 
 If you stop the agent or the server restarts, queued messages keep their order and are held.
 Press **Resume** in an empty composer on web and desktop, or **Resume queue** on mobile, to
@@ -368,7 +372,7 @@ message in the composer. Keep this client connected for a scheduled message to s
 
 ## Response streaming
 
-Choose **Settings → General → Response streaming** to show text as it arrives,
+Choose **Settings → Threads → Advanced → Response streaming** to show text as it arrives,
 show finished paragraphs and code blocks, or wait for the full response. The
 setting also applies to reasoning text and can be overridden per project.
 On mobile, find the same choices under **Settings → Agent behavior**.
