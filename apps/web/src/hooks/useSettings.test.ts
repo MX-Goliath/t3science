@@ -20,6 +20,7 @@ import {
   persistClientSettingsPatch,
   persistClientSettingsUpdate,
   prepareModelPreferencesPatch,
+  resolveEnvironmentIdentificationMode,
 } from "./useSettings";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
@@ -31,6 +32,27 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("environment identification", () => {
+  it("honors Artwork even when the selected palette does not opt into sidebar art", () => {
+    const appearance = {
+      mode: "artwork" as const,
+      settingsHydrated: true,
+      paletteThemeActive: true,
+      paletteThemeAllowsArtwork: false,
+    };
+
+    expect(resolveEnvironmentIdentificationMode(appearance)).toBe("artwork");
+  });
+
+  it.each(["artwork", "pill", "none"] as const)(
+    "waits for saved settings before displaying %s",
+    (mode) => {
+      expect(resolveEnvironmentIdentificationMode({ mode, settingsHydrated: false })).toBe("none");
+      expect(resolveEnvironmentIdentificationMode({ mode, settingsHydrated: true })).toBe(mode);
+    },
+  );
 });
 
 describe("client settings hydration", () => {

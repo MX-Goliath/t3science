@@ -84,10 +84,6 @@ export function getThemePreviewAppearance(): ThemeAppearance | null {
   return themePreviewAppearance;
 }
 
-export function getThemePreviewSidebarArtwork(): boolean | null {
-  return themePreviewAppearance === null ? null : false;
-}
-
 export function subscribeToThemePreview(listener: () => void): () => void {
   themePreviewListeners.add(listener);
   return () => themePreviewListeners.delete(listener);
@@ -400,21 +396,17 @@ export function getStandardThemeColors(appearance: ThemeAppearance): ThemeColors
   return (standardLightThemeColors ??= decodeThemeColors(T3_CODE_LIGHT_THEME_COLORS));
 }
 
-// index.css paints the light bubble a step darker than the shared palette mobile uses.
+// Web surfaces differ from the shared palette mobile uses.
 const STANDARD_WEB_PAINTED_COLORS: Record<ThemeAppearance, Partial<ThemeColors>> = {
   light: { messageSurface: "#ebebed" },
-  dark: {},
+  dark: { canvas: "#000000", messageSurface: "#1e1e1e" },
 };
 
 /** The standard theme as index.css paints it, for solves that measure the page. */
-export function getStandardPaintedThemeColors(
-  appearance: ThemeAppearance,
-  redesign = false,
-): ThemeColors {
+export function getStandardPaintedThemeColors(appearance: ThemeAppearance): ThemeColors {
   return {
     ...getStandardThemeColors(appearance),
     ...STANDARD_WEB_PAINTED_COLORS[appearance],
-    ...(redesign && appearance === "dark" ? { canvas: "#000000", messageSurface: "#1e1e1e" } : {}),
   };
 }
 
@@ -1189,14 +1181,6 @@ export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | nu
   );
 }
 
-export function themeAllowsSidebarArtwork(theme: ThemePreference): boolean {
-  const themeId = themeIdFromPreference(theme);
-  return (
-    BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === themeId)?.sidebarArtwork ===
-    true
-  );
-}
-
 /** Every selection path must check single-appearance themes to keep mix and appearance tiles in sync. */
 export function singleAppearanceOf(theme: ThemeDefinition): ThemeAppearance | null {
   const modes = getThemeModes(theme);
@@ -1636,8 +1620,7 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
   for (const variable of Object.values(APP_THEME_VARIABLES)) {
     root.style.removeProperty(variable);
   }
-  // The redesign's lighter dark bubble is the stricter surface, so this ink also covers legacy UI.
-  applyContextChipVariables(root, getStandardPaintedThemeColors(appearance ?? "light", true));
+  applyContextChipVariables(root, getStandardPaintedThemeColors(appearance ?? "light"));
 }
 
 export function resolveThemeAppearance(
