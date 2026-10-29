@@ -5171,6 +5171,26 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       projection = applyToProjection(projection, event);
     }
 
+    if (
+      projection.thread.activeOrderKey != null &&
+      command.createdBy === "user" &&
+      command.scheduledTaskId === undefined &&
+      !isNativeMaintenanceCommand(command)
+    ) {
+      const now = yield* DateTime.now;
+      const event = yield* emit(
+        events,
+        command,
+      )({
+        type: "thread.metadata-updated",
+        threadId: command.threadId,
+        providerInstanceId: projection.thread.providerInstanceId,
+        occurredAt: now,
+        payload: { ...projection.thread, activeOrderKey: null, updatedAt: now },
+      });
+      projection = applyToProjection(projection, event);
+    }
+
     const continuedTaskId = projection.runs.find(
       (run) => run.id === command.restartContinuationOfRunId,
     )?.delegatedTaskId;

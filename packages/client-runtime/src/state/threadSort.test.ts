@@ -237,6 +237,12 @@ describe("sortActiveThreadsByOrderKey", () => {
   it("keeps new and reopened threads ahead of the saved order", () => {
     const sorted = sortActiveThreadsByOrderKey([
       {
+        id: "sent-again",
+        createdAt: "2026-03-01T08:00:00.000Z",
+        latestUserAuthoredMessageAt: "2026-03-09T14:00:00.000Z",
+        activeOrderKey: null,
+      },
+      {
         id: "arranged-first",
         createdAt: "2026-03-09T09:00:00.000Z",
         activeOrderKey: "f",
@@ -259,6 +265,7 @@ describe("sortActiveThreadsByOrderKey", () => {
       },
     ]);
     expect(sorted.map((thread) => thread.id)).toEqual([
+      "sent-again",
       "reopened",
       "new",
       "arranged-first",

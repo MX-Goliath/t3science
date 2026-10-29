@@ -116,10 +116,12 @@ export function getThreadSortTimestamp(
 function activeThreadAnchorTimestampMs(thread: {
   readonly createdAt: string;
   readonly unsettledAt?: string | null | undefined;
+  readonly latestUserAuthoredMessageAt?: string | null | undefined;
 }): number {
   return Math.max(
     toSortableTimestamp(thread.createdAt) ?? 0,
     toSortableTimestamp(thread.unsettledAt ?? undefined) ?? 0,
+    toSortableTimestamp(thread.latestUserAuthoredMessageAt ?? undefined) ?? 0,
   );
 }
 
@@ -300,6 +302,7 @@ export function sortActiveThreadsByOrderKey<
     readonly id: string;
     readonly createdAt: string;
     readonly unsettledAt?: string | null | undefined;
+    readonly latestUserAuthoredMessageAt?: string | null | undefined;
     readonly activeOrderKey?: string | null | undefined;
     readonly environmentId?: string | undefined;
   },

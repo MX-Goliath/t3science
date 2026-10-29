@@ -114,7 +114,9 @@ after the drop.
 
 New threads appear above the active threads you have arranged. Settling clears a thread's active
 position, so using **Un-settle** returns it to the top. Pinning and snoozing preserve its active
-position until you move it again. Thread activity does not change the order. The settled shelf
+position until you move it again or send a new message. Sending a message, including one added
+to the queue, moves that thread above the saved active order. Background agent activity does
+not change your manual order. Pinned threads keep their pinned position, and the settled shelf
 continues to use settlement time.
 
 If dragging is unavailable for one environment, update the T3 Code server running in that
@@ -148,7 +150,7 @@ This is on by default. Turn it off with **Settings → General → Working secti
 or **Settings → General → Working section** on iOS and Android. Each device keeps its own
 choice.
 
-While this is on, the active list is ordered by when each thread last came back to you, so you
+While this is on, the active list is ordered by your latest message or when the thread last came back to you, so you
 cannot drag or move threads within it. Your saved order returns when you turn it off.
 
 ### Group threads by project (beta)

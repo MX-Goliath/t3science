@@ -198,6 +198,10 @@ describe("createInboxReturnTracker", () => {
       "b",
       "a",
     ]);
+    const sentAgain = { ...a, latestUserAuthoredMessageAt: "1970-01-01T00:00:13Z" };
+    expect(
+      sortInboxThreadsByReturn([b, sentAgain], tracker.returnedAt).map((entry) => entry.id),
+    ).toEqual(["a", "b"]);
   });
 
   it("cancels pending timers for removed threads and disabled shelves", () => {

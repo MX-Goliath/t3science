@@ -4332,6 +4332,14 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           worktreePath: process.cwd(),
         });
         yield* orchestrator.dispatch({
+          type: "thread.active.reorder",
+          commandId: CommandId.make(
+            `runtime-layer-serialized-queue-order-before-send-${automatic}`,
+          ),
+          threadId,
+          orderKey: "a0",
+        });
+        yield* orchestrator.dispatch({
           type: "message.dispatch",
           createdBy: "user",
           creationSource: "web",
@@ -4343,6 +4351,18 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           modelSelection,
           dispatchMode: { type: "start_immediately" },
         });
+        assert.isNull((yield* orchestrator.getThreadProjection(threadId)).thread.activeOrderKey);
+        const activeSentAt = yield* DateTime.now;
+        yield* orchestrator.dispatch({
+          type: "thread.active.reorder",
+          commandId: CommandId.make(
+            `runtime-layer-serialized-queue-order-before-queue-${automatic}`,
+          ),
+          threadId,
+          orderKey: "b0",
+        });
+        yield* TestClock.adjust("1 second");
+        const firstQueuedAt = yield* DateTime.now;
         yield* orchestrator.dispatch({
           type: "message.dispatch",
           createdBy: automatic ? "agent" : "user",
@@ -4365,6 +4385,17 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           modelSelection,
           dispatchMode: { type: "queue_after_active" },
         });
+        assert.equal(
+          (yield* orchestrator.getThreadProjection(threadId)).thread.activeOrderKey,
+          automatic ? "b0" : null,
+        );
+        assert.deepEqual(
+          (yield* orchestrator.getShellSnapshot()).threads.find((thread) => thread.id === threadId)
+            ?.latestUserAuthoredMessageAt,
+          automatic ? activeSentAt : firstQueuedAt,
+        );
+        yield* TestClock.adjust("1 second");
+        const secondQueuedAt = yield* DateTime.now;
         yield* orchestrator.dispatch({
           type: "message.dispatch",
           createdBy: "user",
@@ -4379,6 +4410,12 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         });
 
         const before = yield* orchestrator.getThreadProjection(threadId);
+        assert.isNull(before.thread.activeOrderKey);
+        const queuedShell = (yield* orchestrator.getShellSnapshot()).threads.find(
+          (thread) => thread.id === threadId,
+        );
+        assert.isNull(queuedShell?.activeOrderKey);
+        assert.deepEqual(queuedShell?.latestUserAuthoredMessageAt, secondQueuedAt);
         const activeRun = before.runs.find((run) => run.status === "starting");
         const queuedRuns = before.runs
           .filter((run) => run.status === "queued")
