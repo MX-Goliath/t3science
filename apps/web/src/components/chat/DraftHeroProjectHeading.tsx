@@ -4,12 +4,15 @@ import { observeResize } from "~/lib/observeResize";
 
 export function DraftHeroProjectHeading({
   children,
+  companion,
   projectName,
 }: {
   children: ReactNode;
+  companion?: ReactNode;
   projectName: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const companionRef = useRef<HTMLSpanElement>(null);
   const inlineRef = useRef<HTMLSpanElement>(null);
   const [fitsInline, setFitsInline] = useState(false);
 
@@ -17,20 +20,29 @@ export function DraftHeroProjectHeading({
   useLayoutEffect(() => {
     const container = containerRef.current;
     const inline = inlineRef.current;
-    if (!container || !inline) return;
+    const companion = companionRef.current;
+    if (!container || !inline || !companion) return;
 
     // Measure the full inline heading independently of its current layout, so
     // moving the name below it cannot make the fit check oscillate.
-    const update = () =>
+    const update = () => {
+      const companionWidth = companion.getBoundingClientRect().width;
+      const gap = companionWidth > 0 ? Number.parseFloat(getComputedStyle(container).columnGap) : 0;
       setFitsInline(
-        inline.getBoundingClientRect().width <= container.getBoundingClientRect().width,
+        inline.getBoundingClientRect().width + companionWidth + gap <=
+          container.getBoundingClientRect().width,
       );
+    };
     update();
-    return observeResize([container, inline], update);
+    return observeResize([container, inline, companion], update);
   }, []);
 
   return (
-    <div ref={containerRef} className="group/draft-hero relative w-full" data-inline={fitsInline}>
+    <div
+      ref={containerRef}
+      className="group/draft-hero relative flex w-full items-center justify-center gap-3"
+      data-inline={fitsInline}
+    >
       <span
         aria-hidden="true"
         className="pointer-events-none invisible absolute inset-x-0 top-0 h-0 overflow-hidden"
@@ -45,7 +57,10 @@ export function DraftHeroProjectHeading({
           </span>
         </span>
       </span>
-      <h1 className="flex w-full flex-col items-center justify-center gap-2 text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl lg:group-data-[inline=true]/draft-hero:flex-row">
+      <span ref={companionRef} className="flex shrink-0 -translate-y-1 empty:hidden">
+        {companion}
+      </span>
+      <h1 className="flex min-w-0 flex-col items-center justify-center gap-2 text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl lg:group-data-[inline=true]/draft-hero:flex-row lg:group-data-[inline=true]/draft-hero:items-baseline">
         <span className="max-w-full lg:group-data-[inline=true]/draft-hero:shrink-0">
           What should we build
           <span className="lg:group-data-[inline=true]/draft-hero:hidden">?</span>

@@ -394,11 +394,11 @@ export function DraftHeroHeadline({
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
       {hasResolvedProject && !isScratchDraft ? (
-        <DraftHeroProjectHeading projectName={activeProjectDisplayName ?? "Choose a project"}>
-          <span className="inline-flex items-center justify-center gap-2">
-            <DraftHeroPet providerInstanceId={providerInstanceId} />
-            <span>{projectSelector}</span>
-          </span>
+        <DraftHeroProjectHeading
+          projectName={activeProjectDisplayName ?? "Choose a project"}
+          companion={<DraftHeroPet providerInstanceId={providerInstanceId} />}
+        >
+          {projectSelector}
         </DraftHeroProjectHeading>
       ) : (
         <h1 className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
