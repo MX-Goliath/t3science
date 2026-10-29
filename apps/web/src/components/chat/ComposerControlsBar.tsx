@@ -166,6 +166,7 @@ export function ComposerControlsBar(props: {
     planModeEnabled,
     isComposerOwned: true,
     effortDisplay: props.effortDisplay,
+    onOpenModelPicker: () => onModelPickerOpenChange(true),
     triggerClassName: cn("ps-1.5 pe-1", TEXT_CONTROL_STATES),
     // Permissions always live in the effort menu, so the section never unmounts while open.
     extraMenuContent: (

@@ -1,0 +1,95 @@
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  color: var(--muted-foreground);
+  outline: none;
+  transition:
+    background-color 150ms,
+    color 150ms,
+    transform 150ms;
+}
+
+.icon:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.icon[data-speed-active="true"] {
+  color: #438aff;
+}
+
+.icon:active {
+  transform: scale(0.9);
+}
+
+.icon:focus-visible,
+.slider:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.icon:disabled {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.fill {
+  background: #3983fa;
+  transition: width 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.thumb {
+  transition:
+    left 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    scale 150ms;
+}
+
+.slider:active .thumb {
+  scale: 1.08;
+}
+
+.range {
+  appearance: none;
+}
+
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.range::-moz-range-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.label {
+  animation: reasoning-settings-reveal 160ms ease-out;
+}
+
+@keyframes reasoning-settings-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card *,
+  .icon {
+    animation: none;
+    transition: none;
+  }
+}
+
+.effort {
+  color: #438aff;
+}

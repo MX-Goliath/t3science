@@ -20,6 +20,7 @@ import type { EffortDisplay } from "@t3tools/contracts/settings";
 import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionCurrentLabel,
+  getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
@@ -44,6 +45,7 @@ import { ComposerControl, ComposerControlIcon, type ComposerControlSize } from "
 import { focusRequestedPermission, useComposerMenuProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
 import { EffortGlyph, resolveEffortGlyph } from "./EffortGlyph";
+import { ReasoningSettingsCard } from "./ReasoningSettingsCard";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -336,6 +338,7 @@ interface TraitsMenuContentProps {
   extraMenuOwnsModeShortcut?: boolean;
   /** Extra tooltip text naming what else the menu holds. */
   extraMenuHint?: string;
+  onOpenModelPicker?: () => void;
 }
 
 export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
@@ -350,6 +353,8 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   allowPromptInjectedEffort = true,
   planModeEnabled,
   descriptorIds,
+  isComposerOwned,
+  onOpenModelPicker,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const modelSelection =
@@ -406,6 +411,54 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     );
     if ("modelOptions" in change) updateModelOptions(change.modelOptions);
   };
+  const reasoningDescriptor = isComposerOwned
+    ? selectDescriptors.find((descriptor) => REASONING_SELECT_DESCRIPTOR_IDS.has(descriptor.id))
+    : undefined;
+  const speedDescriptor = reasoningDescriptor
+    ? (selectDescriptors.find((descriptor) => descriptor.id === "serviceTier") ??
+      booleanDescriptors.find((descriptor) => descriptor.id === "fastMode"))
+    : undefined;
+  const reasoningValue = reasoningDescriptor
+    ? ultrathinkPromptControlled && reasoningDescriptor.id === primarySelectDescriptor?.id
+      ? "ultrathink"
+      : getDescriptorStringValue(reasoningDescriptor, modelSelection, reportedModelSelection)
+    : null;
+  const resetReasoning = () => {
+    if (!reasoningDescriptor || ultrathinkInBodyText) return;
+    const defaults = getProviderOptionDescriptors({ caps: selected.caps });
+    const effortDefault = defaults.find((descriptor) => descriptor.id === reasoningDescriptor.id);
+    const effortValue =
+      getProviderOptionCurrentValue(effortDefault) ?? reasoningDescriptor.options[0]?.id;
+    if (typeof effortValue === "string") {
+      onPromptEdit?.(
+        (prompt) =>
+          getTraitSelectChange(selected, reasoningDescriptor, prompt, effortValue)?.prompt ??
+          prompt,
+      );
+    }
+    let nextDescriptors = replaceDescriptorCurrentValue(
+      descriptors,
+      reasoningDescriptor.id,
+      effortValue,
+    );
+    if (speedDescriptor) {
+      const defaultSpeed = defaults.find((descriptor) => descriptor.id === speedDescriptor.id);
+      nextDescriptors = replaceDescriptorCurrentValue(
+        nextDescriptors,
+        speedDescriptor.id,
+        speedDescriptor.type === "boolean"
+          ? false
+          : (getProviderOptionCurrentValue(defaultSpeed) ?? speedDescriptor.options[0]?.id),
+      );
+    }
+    updateDescriptors(nextDescriptors);
+  };
+  const remainingSelectDescriptors = selectDescriptors.filter(
+    (descriptor) => descriptor !== reasoningDescriptor && descriptor !== speedDescriptor,
+  );
+  const remainingBooleanDescriptors = booleanDescriptors.filter(
+    (descriptor) => descriptor !== speedDescriptor,
+  );
 
   if (!hasAnyControls) {
     return null;
@@ -439,7 +492,35 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 
   return (
     <>
-      {selectDescriptors.map((descriptor, index) => {
+      {reasoningDescriptor ? (
+        <ReasoningSettingsCard
+          effort={reasoningDescriptor}
+          value={reasoningValue}
+          speed={speedDescriptor ?? null}
+          speedValue={getProviderOptionCurrentValue(
+            speedDescriptor,
+            modelSelection,
+            reportedModelSelection,
+          )}
+          modelLabel={
+            models.find((entry) => entry.slug === normalizeModelSlug(model, provider))?.name ??
+            model ??
+            "Model"
+          }
+          effortDisabled={ultrathinkInBodyText}
+          onEffortChange={(value) => handleSelectChange(reasoningDescriptor, value)}
+          onSpeedChange={(value) => {
+            if (speedDescriptor) {
+              updateDescriptors(
+                replaceDescriptorCurrentValue(descriptors, speedDescriptor.id, value),
+              );
+            }
+          }}
+          onReset={resetReasoning}
+          onOpenModelPicker={onOpenModelPicker}
+        />
+      ) : null}
+      {remainingSelectDescriptors.map((descriptor, index) => {
         const selectedValue =
           ultrathinkPromptControlled && descriptor.id === primarySelectDescriptor?.id
             ? "ultrathink"
@@ -447,7 +528,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 
         return (
           <div key={descriptor.id}>
-            {index > 0 ? <MenuDivider /> : null}
+            {index > 0 || reasoningDescriptor ? <MenuDivider /> : null}
             <MenuGroup>
               <div className="px-2 pt-1.5 pb-1 font-medium text-muted-foreground text-xs">
                 {descriptor.label}
@@ -488,12 +569,14 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
           </div>
         );
       })}
-      {booleanDescriptors.map((descriptor, index) => {
+      {remainingBooleanDescriptors.map((descriptor, index) => {
         const selectedValue = descriptor.currentValue === true ? "on" : "off";
 
         return (
           <div key={descriptor.id}>
-            {index > 0 || selectDescriptors.length > 0 ? <MenuDivider /> : null}
+            {index > 0 || remainingSelectDescriptors.length > 0 || reasoningDescriptor ? (
+              <MenuDivider />
+            ) : null}
             <MenuGroup>
               <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
                 {descriptor.label}
@@ -558,6 +641,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   extraMenuContent,
   extraMenuOwnsModeShortcut,
   extraMenuHint,
+  onOpenModelPicker,
   size = "sm",
   hidden = false,
   disabled = false,
@@ -571,6 +655,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   const composerFloatingLayerProps = useComposerMenuProps();
   const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden || disabled);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const openingModelPickerRef = useRef(false);
   const { visibleDescriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
     getTraitsSectionVisibility({
       provider,
@@ -641,9 +726,22 @@ export const TraitsPicker = memo(function TraitsPicker({
     <Menu
       open={isMenuOpen}
       onOpenChange={(open) => {
+        if (open) openingModelPickerRef.current = false;
         setIsMenuOpen(open && !disabled);
       }}
-      onOpenChangeComplete={(open) => focusRequestedPermission(open, triggerRef.current)}
+      onOpenChangeComplete={(open) => {
+        const trigger = triggerRef.current;
+        if (open && isComposerOwned && !trigger?.dataset.openToPermissions) {
+          const popupId = trigger?.getAttribute("aria-controls");
+          if (popupId) {
+            document
+              .getElementById(popupId)
+              ?.querySelector<HTMLInputElement>('input[type="range"]:not(:disabled)')
+              ?.focus({ preventScroll: true });
+          }
+        }
+        focusRequestedPermission(open, trigger);
+      }}
     >
       <Tooltip>
         <TooltipTrigger
@@ -744,7 +842,16 @@ export const TraitsPicker = memo(function TraitsPicker({
         </TooltipTrigger>
         <TooltipPopup side="top">{triggerDescription}</TooltipPopup>
       </Tooltip>
-      <MenuPopup align="start" {...(isComposerOwned ? composerFloatingLayerProps : {})}>
+      <MenuPopup
+        align="start"
+        {...(isComposerOwned ? composerFloatingLayerProps : {})}
+        {...(isComposerOwned && onOpenModelPicker
+          ? {
+              finalFocus: () =>
+                openingModelPickerRef.current ? false : composerFloatingLayerProps.finalFocus?.(),
+            }
+          : {})}
+      >
         <TraitsMenuContent
           provider={provider}
           {...(instanceId ? { instanceId } : {})}
@@ -756,6 +863,16 @@ export const TraitsPicker = memo(function TraitsPicker({
           reportedModelSelection={reportedModelSelection}
           allowPromptInjectedEffort={allowPromptInjectedEffort}
           planModeEnabled={planModeEnabled}
+          {...(isComposerOwned ? { isComposerOwned } : {})}
+          {...(onOpenModelPicker
+            ? {
+                onOpenModelPicker: () => {
+                  openingModelPickerRef.current = true;
+                  setIsMenuOpen(false);
+                  onOpenModelPicker();
+                },
+              }
+            : {})}
           {...(descriptorIds ? { descriptorIds } : {})}
           {...persistence}
         />
