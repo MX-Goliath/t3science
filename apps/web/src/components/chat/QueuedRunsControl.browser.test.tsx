@@ -175,37 +175,7 @@ it("shows who sent a queued message and folds automation and agent prompts", asy
   await expect.element(page.getByText("Continue where you left off.")).toBeVisible();
 });
 
-it("stays inside the timeline scroller instead of growing the chat column", async () => {
-  setup();
-  state.projection = { projection: { messages: [] } };
-  state.workflow = {
-    activeRun: { id: "run:active" },
-    canPromoteToSteer: true,
-    queuedRuns: [
-      {
-        run: { id: "run:queued", userMessageId: "message:queued" },
-        text: "Later",
-        attachments: [],
-      },
-    ],
-  };
-  // Mirrors ChatView: a scrollable column, a positioned wrapper, then a non-positioned scroller.
-  await using screen = await renderUi(
-    <div data-testid="column" style={{ height: 200, overflowY: "auto" }}>
-      <div style={{ position: "relative", height: "100%" }}>
-        <div style={{ height: "100%", overflowY: "auto" }}>
-          <div style={{ height: 1000 }} />
-          <QueuedRunsControl {...baseProps} />
-        </div>
-      </div>
-    </div>,
-  );
-  await expect.element(page.getByText("Later", { exact: true })).toBeInTheDocument();
-  const column = screen.getByTestId("column").element();
-  expect(column.scrollHeight).toBe(column.clientHeight);
-});
-
-it("keeps keyboard focus when moving into the collapsed part of the queue", async () => {
+it("keeps keyboard focus when reordering in the scrollable queue", async () => {
   setup();
   state.projection = { projection: { messages: [] } };
   state.workflow = {
@@ -219,7 +189,6 @@ it("keeps keyboard focus when moving into the collapsed part of the queue", asyn
     })),
   };
   await using screen = await renderQueue();
-  await expect.element(screen.getByText("third", { exact: true })).not.toBeInTheDocument();
   const grip = screen.getByRole("button", { name: /Reorder queued message 2 of 4/ });
   await userEvent.click(grip);
   await userEvent.keyboard("{ArrowDown}");
@@ -227,7 +196,9 @@ it("keeps keyboard focus when moving into the collapsed part of the queue", asyn
   await expect.element(screen.getByText("third", { exact: true })).toBeVisible();
   await expect.element(screen.getByText("fourth", { exact: true })).toBeVisible();
   await expect.element(grip).toHaveFocus();
-  await expect.element(screen.getByRole("button", { name: "Show fewer" })).toBeVisible();
+  await screen.getByRole("button", { name: "Collapse queued messages" }).click();
+  await expect.element(screen.getByText("third", { exact: true })).not.toBeVisible();
+  await screen.getByRole("button", { name: "Expand queued messages" }).click();
   await expect
     .element(screen.getByRole("button", { name: "Send now", exact: true }).nth(3))
     .toBeVisible();

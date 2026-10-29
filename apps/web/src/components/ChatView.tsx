@@ -3066,15 +3066,6 @@ export default function ChatView(props: ChatViewProps) {
     goalNow !== null ||
     shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
-  // The queue control is mounted for every server thread but joins the footer only while it shows
-  // something, by its own rule: an optimistic message stops counting once the server has it.
-  const hasQueuedTurns =
-    queuedRunCount > 0 ||
-    optimisticUserMessages.some(
-      (message) =>
-        message.inputIntent === "queued_turn" &&
-        !serverProjection?.messages.some((committed) => committed.id === message.id),
-    );
   const scrollToEndSummary =
     [
       childInputNow === null ? null : "Subagent waiting",
@@ -3082,14 +3073,11 @@ export default function ChatView(props: ChatViewProps) {
     ]
       .filter((part) => part !== null)
       .join(" · ") || null;
-  // The end of the timeline holds the thread's present and next turns: what it is doing now,
-  // its lifecycle status, guest messages awaiting you, then your queued messages.
   const timelineFooter =
     pendingHandoff === null &&
     !hasThreadNow &&
     threadStatusLine === null &&
-    pendingGuestMessageCount === 0 &&
-    !hasQueuedTurns ? null : (
+    pendingGuestMessageCount === 0 ? null : (
       <>
         {pendingHandoff === null ? null : (
           <div className="chat-content-lane">
@@ -3116,7 +3104,6 @@ export default function ChatView(props: ChatViewProps) {
             onFileOpen={openFileAttachmentStable}
           />
         ) : null}
-        {hasQueuedTurns ? queuedRunsControl : null}
       </>
     );
 
@@ -3600,6 +3587,7 @@ export default function ChatView(props: ChatViewProps) {
                                             : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
+                              queuedRunsControl={queuedRunsControl}
                               bannerItems={isDraftHeroState ? [] : composerBannerItems}
                               resumeCompactionTokens={resumeCompactionTokens}
                               keepFullHistory={keepFullHistory}

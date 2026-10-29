@@ -15,7 +15,7 @@ import {
   ArrowUpIcon,
   GripVerticalIcon,
   CalendarClockIcon,
-  ChevronDownIcon,
+  ListOrderedIcon,
   Clock3Icon,
   MessagesSquareIcon,
   PencilIcon,
@@ -33,6 +33,7 @@ import { cn } from "~/lib/utils";
 import { Button, InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
+import { ComposerBanner } from "./ComposerBanner";
 import { GuestMessageName } from "./guestMessageStyle";
 import { TimelineRowTimestamp } from "./TimelineRowParts";
 import { FoldedMessageHeader, useScheduledTaskTitle } from "./TimelineUserMessageRow";
@@ -51,8 +52,6 @@ interface QueuedRowThumbnail {
 }
 
 const QUEUED_RUN_DRAG_TYPE = "application/x-t3code-queued-run";
-// A longer queue shows its first messages and a button that shows the rest.
-const QUEUE_VISIBLE_ROWS = 3;
 
 export interface QueuedRunsControlHandle {
   steerNext: (repeat: boolean) => boolean;
@@ -99,7 +98,7 @@ export function QueuedRunsControl({
   const promote = useAtomCommand(threadEnvironment.promoteQueuedRun);
   const resume = useAtomCommand(threadEnvironment.resumeThreadQueue);
   const cancel = useAtomCommand(threadEnvironment.cancelQueuedRun);
-  const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const queueListId = useId();
   const [busyRunId, setBusyRunId] = useState<RunId | null>(null);
   const [dragState, setDragState] = useState<{
@@ -228,7 +227,7 @@ export function QueuedRunsControl({
         return false;
       }
       if (!repeat) {
-        setShowAll(true);
+        setExpanded(true);
         props.onEditQueuedRun({
           runId: latest.run.id,
           messageId: latest.run.userMessageId,
@@ -251,265 +250,265 @@ export function QueuedRunsControl({
     setBusyRunId(null);
   };
 
-  const collapsible = items.length > QUEUE_VISIBLE_ROWS;
-  const visibleItems = collapsible && !showAll ? items.slice(0, QUEUE_VISIBLE_ROWS - 1) : items;
-
   return (
-    <section
-      aria-label={`${items.length} queued message${items.length === 1 ? "" : "s"}`}
-      data-thread-queue="true"
-      // Anchors the sr-only live region; unanchored, it escapes the timeline scroller and makes the chat column scroll.
-      className="relative mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-2 pb-4"
-    >
-      <span className="sr-only" aria-live="polite">
-        {items.length} queued
-      </span>
-      <ol className="flex flex-col items-end gap-3" id={queueListId}>
-        {visibleItems.map((item, position) => {
-          const previewText = assistantCitationsToPlainText(
-            replaceComposerContextReferences(item.text, (reference) =>
-              reference.kind === "image" && item.thumbnails.length > 0 ? "" : reference.label,
-            ),
-          ).trim();
-          const rowRunId = item.runId;
-          const rowServerIndex = item.serverIndex;
-          const isEditing = rowRunId !== null && rowRunId === props.editingRunId;
-          const rowDraggable =
-            rowRunId !== null && rowServerIndex !== null && canReorder && busyRunId === null;
-          return (
-            <li
-              key={item.key}
-              aria-label={`Queued message ${position + 1} of ${items.length}, not sent`}
-              aria-posinset={position + 1}
-              aria-setsize={items.length}
-              aria-current={isEditing ? "true" : undefined}
-              className={cn(
-                "group/queued relative flex w-full flex-col items-end gap-1 transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none",
-                dragState !== null && dragState.runId === item.runId && "opacity-50",
-              )}
-              draggable={rowDraggable}
-              onDragStart={(event) => {
-                if (item.runId === null || dragArmedRunIdRef.current !== item.runId) {
-                  event.preventDefault();
-                  return;
-                }
-                event.dataTransfer.setData(QUEUED_RUN_DRAG_TYPE, item.runId);
-                event.dataTransfer.effectAllowed = "move";
-                setDragState({ runId: item.runId, insertIndex: null });
-              }}
-              onDragEnd={() => {
-                dragArmedRunIdRef.current = null;
-                setDragState(null);
-              }}
-              onDragOver={(event) => {
-                if (dragState === null || item.serverIndex === null) return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-                const rect = event.currentTarget.getBoundingClientRect();
-                const insertIndex =
-                  event.clientY < rect.top + rect.height / 2
-                    ? item.serverIndex
-                    : item.serverIndex + 1;
-                if (dragState.insertIndex !== insertIndex) {
-                  setDragState({ runId: dragState.runId, insertIndex });
-                }
-              }}
-              onDrop={(event) => {
-                if (dragState === null) return;
-                event.preventDefault();
-                completeDrag(dragState.runId, dragState.insertIndex);
-              }}
-            >
-              {item.serverIndex !== null && dragState?.insertIndex === item.serverIndex ? (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 -top-1.5 h-0.5 rounded bg-primary/70"
-                />
-              ) : null}
-              {item.serverIndex === queued.length - 1 &&
-              dragState?.insertIndex === queued.length ? (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 -bottom-1.5 h-0.5 rounded bg-primary/70"
-                />
-              ) : null}
-              <QueuedMessage
-                environmentId={props.environmentId}
-                message={item.message}
-                previewText={previewText}
-                thumbnails={item.thumbnails}
-                isEditing={isEditing}
-                timestampFormat={props.timestampFormat}
-                onOpenThread={props.onOpenThread}
-              >
-                {items.length > 1 && canReorder && rowRunId !== null && rowServerIndex !== null ? (
-                  <Button
-                    size="icon-xs"
-                    variant="ghost-muted"
-                    aria-label={`Reorder queued message ${position + 1} of ${items.length} (drag, or press the arrow keys)`}
-                    className="group/grip cursor-grab active:cursor-grabbing"
-                    // Not `disabled`: that drops keyboard focus mid-move and breaks repeated arrow presses.
-                    aria-disabled={busyRunId !== null || undefined}
-                    onPointerDown={() => {
-                      if (busyRunId === null) dragArmedRunIdRef.current = rowRunId;
-                    }}
-                    onKeyDown={(event) => {
-                      if (busyRunId !== null) return;
-                      if (event.key === "ArrowUp" && rowServerIndex > 0) {
-                        event.preventDefault();
-                        void move(rowRunId, queued[rowServerIndex - 1]?.run.id ?? null);
-                      }
-                      if (event.key === "ArrowDown" && rowServerIndex < queued.length - 1) {
-                        event.preventDefault();
-                        // Moving into the collapsed rows would unmount the focused grip.
-                        if (rowServerIndex + 1 >= visibleItems.length) setShowAll(true);
-                        void move(rowRunId, queued[rowServerIndex + 2]?.run.id ?? null);
-                      }
-                    }}
+    <ComposerBanner.Attachment>
+      <ComposerBanner.Root
+        role="region"
+        aria-label={`${items.length} queued message${items.length === 1 ? "" : "s"}`}
+        data-thread-queue="true"
+        data-chat-composer-collapsed-controls="true"
+        className="relative z-0"
+      >
+        <span className="sr-only" aria-live="polite">
+          {items.length} queued
+        </span>
+        <ComposerBanner.Row
+          render={<button type="button" />}
+          aria-label={expanded ? "Collapse queued messages" : "Expand queued messages"}
+          aria-expanded={expanded}
+          aria-controls={queueListId}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <ComposerBanner.Icon>
+            <ListOrderedIcon />
+          </ComposerBanner.Icon>
+          <ComposerBanner.Content className="text-muted-foreground">Queued</ComposerBanner.Content>
+          <ComposerBanner.Actions>
+            <ComposerBanner.Count>{items.length}</ComposerBanner.Count>
+            <ComposerBanner.ToggleIcon expanded={expanded} />
+          </ComposerBanner.Actions>
+        </ComposerBanner.Row>
+        <ComposerBanner.Scroll className={cn("max-h-32", !expanded && "hidden")}>
+          <ComposerBanner.Children render={<ol />} id={queueListId}>
+            {items.map((item, position) => {
+              const previewText = assistantCitationsToPlainText(
+                replaceComposerContextReferences(item.text, (reference) =>
+                  reference.kind === "image" && item.thumbnails.length > 0 ? "" : reference.label,
+                ),
+              ).trim();
+              const rowRunId = item.runId;
+              const rowServerIndex = item.serverIndex;
+              const isEditing = rowRunId !== null && rowRunId === props.editingRunId;
+              const rowDraggable =
+                rowRunId !== null && rowServerIndex !== null && canReorder && busyRunId === null;
+              return (
+                <ComposerBanner.Row
+                  render={<li />}
+                  key={item.key}
+                  aria-label={`Queued message ${position + 1} of ${items.length}, not sent`}
+                  aria-posinset={position + 1}
+                  aria-setsize={items.length}
+                  aria-current={isEditing ? "true" : undefined}
+                  className={cn(
+                    "group/queued relative rounded-sm",
+                    isEditing && "bg-accent text-accent-foreground",
+                    dragState !== null && dragState.runId === item.runId && "opacity-50",
+                  )}
+                  draggable={rowDraggable}
+                  onDragStart={(event) => {
+                    if (item.runId === null || dragArmedRunIdRef.current !== item.runId) {
+                      event.preventDefault();
+                      return;
+                    }
+                    event.dataTransfer.setData(QUEUED_RUN_DRAG_TYPE, item.runId);
+                    event.dataTransfer.effectAllowed = "move";
+                    setDragState({ runId: item.runId, insertIndex: null });
+                  }}
+                  onDragEnd={() => {
+                    dragArmedRunIdRef.current = null;
+                    setDragState(null);
+                  }}
+                  onDragOver={(event) => {
+                    if (dragState === null || item.serverIndex === null) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const insertIndex =
+                      event.clientY < rect.top + rect.height / 2
+                        ? item.serverIndex
+                        : item.serverIndex + 1;
+                    if (dragState.insertIndex !== insertIndex) {
+                      setDragState({ runId: dragState.runId, insertIndex });
+                    }
+                  }}
+                  onDrop={(event) => {
+                    if (dragState === null) return;
+                    event.preventDefault();
+                    completeDrag(dragState.runId, dragState.insertIndex);
+                  }}
+                >
+                  {item.serverIndex !== null && dragState?.insertIndex === item.serverIndex ? (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-x-0 top-0 h-0.5 rounded bg-primary/70"
+                    />
+                  ) : null}
+                  {item.serverIndex === queued.length - 1 &&
+                  dragState?.insertIndex === queued.length ? (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 rounded bg-primary/70"
+                    />
+                  ) : null}
+                  <ComposerBanner.Icon aria-hidden={false}>
+                    {items.length > 1 &&
+                    canReorder &&
+                    rowRunId !== null &&
+                    rowServerIndex !== null ? (
+                      <Button
+                        size="icon-xs"
+                        variant="ghost-muted"
+                        aria-label={`Reorder queued message ${position + 1} of ${items.length} (drag, or press the arrow keys)`}
+                        className="group/grip cursor-grab active:cursor-grabbing"
+                        // Not `disabled`: that drops keyboard focus mid-move and breaks repeated arrow presses.
+                        aria-disabled={busyRunId !== null || undefined}
+                        onPointerDown={() => {
+                          if (busyRunId === null) dragArmedRunIdRef.current = rowRunId;
+                        }}
+                        onKeyDown={(event) => {
+                          if (busyRunId !== null) return;
+                          if (event.key === "ArrowUp" && rowServerIndex > 0) {
+                            event.preventDefault();
+                            void move(rowRunId, queued[rowServerIndex - 1]?.run.id ?? null);
+                          }
+                          if (event.key === "ArrowDown" && rowServerIndex < queued.length - 1) {
+                            event.preventDefault();
+                            void move(rowRunId, queued[rowServerIndex + 2]?.run.id ?? null);
+                          }
+                        }}
+                      >
+                        <span className="text-xs font-medium tabular-nums group-hover/queued:hidden group-focus-visible/grip:hidden">
+                          {position + 1}
+                        </span>
+                        <GripVerticalIcon className="hidden group-hover/queued:block group-focus-visible/grip:block" />
+                      </Button>
+                    ) : items.length > 1 ? (
+                      <span className="px-1.5 font-medium tabular-nums">{position + 1}</span>
+                    ) : null}
+                  </ComposerBanner.Icon>
+                  <QueuedMessage
+                    environmentId={props.environmentId}
+                    message={item.message}
+                    previewText={previewText}
+                    thumbnails={item.thumbnails}
+                    timestampFormat={props.timestampFormat}
+                    onOpenThread={props.onOpenThread}
                   >
-                    <span className="text-xs font-medium tabular-nums group-hover/queued:hidden group-focus-visible/grip:hidden">
-                      {position + 1}
-                    </span>
-                    <GripVerticalIcon className="hidden group-hover/queued:block group-focus-visible/grip:block" />
-                  </Button>
-                ) : items.length > 1 ? (
-                  <span className="px-1.5 font-medium tabular-nums">{position + 1}</span>
-                ) : null}
-                {canSend && !isEditing ? (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger render={<span className="flex shrink-0" />}>
+                    {canSend && !isEditing ? (
+                      <>
+                        <Tooltip>
+                          <TooltipTrigger render={<span className="flex shrink-0" />}>
+                            <Button
+                              size="xs"
+                              variant="ghost-muted"
+                              disabled={item.runId === null || busyRunId !== null}
+                              onClick={() => {
+                                if (item.runId !== null) {
+                                  void sendQueuedMessage(item.runId);
+                                }
+                              }}
+                            >
+                              <ArrowUpIcon />
+                              Send now
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipPopup>
+                            {`${workflow?.canSendNow ? "Start a turn with this message" : workflow?.promoteSkipsCompaction ? "Skip compaction and send this message" : "Send into the current turn"}${item.serverIndex === 0 && props.steerShortcutLabel ? ` (${props.steerShortcutLabel})` : ""}`}
+                          </TooltipPopup>
+                        </Tooltip>
+                      </>
+                    ) : null}
+                    {item.pending ? (
+                      <span className="flex items-center gap-1 px-1">
+                        <Clock3Icon aria-hidden className="size-3" />
+                        Saving
+                      </span>
+                    ) : null}
+                    {isEditing ? (
+                      <>
+                        <span className="sr-only">Editing in the composer</span>
                         <Button
                           size="xs"
-                          variant="ghost-muted"
-                          disabled={item.runId === null || busyRunId !== null}
-                          onClick={() => {
-                            if (item.runId !== null) {
-                              void sendQueuedMessage(item.runId);
-                            }
-                          }}
+                          variant="ghost"
+                          aria-label="Cancel editing queued message"
+                          onClick={props.onCancelEdit}
                         >
-                          <ArrowUpIcon />
-                          Send now
+                          Cancel
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipPopup>
-                        {`${workflow?.canSendNow ? "Start a turn with this message" : workflow?.promoteSkipsCompaction ? "Skip compaction and send this message" : "Send into the current turn"}${item.serverIndex === 0 && props.steerShortcutLabel ? ` (${props.steerShortcutLabel})` : ""}`}
-                      </TooltipPopup>
-                    </Tooltip>
-                  </>
-                ) : null}
-                {item.pending ? (
-                  <span className="flex items-center gap-1 px-1">
-                    <Clock3Icon aria-hidden className="size-3" />
-                    Saving
-                  </span>
-                ) : null}
-                {isEditing ? (
-                  <>
-                    <span className="px-1 text-foreground">Editing in the composer</span>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      aria-label="Cancel editing queued message"
-                      onClick={props.onCancelEdit}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Tooltip>
-                      {/* The span keeps the tooltip, and its reason, on a disabled button. */}
-                      <TooltipTrigger render={<span className="flex shrink-0" />}>
-                        <Button
-                          size="icon-xs"
-                          variant="ghost-muted"
-                          aria-label="Edit queued message"
-                          disabled={
-                            item.runId === null ||
-                            !item.editable ||
-                            busyRunId !== null ||
-                            props.editBlockedReason !== null
-                          }
-                          onClick={() => {
-                            if (item.runId !== null && item.messageId !== null) {
-                              props.onEditQueuedRun({
-                                runId: item.runId,
-                                messageId: item.messageId,
-                                text: item.text,
-                                attachments: item.attachments,
-                              });
+                      </>
+                    ) : (
+                      <>
+                        <Tooltip>
+                          {/* The span keeps the tooltip, and its reason, on a disabled button. */}
+                          <TooltipTrigger render={<span className="flex shrink-0" />}>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost-muted"
+                              aria-label="Edit queued message"
+                              disabled={
+                                item.runId === null ||
+                                !item.editable ||
+                                busyRunId !== null ||
+                                props.editBlockedReason !== null
+                              }
+                              onClick={() => {
+                                if (item.runId !== null && item.messageId !== null) {
+                                  props.onEditQueuedRun({
+                                    runId: item.runId,
+                                    messageId: item.messageId,
+                                    text: item.text,
+                                    attachments: item.attachments,
+                                  });
+                                }
+                              }}
+                            >
+                              <PencilIcon />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipPopup>
+                            {props.editBlockedReason ??
+                              `Edit in the composer${item.serverIndex === queued.length - 1 && props.editShortcutLabel ? ` (${props.editShortcutLabel})` : ""}`}
+                          </TooltipPopup>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size="icon-xs"
+                                variant="ghost-muted"
+                                aria-label="Remove queued message"
+                                disabled={item.runId === null || busyRunId !== null}
+                                onClick={() => {
+                                  if (item.runId !== null) void remove(item.runId);
+                                }}
+                              />
                             }
-                          }}
-                        >
-                          <PencilIcon />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipPopup>
-                        {props.editBlockedReason ??
-                          `Edit in the composer${item.serverIndex === queued.length - 1 && props.editShortcutLabel ? ` (${props.editShortcutLabel})` : ""}`}
-                      </TooltipPopup>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            size="icon-xs"
-                            variant="ghost-muted"
-                            aria-label="Remove queued message"
-                            disabled={item.runId === null || busyRunId !== null}
-                            onClick={() => {
-                              if (item.runId !== null) void remove(item.runId);
-                            }}
-                          />
-                        }
-                      >
-                        <XIcon />
-                      </TooltipTrigger>
-                      <TooltipPopup>Remove from queue</TooltipPopup>
-                    </Tooltip>
-                  </>
-                )}
-              </QueuedMessage>
-            </li>
-          );
-        })}
-      </ol>
-      {collapsible ? (
-        <div className="self-end pe-1 text-xs pointer-coarse:[&_[data-slot=inline-button]]:relative pointer-coarse:[&_[data-slot=inline-button]]:after:absolute pointer-coarse:[&_[data-slot=inline-button]]:after:-inset-x-1.5 pointer-coarse:[&_[data-slot=inline-button]]:after:-inset-y-3.5">
-          <InlineButton
-            tone="muted"
-            aria-expanded={showAll}
-            aria-controls={queueListId}
-            // Keep the composer focused; keyboard activation still works.
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={() => setShowAll((value) => !value)}
-          >
-            {showAll ? "Show fewer" : `Show all ${items.length} queued`}
-            <ChevronDownIcon
-              aria-hidden
-              className={cn(
-                "size-3.5 transition-transform duration-150 motion-reduce:transition-none",
-                showAll && "rotate-180",
-              )}
-            />
-          </InlineButton>
-        </div>
-      ) : null}
-    </section>
+                          >
+                            <XIcon />
+                          </TooltipTrigger>
+                          <TooltipPopup>Remove from queue</TooltipPopup>
+                        </Tooltip>
+                      </>
+                    )}
+                  </QueuedMessage>
+                </ComposerBanner.Row>
+              );
+            })}
+          </ComposerBanner.Children>
+        </ComposerBanner.Scroll>
+      </ComposerBanner.Root>
+    </ComposerBanner.Attachment>
   );
 }
 
 type QueuedRunMessage = NonNullable<ThreadQueueProjection["messages"][number]>;
 
-/** A queued turn wears its sent form's attribution; only the dashed edge and controls differ. */
 function QueuedMessage(props: {
   readonly environmentId: EnvironmentId;
   readonly message: QueuedRunMessage | undefined;
   readonly previewText: string;
   readonly thumbnails: ReadonlyArray<QueuedRowThumbnail>;
-  readonly isEditing: boolean;
   readonly timestampFormat: TimestampFormat;
   readonly onOpenThread: (threadId: ThreadId) => void;
   readonly children: ReactNode;
@@ -539,51 +538,76 @@ function QueuedMessage(props: {
             summary: props.previewText.split(/\r?\n/).find((line) => line.trim()) ?? "",
           }
         : null;
-  const bodyVisible = fold === null || expanded;
+  const bodyVisible = fold !== null && expanded;
 
   return (
     <>
-      {attribution === "t3code" ? (
-        <p className="me-1 text-2xs text-muted-foreground/70">Sent by T3 Code</p>
-      ) : null}
-      {presentation?.guestName === undefined ? null : (
-        <GuestMessageName name={presentation.guestName} />
-      )}
-      {/* Dashed and unfilled: a turn that has not been sent yet. */}
-      <div
-        className={cn(
-          "flex min-w-0 max-w-[80%] flex-col rounded-2xl border border-dashed text-sm",
-          props.isEditing
-            ? "border-primary/60 text-foreground"
-            : attribution === "guest"
-              ? "border-guest/50 text-muted-foreground"
-              : "border-muted-foreground/40 text-muted-foreground",
-          fold === null && "px-3 py-2",
-          fold !== null && expanded && "w-full",
-        )}
-      >
-        {fold ? (
-          <FoldedMessageHeader
-            icon={fold.icon}
-            label={fold.label}
-            summary={fold.summary}
-            expanded={expanded}
-            onToggle={() => setExpanded((value) => !value)}
-          />
-        ) : null}
+      <ComposerBanner.Content className="flex-col items-stretch gap-0 text-foreground/80">
+        <div className="flex min-w-0 items-center gap-1">
+          {attribution === "t3code" ? (
+            <span className="shrink-0 text-2xs text-muted-foreground">Sent by T3 Code</span>
+          ) : null}
+          {presentation?.guestName === undefined ? null : (
+            <GuestMessageName name={presentation.guestName} />
+          )}
+          {fold ? (
+            <FoldedMessageHeader
+              icon={fold.icon}
+              label={fold.label}
+              summary={fold.summary}
+              expanded={expanded}
+              onToggle={() => setExpanded((value) => !value)}
+              density="compact"
+            />
+          ) : (
+            <Tooltip>
+              <TooltipTrigger render={<span className="min-w-0 flex-1 truncate" />}>
+                {props.thumbnails.length > 0 ? (
+                  <span className="me-1 inline-flex align-middle gap-0.5">
+                    {props.thumbnails.map((thumbnail) => (
+                      <span
+                        key={thumbnail.key}
+                        className="size-4 overflow-hidden rounded border border-border/70 bg-background"
+                      >
+                        {thumbnail.url ? (
+                          <img
+                            src={thumbnail.url}
+                            alt={thumbnail.name}
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          <span
+                            aria-label={thumbnail.name}
+                            className="block size-full bg-muted/60"
+                          />
+                        )}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+                {props.previewText}
+              </TooltipTrigger>
+              <TooltipPopup side="top" className="max-w-96 whitespace-pre-wrap break-words">
+                {props.previewText}
+                {props.message ? (
+                  <TimelineRowTimestamp
+                    createdAt={DateTime.formatIso(props.message.createdAt)}
+                    timestampFormat={props.timestampFormat}
+                    alwaysVisible
+                  />
+                ) : null}
+              </TooltipPopup>
+            </Tooltip>
+          )}
+        </div>
         {bodyVisible ? (
-          <div
-            className={cn(
-              "flex flex-col gap-2",
-              fold !== null && "max-h-96 overflow-auto px-3 pb-2",
-            )}
-          >
+          <div className="py-1">
             {props.thumbnails.length > 0 ? (
-              <span className="flex flex-wrap items-center gap-1">
+              <span className="flex flex-wrap gap-1">
                 {props.thumbnails.map((thumbnail) => (
                   <span
                     key={thumbnail.key}
-                    className="size-8 overflow-hidden rounded-md border border-border/70 bg-background"
+                    className="size-8 overflow-hidden rounded border border-border/70 bg-background"
                   >
                     {thumbnail.url ? (
                       <img
@@ -598,43 +622,36 @@ function QueuedMessage(props: {
                 ))}
               </span>
             ) : null}
-            {/* In full, like a sent turn: a queued message is read before it is sent. */}
-            {props.previewText ? (
-              <p className="whitespace-pre-wrap wrap-anywhere">{props.previewText}</p>
+            <p className="whitespace-pre-wrap wrap-anywhere">{props.previewText}</p>
+            {props.message ? (
+              <TimelineRowTimestamp
+                createdAt={DateTime.formatIso(props.message.createdAt)}
+                timestampFormat={props.timestampFormat}
+                alwaysVisible
+              />
             ) : null}
           </div>
         ) : null}
-      </div>
-      <div className="flex items-center gap-0.5 pe-1 text-xs text-muted-foreground">
-        {props.message ? (
-          <span className="me-1 flex items-center gap-2 px-1 opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/queued:opacity-100">
-            {attribution === "agent" && senderThreadId ? (
-              <InlineButton tone="muted" onClick={() => props.onOpenThread(senderThreadId)}>
-                Open thread
-              </InlineButton>
-            ) : null}
-            {scheduledTaskId ? (
-              <InlineButton
-                tone="muted"
-                render={
-                  <Link
-                    to="/settings/scheduled-tasks"
-                    search={{ environmentId: props.environmentId, taskId: scheduledTaskId }}
-                  />
-                }
-              >
-                Open automation
-              </InlineButton>
-            ) : null}
-            <TimelineRowTimestamp
-              createdAt={DateTime.formatIso(props.message.createdAt)}
-              timestampFormat={props.timestampFormat}
-              alwaysVisible
-            />
-          </span>
+        {attribution === "agent" && senderThreadId ? (
+          <InlineButton tone="muted" onClick={() => props.onOpenThread(senderThreadId)}>
+            Open thread
+          </InlineButton>
         ) : null}
-        {props.children}
-      </div>
+        {scheduledTaskId ? (
+          <InlineButton
+            tone="muted"
+            render={
+              <Link
+                to="/settings/scheduled-tasks"
+                search={{ environmentId: props.environmentId, taskId: scheduledTaskId }}
+              />
+            }
+          >
+            Open automation
+          </InlineButton>
+        ) : null}
+      </ComposerBanner.Content>
+      <ComposerBanner.Actions>{props.children}</ComposerBanner.Actions>
     </>
   );
 }

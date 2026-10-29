@@ -247,6 +247,7 @@ export function FoldedMessageHeader(props: {
   summary: string;
   expanded: boolean;
   onToggle: () => void;
+  density?: "default" | "compact";
 }) {
   const Icon = props.icon;
   return (
@@ -255,14 +256,22 @@ export function FoldedMessageHeader(props: {
       aria-expanded={props.expanded}
       data-scroll-anchor-ignore
       onClick={props.onToggle}
-      className="flex w-full min-w-0 items-center gap-1.5 rounded-2xl px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring"
+      className={cn(
+        "flex w-full min-w-0 items-center text-left focus-visible:outline-2 focus-visible:outline-ring",
+        props.density === "compact" ? "gap-1 rounded-sm" : "gap-1.5 rounded-2xl px-3 py-2 text-sm",
+      )}
     >
-      <Icon className="size-4 shrink-0 stroke-2 text-muted-foreground" />
+      <Icon
+        className={cn(
+          "shrink-0 stroke-2 text-muted-foreground",
+          props.density === "compact" ? "size-3" : "size-4",
+        )}
+      />
       <span className="max-w-1/2 shrink-0 truncate text-muted-foreground">{props.label}</span>
       <span className="min-w-0 flex-1 truncate">{props.summary}</span>
       <ChevronDownIcon
         className={cn(
-          "size-3.5 shrink-0 text-muted-foreground transition-transform",
+          "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none",
           props.expanded && "rotate-180",
         )}
       />
