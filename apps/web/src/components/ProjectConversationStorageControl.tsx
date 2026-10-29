@@ -10,7 +10,6 @@ import type { SidebarProjectGroupMember } from "../sidebarProjectGrouping";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
-import { Switch } from "./ui/switch";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
 export interface ProjectConversationStorageState {
@@ -21,11 +20,6 @@ export interface ProjectConversationStorageState {
   readonly setEnabled: (enabled: boolean) => void;
 }
 
-/**
- * Project-local conversation storage for one physical checkout. Shared by the
- * legacy sidebar dialog and the project settings page, which render the same
- * toggle in different layouts.
- */
 export function useProjectConversationStorage(
   member: SidebarProjectGroupMember,
 ): ProjectConversationStorageState {
@@ -102,31 +96,3 @@ export function useProjectConversationStorage(
 }
 
 export const PORTABLE_CONVERSATIONS_SWITCH_LABEL = "Save conversations in the project directory";
-
-export function ProjectConversationStorageControl({
-  member,
-}: {
-  member: SidebarProjectGroupMember;
-}) {
-  const { enabled, busy, error, setEnabled } = useProjectConversationStorage(member);
-
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-md border border-border/70 px-3 py-3 dark:border-transparent dark:bg-white/[0.035]">
-      <div className="min-w-0">
-        <p className="font-medium text-foreground">Portable local conversations</p>
-        <p className="mt-1 text-sm text-pretty text-muted-foreground">
-          Save and automatically restore this project&apos;s conversations from{" "}
-          <code>.t3/conversations</code>. Imported conversations continue in a new provider session
-          with their previous message context.
-        </p>
-        {error ? <p className="mt-1 text-sm text-destructive">{error}</p> : null}
-      </div>
-      <Switch
-        checked={enabled}
-        disabled={busy}
-        aria-label={PORTABLE_CONVERSATIONS_SWITCH_LABEL}
-        onCheckedChange={(checked) => setEnabled(Boolean(checked))}
-      />
-    </div>
-  );
-}

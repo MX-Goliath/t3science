@@ -67,6 +67,7 @@ const expected = {
 beforeEach(() => {
   vi.clearAllMocks();
   state.value = {
+    sequence: 0,
     data: Option.some(thread),
     status: "live",
     error: Option.none(),

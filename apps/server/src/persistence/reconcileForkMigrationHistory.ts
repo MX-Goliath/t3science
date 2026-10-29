@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import reconcileSchema from "./Migrations/055_ReconcileForkSchema.ts";
+import reconcileSchema from "./reconcileForkSchema.ts";
 
 /** Repair the fork's colliding V1 migration IDs before the V2 loader advances. */
 export const reconcileForkMigrationHistory = Effect.fn("reconcileForkMigrationHistory")(

@@ -1,6 +1,6 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 
-import { derivePhysicalProjectKey } from "./logicalProject";
+import { derivePhysicalProjectKey } from "@t3tools/client-runtime/state/project-grouping";
 import type { SidebarProjectGroupMember, SidebarProjectSnapshot } from "./sidebarProjectGrouping";
 import type { Project } from "./types";
 

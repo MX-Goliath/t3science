@@ -80,6 +80,9 @@ export function useCreateProjectThread() {
         return AsyncResult.failure(Cause.fail(new Error(initialAttachmentError)));
       }
 
+      const supportsImageUploads =
+        appAtomRegistry.get(serverEnvironment.configValueAtom(input.project.environmentId))
+          ?.environment.capabilities.attachmentUploads === true;
       let prepared: Awaited<ReturnType<typeof prepareTurnAttachments>>;
       try {
         // If persisting the references into the draft throws, the owner call
@@ -87,9 +90,7 @@ export function useCreateProjectThread() {
         prepared = await prepareTurnAttachments({
           environmentId: input.project.environmentId,
           attachments: input.initialAttachments,
-          supportsImageUploads:
-            appAtomRegistry.get(serverEnvironment.configValueAtom(input.project.environmentId))
-              ?.environment.capabilities.attachmentUploads === true,
+          supportsImageUploads,
           persistUploadedReferences: async (draftAttachments) => {
             await input.onAttachmentsUploaded(draftAttachments);
             return "persisted";

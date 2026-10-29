@@ -1,7 +1,6 @@
 import {
-  deriveProviderInstanceEntries,
+  providerInstanceEntriesFor,
   resolveDefaultProviderModelSelection,
-  sortProviderInstanceEntries,
 } from "../../providerInstances";
 import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
@@ -56,7 +55,11 @@ export function ProjectActionsSettings() {
       )
     : null;
   const instanceEntries = representativeConfig
-    ? sortProviderInstanceEntries(deriveProviderInstanceEntries(providers))
+    ? providerInstanceEntriesFor(
+        providers,
+        representativeConfig.settings,
+        target?.projectId ?? null,
+      )
     : [];
   const modelOptionsByInstance = new Map(
     instanceEntries.map((entry) => [entry.instanceId, entry.models] as const),
@@ -79,14 +82,6 @@ export function ProjectActionsSettings() {
       );
       if (!environment?.serverConfig) return [];
       const member = candidate.projectId ? memberById.get(candidate.projectId) : undefined;
-      // Older servers ignore override records; exclude them from edits and retain their legacy per-project
-      // map.
-      if (
-        member &&
-        environment.serverConfig.environment?.capabilities.projectSettingsOverrides !== true
-      ) {
-        return [];
-      }
       return [
         {
           environmentId: candidate.environmentId,

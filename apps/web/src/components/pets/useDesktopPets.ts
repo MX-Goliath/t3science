@@ -32,7 +32,7 @@ export function useDesktopPets() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Hydrate shared pet state from the native desktop bridge and detach on unmount.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Hydrate shared pet state from the native desktop bridge and detach on unmount.
   useEffect(() => {
     if (!bridge?.getDesktopPetsState || sharedState !== null) return;
     let active = true;
@@ -61,17 +61,17 @@ export function useDesktopPets() {
   const mutate = async (operation: () => Promise<DesktopPetsState>) => {
     setBusy(true);
     setError(null);
+    let result: DesktopPetsState | null = null;
     try {
       const next = await operation();
       publishSharedState(next);
-      return next;
+      result = next;
     } catch (cause) {
       const message = toErrorMessage(cause);
       setError(message);
-      return null;
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
+    return result;
   };
 
   const setEnabled = (enabled: boolean) => {
@@ -86,16 +86,16 @@ export function useDesktopPets() {
     if (!bridge?.importDesktopPetArchive) return null;
     setBusy(true);
     setError(null);
+    let imported: DesktopPetImportResult | null = null;
     try {
       const result = await bridge.importDesktopPetArchive();
       if (result.kind === "imported") publishSharedState(result.state);
-      return result;
+      imported = result;
     } catch (cause) {
       setError(toErrorMessage(cause));
-      return null;
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
+    return imported;
   };
   const removePet = (petId: string) => {
     if (!bridge?.removeDesktopPet) return Promise.resolve(null);

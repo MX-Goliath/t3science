@@ -37,7 +37,7 @@ function UsageWindow(props: {
   const [now, setNow] = useState(Date.now);
   const redeem = useResetCredit(props.environmentId, { instanceId: props.instanceId });
   const showReset = canResetLowWeeklyLimit(props.window, props.credits);
-  // oxlint-disable-next-line t3code/react-effect-budget -- Present status updates from the reset-credit operation as toasts.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Present status updates from the reset-credit operation as toasts.
   useEffect(() => {
     if (redeem.status) toastManager.add({ type: "info", title: redeem.status });
   }, [redeem.status]);

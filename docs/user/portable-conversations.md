@@ -1,9 +1,9 @@
 # Portable local conversations
 
 The desktop app can keep a portable copy of a project's conversations inside that project's
-directory. In the current sidebar, open the project selector, choose the project's actions, and
-turn on **Portable local conversations**. In the legacy sidebar, right-click the project, choose
-**Portable conversations…**, and use the switch in the dialog. This setting is opt-in and applies
+directory. Open the project's settings and enable **Save conversations in the project directory**
+under **Conversations**. In the folder sidebar, right-click the project and choose
+**Portable conversations…** to open that setting directly. This setting is opt-in and applies
 only to that project.
 
 When you turn it on, T3 Code immediately exports the project's existing conversations and image

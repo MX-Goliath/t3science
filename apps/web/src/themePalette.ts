@@ -1,3 +1,4 @@
+import { pipe } from "effect/Function";
 import type { EnvironmentTheme } from "@t3tools/contracts";
 import * as Equal from "effect/Equal";
 import * as Option from "effect/Option";
@@ -404,10 +405,7 @@ const STANDARD_WEB_PAINTED_COLORS: Record<ThemeAppearance, Partial<ThemeColors>>
 
 /** The standard theme as index.css paints it, for solves that measure the page. */
 export function getStandardPaintedThemeColors(appearance: ThemeAppearance): ThemeColors {
-  return {
-    ...getStandardThemeColors(appearance),
-    ...STANDARD_WEB_PAINTED_COLORS[appearance],
-  };
+  return { ...getStandardThemeColors(appearance), ...STANDARD_WEB_PAINTED_COLORS[appearance] };
 }
 
 type ThemeRgbColor = {
@@ -751,13 +749,12 @@ function standardStatusColors(canvas: ThemeRgbColor): {
   const surfaceOf = (value: string) =>
     mixThemeRgbColors(canvas, parseThemeRgbColor(value, canvas), surfaceMix);
   const readableOn = (foreground: string, surface: ThemeRgbColor) =>
-    themeOklchToThemeColor(
-      solveOklchLightness(
-        themeRgbToOklch(parseThemeRgbColor(foreground, canvas)),
-        [surface],
-        4.6,
-        appearance === "dark" ? "lighter" : "darker",
-      ),
+    pipe(
+      parseThemeRgbColor(foreground, canvas),
+      themeRgbToOklch,
+      (color) =>
+        solveOklchLightness(color, [surface], 4.6, appearance === "dark" ? "lighter" : "darker"),
+      themeOklchToThemeColor,
     );
   const errorSurface = surfaceOf(standard.error);
   const warningSurface = surfaceOf(standard.warning);
