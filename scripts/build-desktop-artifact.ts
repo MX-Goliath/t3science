@@ -1855,6 +1855,7 @@ const buildDesktopBundlesUnlocked = Effect.fn("buildDesktopBundlesUnlocked")(fun
   repoRoot: string,
   appVersion: string,
   verbose: boolean,
+  desktopOutDir?: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -1880,7 +1881,11 @@ const buildDesktopBundlesUnlocked = Effect.fn("buildDesktopBundlesUnlocked")(fun
           ChildProcess.make(spawnCommand.command, spawnCommand.args, {
             cwd: repoRoot,
             shell: spawnCommand.shell,
-            env: { APP_VERSION: appVersion },
+            env: {
+              APP_VERSION: appVersion,
+              T3CODE_DESKTOP_DEV: "0",
+              ...(desktopOutDir ? { T3CODE_DESKTOP_OUT_DIR: desktopOutDir } : {}),
+            },
             extendEnv: true,
           }),
           { label: "vp run build:desktop", verbose },
@@ -1913,9 +1918,42 @@ const buildDesktopBundlesUnlocked = Effect.fn("buildDesktopBundlesUnlocked")(fun
 });
 
 export const buildDesktopBundles = Effect.fn("buildDesktopBundles")(
-  (repoRoot: string, appVersion: string, verbose: boolean) =>
-    withDesktopBuildLock(repoRoot, buildDesktopBundlesUnlocked(repoRoot, appVersion, verbose)),
+  (repoRoot: string, appVersion: string, verbose: boolean, desktopOutDir?: string) =>
+    withDesktopBuildLock(
+      repoRoot,
+      buildDesktopBundlesUnlocked(repoRoot, appVersion, verbose, desktopOutDir),
+    ),
 );
+
+export const validateDesktopRuntimeBundle = Effect.fn("validateDesktopRuntimeBundle")(function* (
+  desktopDist: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  for (const file of [
+    "boot.cjs",
+    "compileCache.cjs",
+    "main.cjs",
+    "preload.cjs",
+    "preview-pick-preload.cjs",
+    "preview-pip-preload.cjs",
+    "mac-permission-preload.cjs",
+    "electron/WindowsForegroundFocusWorker.cjs",
+    "snapShot/GlobalShiftShortcutWorker.cjs",
+    "snapShot/RegionSnapShotWorker.cjs",
+    "snapShot/SnapShotAccessibilityWorker.cjs",
+  ]) {
+    const artifactPath = path.join(desktopDist, file);
+    const stat = yield* fs.stat(artifactPath).pipe(Effect.orElseSucceed(() => null));
+    if (stat?.type !== "File") {
+      return yield* new MissingDesktopBuildInputError({
+        artifact: "desktop-dist",
+        artifactPath,
+        buildCommand: "vp run build:desktop",
+      });
+    }
+  }
+});
 
 const desktopBuildProbeSucceeds = Effect.fn("desktopBuildProbeSucceeds")(function* (
   command: ChildProcess.Command,
@@ -3724,7 +3762,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const stageAppDir = path.join(stageRoot, "app");
   const stageResourcesDir = path.join(stageAppDir, "apps/desktop/resources");
   const distDirs = {
-    desktopDist: path.join(repoRoot, "apps/desktop/dist-electron"),
+    desktopDist: options.skipBuild
+      ? path.join(repoRoot, "apps/desktop/dist-electron")
+      : path.join(stageRoot, "desktop-dist"),
     desktopResources: path.join(repoRoot, "apps/desktop/resources"),
     serverDist: path.join(repoRoot, "apps/server/dist"),
   };
@@ -3732,7 +3772,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
 
   if (!options.skipBuild) {
     yield* Effect.log("[desktop-artifact] Building desktop/server/web artifacts...");
-    yield* buildDesktopBundlesUnlocked(repoRoot, appVersion, options.verbose);
+    yield* buildDesktopBundlesUnlocked(repoRoot, appVersion, options.verbose, distDirs.desktopDist);
   }
 
   const requiredBuildInputs = [
@@ -3748,6 +3788,8 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       });
     }
   }
+
+  yield* validateDesktopRuntimeBundle(distDirs.desktopDist);
 
   // Inlined native loaders resolve relative to the bundle and can silently fall back to slower JS; reject them.
   {
@@ -3812,7 +3854,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   }
 
   yield* Effect.log("[desktop-artifact] Staging release app...");
-  yield* fs.copy(distDirs.desktopDist, path.join(stageAppDir, "apps/desktop/dist-electron"));
+  const stagedDesktopDist = path.join(stageAppDir, "apps/desktop/dist-electron");
+  yield* fs.copy(distDirs.desktopDist, stagedDesktopDist);
+  yield* validateDesktopRuntimeBundle(stagedDesktopDist);
   yield* fs.copy(distDirs.desktopResources, stageResourcesDir);
   if (options.platform === "linux") {
     const extensionDir = path.join(stageAppDir, "apps/desktop/gnome-extension");

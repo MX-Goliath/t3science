@@ -29,6 +29,8 @@ import {
   renderLinuxElectronLauncher,
   renderLinuxAfterPackHook,
   buildDesktopBundles,
+  validateDesktopRuntimeBundle,
+  MissingDesktopBuildInputError,
   DesktopBuildManifestRestoreError,
   BundleNotSelfContainedError,
   BuildCommandFailedError,
@@ -395,6 +397,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         }`;
         yield* fs.writeFileString(path.join(root, "package.json"), packageJson);
         const version = "0.0.43-nightly.20260920.2018";
+        const desktopOutDir = path.join(root, "release-desktop");
+        const sharedDesktopDir = path.join(root, "apps/desktop/dist-electron");
+        yield* fs.makeDirectory(sharedDesktopDir, { recursive: true });
+        yield* fs.writeFileString(path.join(sharedDesktopDir, "main.cjs"), "dev bundle");
         const matchingPath = "packages/contracts/package.json";
         const originals = releasePackageFiles.map((relativePath, index) => ({
           relativePath,
@@ -420,11 +426,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
             require("./apps/server/package.json").version,
             require("./apps/desktop/package.json").version
           ].join("\\n"));
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const output = process.env.T3CODE_DESKTOP_OUT_DIR || "apps/desktop/dist-electron";
+          fs.mkdirSync(output, { recursive: true });
+          fs.writeFileSync(path.join(output, "main.cjs"), process.env.APP_VERSION);
           const manifest = require("./${matchingPath}");
           manifest.description = "edited during compilation";
           require("node:fs").writeFileSync("${matchingPath}", JSON.stringify(manifest) + "\\n");`,
         );
-        yield* buildDesktopBundles(root, version, false);
+        yield* buildDesktopBundles(root, version, false, desktopOutDir);
+        assert.isTrue(yield* fs.exists(path.join(desktopOutDir, "main.cjs")));
+        assert.equal(yield* fs.readFileString(path.join(desktopOutDir, "main.cjs")), version);
+        assert.equal(
+          yield* fs.readFileString(path.join(sharedDesktopDir, "main.cjs")),
+          "dev bundle",
+        );
         assert.equal(
           yield* fs.readFileString(path.join(root, "version.txt")),
           [version, version, version, version].join("\n"),
@@ -498,6 +515,23 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notEqual(yield* fs.readFileString(failedPath), original);
       for (const relativePath of releasePackageFiles.slice(1)) {
         assert.equal(yield* fs.readFileString(path.join(root, relativePath)), original);
+      }
+    }),
+  );
+
+  it.effect("rejects a desktop boot bundle without its main process module", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const desktopDist = yield* fs.makeTempDirectoryScoped({ prefix: "t3-incomplete-desktop-" });
+      yield* fs.writeFileString(path.join(desktopDist, "boot.cjs"), 'require("./main.cjs");');
+      yield* fs.writeFileString(path.join(desktopDist, "compileCache.cjs"), "");
+      const mainPath = path.join(desktopDist, "main.cjs");
+      for (const mainIsDirectory of [false, true]) {
+        if (mainIsDirectory) yield* fs.makeDirectory(mainPath);
+        const error = yield* Effect.flip(validateDesktopRuntimeBundle(desktopDist));
+        assert.instanceOf(error, MissingDesktopBuildInputError);
+        assert.equal(error.artifactPath, mainPath);
       }
     }),
   );

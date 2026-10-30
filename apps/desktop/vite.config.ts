@@ -10,6 +10,7 @@ const repoEnv = loadRepoEnv();
 const isMainProcessExternal = (id: string) =>
   id === "electron" || id.startsWith("electron/") || isDesktopRuntimeExternalDependency(id);
 const shouldLaunchElectronAfterPack = process.env.T3CODE_DESKTOP_DEV === "1";
+const desktopOutDir = process.env.T3CODE_DESKTOP_OUT_DIR || "dist-electron";
 const publicConfigDefine = {
   __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
@@ -51,7 +52,7 @@ export default defineConfig({
   pack: [
     {
       format: "cjs",
-      outDir: "dist-electron",
+      outDir: desktopOutDir,
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
@@ -68,7 +69,7 @@ export default defineConfig({
     },
     {
       format: "cjs",
-      outDir: "dist-electron",
+      outDir: desktopOutDir,
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
@@ -89,7 +90,7 @@ export default defineConfig({
     {
       // boot.cjs requires the other two at runtime, so all three stay separate files.
       format: "cjs",
-      outDir: "dist-electron",
+      outDir: desktopOutDir,
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
@@ -101,7 +102,7 @@ export default defineConfig({
     },
     {
       format: "cjs",
-      outDir: "dist-electron",
+      outDir: desktopOutDir,
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
@@ -114,7 +115,7 @@ export default defineConfig({
     },
     {
       format: "cjs",
-      outDir: "dist-electron",
+      outDir: desktopOutDir,
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
@@ -125,7 +126,7 @@ export default defineConfig({
     },
     {
       format: "cjs",
-      outDir: "dist-electron",
+      outDir: desktopOutDir,
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
@@ -134,7 +135,7 @@ export default defineConfig({
     {
       // Sandboxed preloads must be self-contained, without shared runtime chunks.
       format: "cjs",
-      outDir: "dist-electron",
+      outDir: desktopOutDir,
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
