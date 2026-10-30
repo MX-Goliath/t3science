@@ -99,10 +99,10 @@ it("changes effort by keyboard, cycles speed tiers and resets both without losin
         id: "serviceTier",
         label: "Speed",
         type: "select",
-        currentValue: "default",
+        currentValue: "priority",
         options: [
-          { id: "default", label: "Normal", isDefault: true },
-          { id: "priority", label: "Fast" },
+          { id: "default", label: "Normal" },
+          { id: "priority", label: "Fast", isDefault: true },
           { id: "ultra", label: "Ultrafast" },
         ],
       },
@@ -120,8 +120,12 @@ it("changes effort by keyboard, cycles speed tiers and resets both without losin
   await expect.element(slider).toHaveFocus();
   await userEvent.keyboard("{End}");
   await expect.element(slider).toHaveAttribute("aria-valuetext", "High");
-  await page.getByRole("button", { name: "Speed: Normal. Switch to Fast" }).click();
-  await page.getByRole("button", { name: "Speed: Fast. Switch to Ultrafast" }).click();
+  const normalSpeed = page.getByRole("button", { name: "Speed: Normal. Switch to Fast" });
+  await expect.element(normalSpeed).toHaveAttribute("data-speed-active", "false");
+  await normalSpeed.click();
+  const fastSpeed = page.getByRole("button", { name: "Speed: Fast. Switch to Ultrafast" });
+  await expect.element(fastSpeed).toHaveAttribute("data-speed-active", "true");
+  await fastSpeed.click();
   expect(save).toHaveBeenLastCalledWith([
     { id: "reasoningEffort", value: "high" },
     { id: "serviceTier", value: "ultra" },
@@ -132,9 +136,12 @@ it("changes effort by keyboard, cycles speed tiers and resets both without losin
   await page.getByRole("button", { name: "Reset effort and speed" }).click();
   expect(save).toHaveBeenLastCalledWith([
     { id: "reasoningEffort", value: "medium" },
-    { id: "serviceTier", value: "default" },
+    { id: "serviceTier", value: "priority" },
     { id: "contextWindow", value: "long" },
   ]);
+  await expect
+    .element(page.getByRole("button", { name: "Speed: Fast. Switch to Ultrafast" }))
+    .toHaveAttribute("data-speed-active", "true");
   await expect.element(slider).toHaveAttribute("aria-valuetext", "Medium");
 });
 
@@ -162,6 +169,18 @@ it("keeps prompt-injected effort in sync and explicitly resets boolean fast mode
   await screen.getByRole("button", { name: /^Effort:/ }).click();
   const slider = page.getByRole("slider", { name: "Reasoning effort" });
   await expect.element(slider).toHaveAttribute("aria-valuetext", "Ultrathink");
+  const fastSpeed = page.getByRole("button", { name: "Speed: Fast. Switch to Normal" });
+  await expect.element(fastSpeed).toHaveAttribute("data-speed-active", "true");
+  await fastSpeed.click();
+  await expect
+    .element(page.getByRole("button", { name: "Speed: Normal. Switch to Fast" }))
+    .toHaveAttribute("data-speed-active", "false");
+  expect(save).toHaveBeenLastCalledWith([
+    { id: "reasoningEffort", value: "high" },
+    { id: "fastMode", value: false },
+    { id: "contextWindow", value: "long" },
+  ]);
+  await page.getByRole("button", { name: "Speed: Normal. Switch to Fast" }).click();
   await act(() => slider.element().focus());
   await userEvent.keyboard("{Home}");
   await expect.element(screen.getByLabelText("Prompt")).toHaveTextContent("Keep this message");

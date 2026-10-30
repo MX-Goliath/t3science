@@ -27,6 +27,7 @@ export function ReasoningSettingsCard(props: {
   );
   const progress = choices.length > 1 ? index / (choices.length - 1) : 0;
   const label = selectedIndex < 0 ? (props.value ?? "Default") : choices[index]!.label;
+  const ultra = props.value === "ultra";
   const speedChoices =
     props.speed?.type === "select"
       ? props.speed.options.map((option) => ({ value: option.id, label: option.label }))
@@ -39,16 +40,13 @@ export function ReasoningSettingsCard(props: {
   const speedIndex = speedChoices.findIndex((option) => option.value === props.speedValue);
   const currentSpeed = speedChoices[speedIndex];
   const nextSpeed = speedChoices[(speedIndex + 1) % speedChoices.length];
-  const defaultSpeed =
-    props.speed?.type === "select"
-      ? (props.speed.options.find((option) => option.isDefault)?.id ??
-        props.speed.options.find((option) => option.id === "default")?.id ??
-        props.speed.options[0]?.id)
-      : false;
-  const accelerated = currentSpeed !== undefined && currentSpeed.value !== defaultSpeed;
+  const accelerated =
+    currentSpeed?.value === true ||
+    currentSpeed?.label === "Fast" ||
+    currentSpeed?.label === "Ultrafast";
 
   return (
-    <div className={cn(styles.card, "w-70 max-w-full px-2 py-2")}>
+    <div className={cn(styles.card, "w-70 max-w-full px-2 py-2")} data-effort-ultra={ultra}>
       <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] items-start gap-1">
         {props.speed && nextSpeed ? (
           <Tooltip>
@@ -58,6 +56,7 @@ export function ReasoningSettingsCard(props: {
                   type="button"
                   className={styles.icon}
                   data-speed-active={accelerated}
+                  aria-pressed={accelerated}
                   aria-label={`Speed: ${currentSpeed?.label ?? "Default"}. Switch to ${nextSpeed.label}`}
                   onClick={() => props.onSpeedChange(nextSpeed.value)}
                 />
@@ -137,8 +136,14 @@ export function ReasoningSettingsCard(props: {
             className={cn(styles.fill, "h-full")}
             style={{ width: `calc(${progress * 100}% + ${12 - 24 * progress}px)` }}
           />
+          {ultra ? <span aria-hidden className={styles.sparkles} /> : null}
         </div>
-        <div className="pointer-events-none absolute inset-y-0 inset-x-3 flex items-center justify-between">
+        <div
+          className={cn(
+            styles.ticks,
+            "pointer-events-none absolute inset-y-0 inset-x-3 flex items-center justify-between",
+          )}
+        >
           {choices.map((option, tick) => (
             <span
               key={option.id}

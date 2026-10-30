@@ -46,6 +46,7 @@ import { focusRequestedPermission, useComposerMenuProps } from "./composerEventS
 import { useComposerMenuState } from "./useComposerMenuState";
 import { EffortGlyph, resolveEffortGlyph } from "./EffortGlyph";
 import { ReasoningSettingsCard } from "./ReasoningSettingsCard";
+import reasoningStyles from "./ReasoningSettingsCard.module.css";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -695,6 +696,19 @@ export const TraitsPicker = memo(function TraitsPicker({
     reportedModelSelection,
   });
   const isCodexStyle = provider === "codex";
+  const effortValue = ultrathinkPromptControlled
+    ? "ultrathink"
+    : getDescriptorStringValue(
+        primarySelectDescriptor,
+        instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null,
+        reportedModelSelection,
+      );
+  const effortLabelClassName =
+    primarySelectDescriptor &&
+    REASONING_SELECT_DESCRIPTOR_IDS.has(primarySelectDescriptor.id) &&
+    effortValue === "ultra"
+      ? reasoningStyles.ultraLabel
+      : undefined;
   // In the composer the glyph has no word, so the tooltip and label name the control.
   const triggerDescription = isComposerOwned
     ? [`Effort: ${triggerLabel}`, speedLabel, extraMenuHint].filter(Boolean).join(" · ")
@@ -703,16 +717,7 @@ export const TraitsPicker = memo(function TraitsPicker({
     isComposerOwned &&
     primarySelectDescriptor &&
     REASONING_SELECT_DESCRIPTOR_IDS.has(primarySelectDescriptor.id)
-      ? resolveEffortGlyph(
-          primarySelectDescriptor,
-          ultrathinkPromptControlled
-            ? "ultrathink"
-            : getDescriptorStringValue(
-                primarySelectDescriptor,
-                instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null,
-                reportedModelSelection,
-              ),
-        )
+      ? resolveEffortGlyph(primarySelectDescriptor, effortValue)
       : null;
   // Workflow levels such as Ultracode always show their name; the setting names every level.
   // Traits the bars cannot show, such as an agent mode, appear as words in the composer.
@@ -784,7 +789,9 @@ export const TraitsPicker = memo(function TraitsPicker({
               ) : null}
               {effortWord !== null ? (
                 <>
-                  <span data-composer-control-label>{effortWord}</span>
+                  <span data-composer-control-label className={effortLabelClassName}>
+                    {effortWord}
+                  </span>
                   {/* Icon-only footers hide labels and reveal this instead. */}
                   <GaugeIcon
                     aria-hidden="true"
@@ -814,7 +821,9 @@ export const TraitsPicker = memo(function TraitsPicker({
             </span>
           ) : effortWord !== null ? (
             <>
-              <span data-composer-control-label>{effortWord}</span>
+              <span data-composer-control-label className={effortLabelClassName}>
+                {effortWord}
+              </span>
               <GaugeIcon
                 aria-hidden="true"
                 data-composer-control-compact-icon
@@ -843,7 +852,7 @@ export const TraitsPicker = memo(function TraitsPicker({
         <TooltipPopup side="top">{triggerDescription}</TooltipPopup>
       </Tooltip>
       <MenuPopup
-        align="start"
+        align={isComposerOwned ? "center" : "start"}
         {...(isComposerOwned ? composerFloatingLayerProps : {})}
         {...(isComposerOwned && onOpenModelPicker
           ? {
