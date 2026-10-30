@@ -178,7 +178,7 @@ export function ComposerPermissionsSection(props: {
     supervisedRuntimeModeOption;
   const descriptionId = useId();
   return (
-    <div data-composer-permissions className="grid w-72 gap-1.5 px-2 py-1.5">
+    <div data-composer-permissions className="grid min-w-0 w-72 max-w-full gap-1.5 px-2 py-1.5">
       <div className="font-medium text-muted-foreground text-xs">Permissions</div>
       <MenuPrimitive.RadioGroup
         aria-label="Permissions"
