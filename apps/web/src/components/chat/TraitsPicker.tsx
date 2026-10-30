@@ -789,8 +789,21 @@ export const TraitsPicker = memo(function TraitsPicker({
               ) : null}
               {effortWord !== null ? (
                 <>
-                  <span data-composer-control-label className={effortLabelClassName}>
-                    {effortWord}
+                  <span data-composer-control-label className="grid text-left">
+                    {effortDisplay === "label"
+                      ? primarySelectDescriptor?.options.map((option) => (
+                          <span
+                            key={option.id}
+                            aria-hidden="true"
+                            className="invisible col-start-1 row-start-1"
+                          >
+                            {option.label}
+                          </span>
+                        ))
+                      : null}
+                    <span className={cn("col-start-1 row-start-1", effortLabelClassName)}>
+                      {effortWord}
+                    </span>
                   </span>
                   {/* Icon-only footers hide labels and reveal this instead. */}
                   <GaugeIcon
@@ -853,6 +866,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       </Tooltip>
       <MenuPopup
         align={isComposerOwned ? "center" : "start"}
+        shadow={isComposerOwned ? "none" : "default"}
         {...(isComposerOwned ? composerFloatingLayerProps : {})}
         {...(isComposerOwned && onOpenModelPicker
           ? {
