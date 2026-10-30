@@ -866,6 +866,9 @@ export const TraitsPicker = memo(function TraitsPicker({
       </Tooltip>
       <MenuPopup
         align={isComposerOwned ? "center" : "start"}
+        className={
+          isComposerOwned ? "w-[calc(--spacing(72)+2px)] max-w-[calc(100vw-2rem)]" : undefined
+        }
         shadow={isComposerOwned ? "none" : "default"}
         {...(isComposerOwned ? composerFloatingLayerProps : {})}
         {...(isComposerOwned && onOpenModelPicker

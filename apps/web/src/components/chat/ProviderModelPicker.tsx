@@ -96,6 +96,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useState(false);
   const isMenuOpen = props.open ?? uncontrolledIsMenuOpen;
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const size = props.size ?? "sm";
 
   const activeEntry =
@@ -187,6 +188,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       <PopoverTrigger
         render={
           <ComposerControl
+            ref={triggerRef}
             aria-label={
               props.triggerAriaLabel ?? props.triggerLabel ?? allModelNames ?? triggerLabel
             }
@@ -276,12 +278,27 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         {...(props.isComposerOwned ? composerFloatingLayerProps : {})}
         ref={lockBackgroundScroll}
         initialFocus={searchInputRef}
-        align="start"
-        className="before:hidden"
+        align={props.isComposerOwned ? "center" : "start"}
+        anchor={
+          props.isComposerOwned
+            ? () => {
+                const trigger = triggerRef.current;
+                const effort = trigger?.parentElement?.querySelector<HTMLElement>(
+                  '[data-composer-shortcut~="composer.effort"]',
+                );
+                return effort && !effort.closest("[inert]") ? effort : trigger;
+              }
+            : undefined
+        }
+        className={cn(
+          "before:hidden",
+          props.isComposerOwned && "w-[calc(--spacing(72)+2px)] max-w-[calc(100vw-2rem)]",
+        )}
         padding="none"
         touchBackdrop
       >
         <ModelPickerContent
+          {...(props.isComposerOwned ? { compact: true } : {})}
           searchInputRef={searchInputRef}
           environmentId={props.environmentId}
           activeInstanceId={activeInstanceId}

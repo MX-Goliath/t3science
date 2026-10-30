@@ -346,6 +346,7 @@ function WindowKeyDownListener({ onKeyDown }: { onKeyDown: (event: KeyboardEvent
 }
 
 export const ModelPickerContent = memo(function ModelPickerContent(props: {
+  compact?: boolean;
   environmentId: EnvironmentId | null;
   activeInstanceId: ProviderInstanceId;
   model: string;
@@ -827,7 +828,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       <WindowKeyDownListener onKeyDown={onWindowKeyDown} />
       <div
         ref={pickerContentRef}
-        className="relative flex max-h-86.5 w-screen max-w-90 flex-row overflow-hidden"
+        className={cn(
+          "relative flex max-h-86.5 flex-row overflow-hidden",
+          props.compact ? "w-full min-w-0" : "w-screen max-w-90",
+        )}
         style={
           isSearching
             ? { height: searchHeight }
@@ -899,7 +903,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         >
           <div
             className={cn(
-              "flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/40",
+              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/40",
               showSidebar && "border-l border-border/70",
             )}
           >
