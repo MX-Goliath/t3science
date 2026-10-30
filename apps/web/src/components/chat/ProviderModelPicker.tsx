@@ -275,6 +275,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         </span>
       </PopoverTrigger>
       <PopoverPopup
+        shadow={props.isComposerOwned ? "none" : "default"}
         {...(props.isComposerOwned ? composerFloatingLayerProps : {})}
         ref={lockBackgroundScroll}
         initialFocus={searchInputRef}
