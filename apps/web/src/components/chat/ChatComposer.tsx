@@ -397,6 +397,7 @@ export interface ChatComposerProps {
   isCompacting: boolean;
   queuedRunsControl?: React.ReactNode;
   tasksControl?: React.ReactNode;
+  backgroundWorkControl?: React.ReactNode;
   bannerItems: readonly ComposerBannerStackItem[];
   resumeCompactionTokens: number | null;
   keepFullHistory: boolean;
@@ -3363,6 +3364,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           {props.queuedRunsControl}
+          {props.backgroundWorkControl}
           <ComposerBannerStack items={shelfItems} />
           {!hasBlockingComposerTopDrawer ? props.tasksControl : null}
           {showComposerTopDrawer ? (

@@ -2389,7 +2389,7 @@ export default function ChatView(props: ChatViewProps) {
   const {
     acknowledgeActiveThreadWoke,
     activeBranchMismatchKey,
-    backgroundWorkNow,
+    backgroundWorkBanner,
     childInputNow,
     goalNow,
     handleSwitchCheckoutToThread,
@@ -3071,11 +3071,7 @@ export default function ChatView(props: ChatViewProps) {
   };
   const onExpandTimelineImageStable = useStableCallback(onExpandTimelineImage);
   const shownThreadSyncPhase = activeEnvironmentUnavailable ? null : delayedThreadSyncPhase;
-  const hasThreadNow =
-    childInputNow !== null ||
-    backgroundWorkNow !== null ||
-    goalNow !== null ||
-    shownThreadSyncPhase !== null;
+  const hasThreadNow = childInputNow !== null || goalNow !== null || shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
   const scrollToEndSummary =
     [
@@ -3103,7 +3099,6 @@ export default function ChatView(props: ChatViewProps) {
         <ThreadNow
           key={routeThreadKey}
           attention={childInputNow}
-          work={backgroundWorkNow}
           syncPhase={shownThreadSyncPhase}
           goal={goalNow}
         />
@@ -3599,6 +3594,11 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
                               queuedRunsControl={queuedRunsControl}
+                              backgroundWorkControl={
+                                backgroundWorkBanner !== null ? (
+                                  <ComposerBannerStack items={[backgroundWorkBanner]} />
+                                ) : null
+                              }
                               tasksControl={
                                 shownThreadSyncPhase === null && composerTasksPlan !== null ? (
                                   <ComposerTasksControl
