@@ -294,6 +294,7 @@ import {
   usePreparingComposerImages,
 } from "./preparingComposerImages";
 import { ComposerControlsBar } from "./ComposerControlsBar";
+import type { ModelResetAction } from "./ReasoningSettingsCard";
 import { composerCommandKeyHandler } from "./composerCommandKey";
 
 function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
@@ -442,6 +443,7 @@ export interface ChatComposerProps {
   providerStatuses: ServerProvider[];
   providerCatalogKnown: boolean;
   activeProjectDefaultModelSelection: ModelSelection | null | undefined;
+  modelReset: ModelResetAction;
   activeThreadModelSelection: ModelSelection | null | undefined;
   reportedModelSelection?: ModelSelection | null;
   activeProjectId: ProjectId | null;
@@ -2516,6 +2518,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedProvider={selectedProvider}
       selectedInstanceId={selectedInstanceId}
       selectedModel={selectedModel}
+      modelReset={{
+        ...props.modelReset,
+        onReset: () => {
+          setMultipleModelSelections(null);
+          props.modelReset.onReset();
+        },
+      }}
       selectedProviderModels={selectedProviderModels}
       composerModelOptions={composerModelOptions}
       reportedModelSelection={reportedModelSelection}

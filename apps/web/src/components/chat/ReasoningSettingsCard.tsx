@@ -7,6 +7,12 @@ import styles from "./ReasoningSettingsCard.module.css";
 
 type SelectDescriptor = Extract<ProviderOptionDescriptor, { type: "select" }>;
 
+export interface ModelResetAction {
+  readonly label: string;
+  readonly disabledReason: string | null;
+  readonly onReset: () => void;
+}
+
 export function ReasoningSettingsCard(props: {
   effort: SelectDescriptor;
   value: string | null;
@@ -17,6 +23,7 @@ export function ReasoningSettingsCard(props: {
   onEffortChange: (value: string) => void;
   onSpeedChange: (value: string | boolean) => void;
   onReset: () => void;
+  modelReset?: ModelResetAction;
   onOpenModelPicker?: (() => void) | undefined;
 }) {
   const choices = props.effort.options;
@@ -113,15 +120,19 @@ export function ReasoningSettingsCard(props: {
               <button
                 type="button"
                 className={cn(styles.icon, "group/reset")}
-                aria-label="Reset effort and speed"
-                disabled={props.effortDisabled}
+                aria-label={props.modelReset?.label ?? "Reset effort and speed"}
+                disabled={props.effortDisabled || Boolean(props.modelReset?.disabledReason)}
                 onClick={props.onReset}
               />
             }
           >
             <RotateCcwIcon className="size-3.5 transition-transform duration-200 group-active/reset:-rotate-90 motion-reduce:transition-none" />
           </TooltipTrigger>
-          <TooltipPopup side="top">Reset effort and speed</TooltipPopup>
+          <TooltipPopup side="top">
+            {props.modelReset?.disabledReason ??
+              props.modelReset?.label ??
+              "Reset effort and speed"}
+          </TooltipPopup>
         </Tooltip>
       </div>
       <div

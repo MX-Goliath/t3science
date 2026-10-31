@@ -45,7 +45,7 @@ import { ComposerControl, ComposerControlIcon, type ComposerControlSize } from "
 import { focusRequestedPermission, useComposerMenuProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
 import { EffortGlyph, resolveEffortGlyph } from "./EffortGlyph";
-import { ReasoningSettingsCard } from "./ReasoningSettingsCard";
+import { ReasoningSettingsCard, type ModelResetAction } from "./ReasoningSettingsCard";
 import reasoningStyles from "./ReasoningSettingsCard.module.css";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
@@ -340,6 +340,7 @@ interface TraitsMenuContentProps {
   /** Extra tooltip text naming what else the menu holds. */
   extraMenuHint?: string;
   onOpenModelPicker?: () => void;
+  modelReset?: ModelResetAction;
 }
 
 export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
@@ -356,6 +357,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   descriptorIds,
   isComposerOwned,
   onOpenModelPicker,
+  modelReset,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const modelSelection =
@@ -426,6 +428,14 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     : null;
   const resetReasoning = () => {
     if (!reasoningDescriptor || ultrathinkInBodyText) return;
+    if (modelReset) {
+      if (modelReset.disabledReason) return;
+      if (ultrathinkPromptControlled) {
+        onPromptEdit?.((prompt) => prompt.replace(/^Ultrathink:\s*/i, ""));
+      }
+      modelReset.onReset();
+      return;
+    }
     const defaults = getProviderOptionDescriptors({ caps: selected.caps });
     const effortDefault = defaults.find((descriptor) => descriptor.id === reasoningDescriptor.id);
     const effortValue =
@@ -518,6 +528,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
             }
           }}
           onReset={resetReasoning}
+          {...(modelReset ? { modelReset } : {})}
           onOpenModelPicker={onOpenModelPicker}
         />
       ) : null}
@@ -643,6 +654,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   extraMenuOwnsModeShortcut,
   extraMenuHint,
   onOpenModelPicker,
+  modelReset,
   size = "sm",
   hidden = false,
   disabled = false,
@@ -897,6 +909,7 @@ export const TraitsPicker = memo(function TraitsPicker({
           allowPromptInjectedEffort={allowPromptInjectedEffort}
           planModeEnabled={planModeEnabled}
           {...(isComposerOwned ? { isComposerOwned } : {})}
+          {...(modelReset ? { modelReset } : {})}
           {...(onOpenModelPicker
             ? {
                 onOpenModelPicker: () => {

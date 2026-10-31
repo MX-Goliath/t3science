@@ -18,6 +18,14 @@ import { type SetStateAction } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toastManager } from "../ui/toast";
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
+import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
+import { getProviderModelCapabilities } from "../../providerModels";
+import {
+  buildProviderOptionSelectionsFromDescriptors,
+  getProviderOptionDescriptors,
+} from "@t3tools/shared/model";
+import { withImplicitFastModeDefault } from "./composerProviderState";
+import type { ModelResetAction } from "./ReasoningSettingsCard";
 import { resolveNewDraftStartFromOrigin } from "../../lib/chatThreadActions";
 import { type DraftThreadEnvMode, useComposerDraftStore } from "../../composerDraftStore";
 import {
@@ -32,7 +40,10 @@ interface ComposerSelectionInput {
   readonly activeThread: EnvironmentThreadShell | undefined;
   readonly activeRuntime: ReturnType<typeof deriveThreadStructureRuntime>;
   readonly activeProjectSettings: {
-    readonly settings: { readonly newWorktreesStartFromOrigin: boolean };
+    readonly settings: {
+      readonly newWorktreesStartFromOrigin: boolean;
+      readonly defaultModelSelection: ModelSelection | null;
+    };
   };
   readonly settings: UnifiedSettings;
   readonly providerStatuses: ReadonlyArray<ServerProvider>;
@@ -212,8 +223,66 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     );
     setStickyComposerModelSelection(nextModelSelection);
     if (options?.focusComposer !== false) scheduleComposerFocus();
+    return true;
   };
   const onProviderModelSelectStable = useStableCallback(onProviderModelSelect);
+  const defaultSelection =
+    activeProjectSettings.settings.defaultModelSelection ??
+    resolveProjectDefaultProviderModelSelection(
+      providerStatuses,
+      settings,
+      activeThread?.projectId ?? null,
+    );
+  const defaultProvider = providerStatuses.find(
+    (provider) => provider.instanceId === defaultSelection?.instanceId,
+  );
+  const defaultModel = defaultSelection
+    ? resolveAppModelSelectionForInstance(
+        defaultSelection.instanceId,
+        settings,
+        providerStatuses,
+        defaultSelection.model,
+      )
+    : null;
+  const resetDisabledReason =
+    !defaultSelection || !defaultModel || !defaultProvider?.enabled
+      ? "The project default model is unavailable"
+      : getModelDisabledReason(defaultSelection.instanceId, defaultModel);
+  const onResetModel = useStableCallback(() => {
+    if (!defaultSelection || !defaultModel || resetDisabledReason) return;
+    const applied = onProviderModelSelect(defaultSelection.instanceId, defaultModel, {
+      focusComposer: false,
+    });
+    if (!applied || !defaultProvider) return;
+    const caps = getProviderModelCapabilities(
+      defaultProvider.models,
+      defaultModel,
+      defaultProvider.driver,
+      settings.planModeEnabled,
+    );
+    const defaultOptions = buildProviderOptionSelectionsFromDescriptors(
+      getProviderOptionDescriptors({
+        caps,
+        selections: withImplicitFastModeDefault(caps, defaultSelection.options),
+      }),
+    );
+    useComposerDraftStore
+      .getState()
+      .setProviderModelOptions(composerDraftTarget, defaultProvider.driver, defaultOptions, {
+        instanceId: defaultSelection.instanceId,
+        model: defaultModel,
+        persistSticky: true,
+      });
+  });
+  const defaultModelLabel =
+    defaultProvider?.models.find((model) => model.slug === defaultModel)?.name ??
+    defaultModel ??
+    "Unavailable";
+  const modelReset: ModelResetAction = {
+    label: `Reset to project default: ${defaultModelLabel}`,
+    disabledReason: resetDisabledReason,
+    onReset: onResetModel,
+  };
   const onEnvModeChange = (mode: DraftThreadEnvMode) => {
     if (multipleModelSelections !== null) return;
     if (canOverrideServerThreadEnvMode) {
@@ -254,6 +323,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     }
   };
   return {
+    modelReset,
     getModelDisabledReason,
     handleInteractionModeChange,
     handleInteractionModeChangeStable,

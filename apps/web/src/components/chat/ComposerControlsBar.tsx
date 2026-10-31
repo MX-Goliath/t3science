@@ -46,6 +46,7 @@ export function ComposerControlsBar(props: {
   selectedProvider: ProviderDriverKind;
   selectedInstanceId: ProviderInstanceId;
   selectedModel: string;
+  modelReset: ChatComposerProps["modelReset"];
   selectedProviderModels: ServerProvider["models"];
   composerModelOptions: ReturnType<typeof useComposerProviderModel>["composerModelOptions"];
   reportedModelSelection: ChatComposerProps["reportedModelSelection"];
@@ -167,6 +168,7 @@ export function ComposerControlsBar(props: {
     isComposerOwned: true,
     effortDisplay: props.effortDisplay,
     onOpenModelPicker: () => onModelPickerOpenChange(true),
+    modelReset: props.modelReset,
     triggerClassName: cn("ps-1.5 pe-1", TEXT_CONTROL_STATES),
     // Permissions always live in the effort menu, so the section never unmounts while open.
     extraMenuContent: (

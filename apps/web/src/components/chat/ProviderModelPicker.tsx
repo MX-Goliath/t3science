@@ -291,15 +291,11 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               }
             : undefined
         }
-        className={cn(
-          "before:hidden",
-          props.isComposerOwned && "w-[calc(--spacing(72)+2px)] max-w-[calc(100vw-2rem)]",
-        )}
+        className="before:hidden"
         padding="none"
         touchBackdrop
       >
         <ModelPickerContent
-          {...(props.isComposerOwned ? { compact: true } : {})}
           searchInputRef={searchInputRef}
           environmentId={props.environmentId}
           activeInstanceId={activeInstanceId}

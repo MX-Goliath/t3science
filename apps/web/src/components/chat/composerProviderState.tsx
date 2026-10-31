@@ -20,6 +20,7 @@ import type { ReactNode } from "react";
 import type { DraftId } from "../../composerDraftStore";
 import { getProviderModelCapabilities } from "../../providerModels";
 import type { ComposerControlSize } from "./ComposerControl";
+import type { ModelResetAction } from "./ReasoningSettingsCard";
 import {
   getReasoningTraitStep,
   shouldRenderTraitsControls,
@@ -69,6 +70,7 @@ type TraitsRenderInput = {
   extraMenuOwnsModeShortcut?: boolean;
   extraMenuHint?: string;
   onOpenModelPicker?: () => void;
+  modelReset?: ModelResetAction;
 };
 
 export function getComposerPromptInjectionState(prompt: string): ComposerPromptInjectionState {
@@ -244,6 +246,7 @@ function renderTraitsControl(
     extraMenuOwnsModeShortcut,
     extraMenuHint,
     onOpenModelPicker,
+    modelReset,
   } = input;
   const hasTarget = threadRef !== undefined || draftId !== undefined;
   const { selections: resolvedModelOptions } = resolveComposerOptionSelections(
@@ -290,6 +293,7 @@ function renderTraitsControl(
       {...(extraMenuOwnsModeShortcut ? { extraMenuOwnsModeShortcut } : {})}
       {...(extraMenuHint ? { extraMenuHint } : {})}
       {...(onOpenModelPicker ? { onOpenModelPicker } : {})}
+      {...(modelReset ? { modelReset } : {})}
     />
   );
 }
