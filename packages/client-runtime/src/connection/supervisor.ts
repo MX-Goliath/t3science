@@ -272,6 +272,12 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   | ConnectionWakeups.ConnectionWakeups
 > {
   const target = entry.target;
+  const hasLoopbackRoute = connectionRoutes(entry).some(
+    (route) => connectionRouteKind(route) === "loopback",
+  );
+  // Loopback and USB forwarding stay reachable without a platform network interface.
+  const effectiveNetworkStatus = (network: NetworkStatus): NetworkStatus =>
+    network === "offline" && hasLoopbackRoute ? "unknown" : network;
   const usesRelay = connectionRoutes(entry).some(
     (route) => route.target._tag === "RelayConnectionTarget",
   );
@@ -285,7 +291,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   const wakeups = yield* ConnectionWakeups.ConnectionWakeups;
   const initialIntent: SupervisorIntent = {
     desired: options?.initiallyDesired ?? false,
-    network: yield* connectivity.status,
+    network: effectiveNetworkStatus(yield* connectivity.status),
   };
   const intent = yield* Ref.make(initialIntent);
   const signals = yield* Queue.unbounded<SupervisorSignal>();
@@ -1151,6 +1157,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   });
 
   yield* connectivity.changes.pipe(
+    Stream.map(effectiveNetworkStatus),
     Stream.runForEach((network) =>
       Ref.modify(intent, (current) =>
         current.network === network ? [false, current] : ([true, { ...current, network }] as const),

@@ -61,7 +61,7 @@ const CACHED_SHELL_SUMMARY: EnvironmentShellSummary = {
 };
 
 describe("mobile workspace projection", () => {
-  it("reports offline before stale connected presentations", () => {
+  it("keeps a connected environment usable when the platform reports offline", () => {
     const environments = [projectWorkspaceEnvironment(ENVIRONMENT_ID, environment("connected"))];
     const state = projectWorkspaceState({
       isReady: true,
@@ -71,9 +71,9 @@ describe("mobile workspace projection", () => {
       hasSyncingConnectedEnvironment: false,
     });
 
-    expect(state.connectionState).toBe("offline");
-    expect(state.networkStatus).toBe("offline");
-    expect(state.hasReadyEnvironment).toBe(false);
+    expect(state.connectionState).toBe("connected");
+    expect(state.networkStatus).toBe("unknown");
+    expect(state.hasReadyEnvironment).toBe(true);
   });
 
   it("keeps retained snapshots visible while reconnecting without claiming readiness", () => {

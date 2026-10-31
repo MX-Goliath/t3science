@@ -331,6 +331,28 @@ describe("EnvironmentSupervisor", () => {
         lastFailure: null,
       });
       expect(yield* Ref.get(harness.prepareCount)).toBe(1);
+
+      for (const origin of [
+        "http://127.0.0.1:3773",
+        "http://localhost:3773",
+        "http://[::1]:3773",
+      ]) {
+        const localHarness = yield* makeHarness({ networkStatus: "offline" });
+        const local = yield* EnvironmentSupervisor.make(
+          {
+            ...TARGET_ENTRY,
+            target: new PrimaryConnectionTarget({
+              ...TARGET,
+              httpBaseUrl: origin,
+              wsBaseUrl: origin.replace("http:", "ws:"),
+            }),
+          },
+          { initiallyDesired: true },
+        ).pipe(Effect.provide(localHarness.dependencies));
+        expect((yield* SubscriptionRef.get(local.state)).phase).not.toBe("offline");
+        yield* awaitState(local.state, (state) => state.phase === "connected");
+        expect(yield* Ref.get(localHarness.prepareCount)).toBe(1);
+      }
     }),
   );
 

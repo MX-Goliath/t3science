@@ -70,20 +70,23 @@ export function projectWorkspaceConnectionState(input: {
       environment.connectionState === "connecting" ||
       environment.connectionState === "reconnecting",
   );
+  const hasReadyEnvironment = activeEnvironments.some(
+    (environment) => environment.connectionState === "connected",
+  );
+  const networkStatus =
+    hasReadyEnvironment && input.networkStatus === "offline" ? "unknown" : input.networkStatus;
 
   return {
     isLoadingConnections: !input.isReady,
     hasConnections: input.environments.length > 0,
-    hasReadyEnvironment:
-      input.networkStatus !== "offline" &&
-      activeEnvironments.some((environment) => environment.connectionState === "connected"),
+    hasReadyEnvironment,
     hasConnectingEnvironment: connectingEnvironments.length > 0,
     connectingEnvironments,
-    connectionState: overallConnectionState(activeEnvironments, input.networkStatus),
+    connectionState: overallConnectionState(activeEnvironments, networkStatus),
     connectionError:
       activeEnvironments.find((environment) => environment.connectionError !== null)
         ?.connectionError ?? null,
-    networkStatus: input.networkStatus,
+    networkStatus,
   };
 }
 
