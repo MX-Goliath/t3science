@@ -10,6 +10,8 @@ const validPreload = `
     getClientPlatform: () => process.platform,
     getLocalEnvironmentBootstraps: () => [],
     getPathForFile: () => "",
+    onTrackpadScrollBegin: () => () => {},
+    onTrackpadScrollEnd: () => () => {},
     pickFolder: (options) => electron.ipcRenderer.invoke(PICK_FOLDER_CHANNEL, options),
   });
 `;
@@ -27,18 +29,18 @@ describe("desktop preload bundle verifier", () => {
     );
   });
 
-  it("rejects a required API whose exposed value is not callable", () => {
-    assert.throws(
-      () =>
-        verifyPreloadBundle(
-          validPreload.replace(
-            "getClientPlatform: () => process.platform,",
-            "getClientPlatform: undefined,",
+  it.each(["getClientPlatform", "onTrackpadScrollBegin", "onTrackpadScrollEnd"])(
+    "rejects a non-callable %s API",
+    (api) => {
+      assert.throws(
+        () =>
+          verifyPreloadBundle(
+            validPreload.replace(new RegExp(`${api}: [^\\n]+`), `${api}: undefined,`),
           ),
-        ),
-      /missing executable APIs: getClientPlatform/,
-    );
-  });
+        new RegExp(`missing executable APIs: ${api}`),
+      );
+    },
+  );
 
   it("accepts a required API exposed through a function alias", () => {
     assert.doesNotThrow(() =>

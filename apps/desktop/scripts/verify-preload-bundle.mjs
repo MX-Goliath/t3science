@@ -10,6 +10,8 @@ const expectedDesktopBridgeApis = [
   "getClientPlatform",
   "getLocalEnvironmentBootstraps",
   "getPathForFile",
+  "onTrackpadScrollBegin",
+  "onTrackpadScrollEnd",
   "pickFolder",
 ];
 const clerkPasskeysGlobal = "__clerk_internal_electron_passkeys";
@@ -145,7 +147,7 @@ export const verifyPreloadBundle = (source) => {
 };
 
 if (process.argv[1] && NodeURL.pathToFileURL(process.argv[1]).href === import.meta.url) {
-  const preloadUrl = new URL("../dist-electron/preload.cjs", import.meta.url);
+  const preloadUrl = process.argv[2] ?? new URL("../dist-electron/preload.cjs", import.meta.url);
   const source = await NodeFSP.readFile(preloadUrl, "utf8");
   verifyPreloadBundle(source);
 }

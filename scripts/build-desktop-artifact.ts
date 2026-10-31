@@ -1953,6 +1953,14 @@ export const validateDesktopRuntimeBundle = Effect.fn("validateDesktopRuntimeBun
       });
     }
   }
+  const repoRoot = yield* RepoRoot;
+  yield* runCommand(
+    ChildProcess.make("node", [
+      path.join(repoRoot, "apps/desktop/scripts/verify-preload-bundle.mjs"),
+      path.join(desktopDist, "preload.cjs"),
+    ]),
+    { label: "verify desktop preload API", verbose: false },
+  );
 });
 
 const desktopBuildProbeSucceeds = Effect.fn("desktopBuildProbeSucceeds")(function* (
