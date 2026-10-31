@@ -82,11 +82,14 @@ jobs:
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
           echo "T3SCIENCE_ANDROID_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
-      - name: Build signed APK
-        run: vp run dist:mobile:android --abi all --output "release/T3-Science-$RELEASE_VERSION-android.apk"
+      - name: Generate native project for validation
+        working-directory: apps/mobile
+        run: vp exec expo prebuild --clean --platform android --no-install
       - name: Test Android APK validation
         working-directory: apps/mobile/android
         run: ./gradlew :t3tools-mobile-app-updates:testReleaseUnitTest
+      - name: Build signed APK
+        run: vp run dist:mobile:android --abi all --output "release/T3-Science-$RELEASE_VERSION-android.apk"
       - name: Verify APK signature and version
         run: |
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
