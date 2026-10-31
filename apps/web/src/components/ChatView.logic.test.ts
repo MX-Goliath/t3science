@@ -4,6 +4,7 @@ import {
   mergeDirectPreviewAnnotation,
   planComposerTurn,
   snapshotComposerSend,
+  optimisticMessageAttachments,
   withMessageContext,
   deriveAvailableRevertTurnCounts,
   deriveWorkspaceMutationId,
@@ -1027,6 +1028,31 @@ describe("snapshotComposerSend", () => {
     expect(snapshot.messageText).toBe(
       ensureInlineContextReferences("run", [terminalContextReference(live)]).trim(),
     );
+  });
+
+  it("gives each optimistic message its own preview while the pinned draft keeps its URL", () => {
+    using createUrl = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValueOnce("blob:send-1")
+      .mockReturnValueOnce("blob:send-2");
+    const image = {
+      type: "image" as const,
+      id: "pinned-image",
+      name: "reference.png",
+      mimeType: "image/png",
+      sizeBytes: 1,
+      previewUrl: "blob:draft",
+      file: new File(["x"], "reference.png", { type: "image/png" }),
+    };
+    expect(optimisticMessageAttachments([image], [image.id])[0]).toMatchObject({
+      previewUrl: "blob:send-1",
+    });
+    expect(optimisticMessageAttachments([image], [image.id])[0]).toMatchObject({
+      previewUrl: "blob:send-2",
+    });
+    expect(optimisticMessageAttachments([image])[0]).toMatchObject({ previewUrl: "blob:draft" });
+    expect(image.previewUrl).toBe("blob:draft");
+    expect(createUrl).toHaveBeenCalledTimes(2);
   });
 });
 

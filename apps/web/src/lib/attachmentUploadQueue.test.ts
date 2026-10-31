@@ -59,7 +59,7 @@ import {
   readAttachmentUpload,
   releaseAttachmentUpload,
   releaseDraftAttachment,
-  releaseDraftAttachments,
+  releaseSentDraftAttachments,
   releasePersistedAttachmentUpload,
   retryAttachmentUpload,
   startAttachmentUpload,
@@ -337,7 +337,20 @@ describe("attachmentUploadQueue", () => {
       },
     ]);
 
-    releaseDraftAttachments([image]);
+    const target = DraftId.make("pinned-upload-send");
+    const store = useComposerDraftStore.getState();
+    store.addImages(target, [image]);
+    store.setAttachmentPinned(target, image.id, true);
+    for (let send = 0; send < 2; send += 1) {
+      store.clearComposerContent(target, { preservePinnedAttachments: true });
+      releaseSentDraftAttachments(target, [image]);
+      expect(
+        getUploadedAttachments({ environmentId: firstEnvironment, images: [image] })?.[0]?.id,
+      ).toBe("pending-environment-1-image-1.png");
+    }
+    store.setAttachmentPinned(target, image.id, false);
+    store.clearComposerContent(target, { preservePinnedAttachments: true });
+    releaseSentDraftAttachments(target, [image]);
     expect(readAttachmentUpload(image.id)).toBeUndefined();
     expect(mocks.runAtomCommand).toHaveBeenCalledWith(
       expect.anything(),

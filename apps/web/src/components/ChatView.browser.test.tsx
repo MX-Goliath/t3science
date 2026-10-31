@@ -4,7 +4,7 @@ import { ThreadId } from "@t3tools/contracts";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import type * as Context from "effect/Context";
 import { expect, it, vi } from "vite-plus/test";
-import { page } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import { AppRoot } from "~/AppRoot";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
@@ -17,6 +17,7 @@ import {
   type FakeDriver,
 } from "../../test/fakeEnvironment";
 import { render } from "../../test/render";
+import { dismissContextMenu } from "~/contextMenuFallback";
 
 // The socket is the only fake layer; see test/appScenarios.renders.tsx.
 vi.mock("../../../../packages/client-runtime/src/connection/driver.ts", async (importOriginal) => {
@@ -61,4 +62,66 @@ it("a new draft does not load its reserved thread before the server lists it", a
     .filter((url) => url.includes(`/api/orchestration/threads/${threadId}/`));
   // A 404 here marks the thread deleted, and the view never loads it once the send creates it.
   expect(threadRequests).toEqual([]);
+});
+
+it("pins and unpins an attachment from the composer thumbnail menu", async () => {
+  using _environment = installFakeEnvironment([]);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const draftId = DraftId.make("draft-pinned-attachment");
+  const store = useComposerDraftStore.getState();
+  store.setProjectDraftThreadId(scopeProjectRef(ENVIRONMENT_ID, PROJECT_ID), draftId, {
+    threadId: ThreadId.make("thread-pinned-attachment"),
+  });
+  const file = new File(
+    [
+      Uint8Array.from(
+        atob(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWKQAAAAASUVORK5CYII=",
+        ),
+        (char) => char.charCodeAt(0),
+      ),
+    ],
+    "reference.png",
+    { type: "image/png" },
+  );
+  store.addImages(draftId, [
+    {
+      type: "image",
+      id: "reference-image",
+      name: file.name,
+      mimeType: file.type,
+      sizeBytes: file.size,
+      previewUrl: URL.createObjectURL(file),
+      file,
+    },
+  ]);
+  const router = getRouter(createMemoryHistory({ initialEntries: [`/draft/${draftId}`] }));
+  await router.load();
+  await using _app = await render(<AppRoot router={router} />, {
+    // AppRoot brings its own router.
+    router: false,
+  });
+  using _menu = { [Symbol.dispose]: () => dismissContextMenu() };
+  await expect.element(page.getByTestId("composer-editor")).toBeVisible();
+  const thumbnail = page.getByRole("button", { name: "Preview reference.png" });
+  await expect.element(thumbnail).toBeVisible();
+  thumbnail
+    .element()
+    .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }));
+  await userEvent.click(page.getByRole("menuitem", { name: "Pin attachment", exact: true }));
+  await expect
+    .element(page.getByRole("img", { name: "Pinned attachment", exact: true }))
+    .toBeVisible();
+  expect(store.getComposerDraft(draftId)?.pinnedAttachmentIds).toEqual(["reference-image"]);
+  thumbnail
+    .element()
+    .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }));
+  await userEvent.click(page.getByRole("menuitem", { name: "Unpin attachment", exact: true }));
+  await expect
+    .element(page.getByRole("img", { name: "Pinned attachment", exact: true }))
+    .not.toBeInTheDocument();
+  await expect.element(thumbnail).toBeVisible();
 });

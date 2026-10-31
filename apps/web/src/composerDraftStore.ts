@@ -239,6 +239,7 @@ type PersistedTerminalContextDraft = typeof PersistedTerminalContextDraft.Type;
 const PersistedComposerThreadDraftState = Schema.Struct({
   prompt: Schema.String,
   attachments: Schema.Array(PersistedComposerImageAttachment),
+  pinnedAttachmentIds: Schema.optionalKey(Schema.Array(Schema.String)),
   files: Schema.optionalKey(Schema.Array(PersistedComposerDraftFileAttachment)),
   terminalContexts: Schema.optionalKey(Schema.Array(PersistedTerminalContextDraft)),
   previewAnnotations: Schema.optionalKey(Schema.Array(PreviewAnnotationPayloadSchema)),
@@ -375,6 +376,7 @@ const contextInsertionHandlers = new Map<string, ComposerContextInsertionHandler
 
 export interface ComposerThreadDraftState {
   prompt: string;
+  pinnedAttachmentIds?: string[];
   images: ComposerImageAttachment[];
   files: ComposerFileAttachment[];
   nonPersistedImageIds: string[];
@@ -645,7 +647,15 @@ interface ComposerDraftStoreState {
     threadRef: ComposerThreadTarget,
     attachments: PersistedComposerImageAttachment[],
   ) => Promise<void>;
-  clearComposerContent: (threadRef: ComposerThreadTarget) => void;
+  setAttachmentPinned: (
+    threadRef: ComposerThreadTarget,
+    attachmentId: string,
+    pinned: boolean,
+  ) => void;
+  clearComposerContent: (
+    threadRef: ComposerThreadTarget,
+    options?: { preservePinnedAttachments?: boolean },
+  ) => void;
   /** Clears text and attachments, preserving terminal/element contexts, preview annotations, and review comments. */
   clearComposerPromptAndImages: (threadRef: ComposerThreadTarget) => void;
   /** Keeps attachments over destination limits, other environments' uploads, terminal/element contexts, annotations, and review comments in source. */
@@ -2016,6 +2026,15 @@ function normalizePersistedDraftsByThreadId(
     nextDraftsByThreadKey[normalizedThreadKey] = {
       prompt,
       attachments,
+      ...(Array.isArray(draftCandidate.pinnedAttachmentIds)
+        ? {
+            pinnedAttachmentIds: draftCandidate.pinnedAttachmentIds.filter(
+              (id) =>
+                attachments.some((attachment) => attachment.id === id) ||
+                files.some((file) => file.id === id),
+            ),
+          }
+        : {}),
       ...(files.length > 0 ? { files } : {}),
       ...(terminalContexts.length > 0 ? { terminalContexts } : {}),
       ...(previewAnnotations.length > 0 ? { previewAnnotations } : {}),
@@ -2137,6 +2156,9 @@ export function partializeComposerDraftStoreState(
     const persistedDraft: DeepMutable<PersistedComposerThreadDraftState> = {
       prompt: draft.prompt,
       attachments: draft.persistedAttachments,
+      ...(draft.pinnedAttachmentIds?.length
+        ? { pinnedAttachmentIds: draft.pinnedAttachmentIds }
+        : {}),
       ...(draft.files.length > 0
         ? {
             files: draft.files.map((file) => ({
@@ -2453,6 +2475,9 @@ function toHydratedThreadDraft(
     files,
     nonPersistedImageIds: [],
     persistedAttachments: [...persistedDraft.attachments],
+    ...(persistedDraft.pinnedAttachmentIds?.length
+      ? { pinnedAttachmentIds: [...persistedDraft.pinnedAttachmentIds] }
+      : {}),
     terminalContexts:
       persistedDraft.terminalContexts?.map((context) => ({
         ...context,
@@ -3339,6 +3364,11 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                 toKindScopedComposerContextId("image", imageId),
               ).prompt,
               images: current.images.filter((image) => image.id !== imageId),
+              ...(current.pinnedAttachmentIds
+                ? {
+                    pinnedAttachmentIds: current.pinnedAttachmentIds.filter((id) => id !== imageId),
+                  }
+                : {}),
               nonPersistedImageIds: current.nonPersistedImageIds.filter((id) => id !== imageId),
               persistedAttachments: current.persistedAttachments.filter(
                 (attachment) => attachment.id !== imageId,
@@ -3451,6 +3481,9 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                 toKindScopedComposerContextId("file", fileId),
               ).prompt,
               files: current.files.filter((file) => file.id !== fileId),
+              ...(current.pinnedAttachmentIds
+                ? { pinnedAttachmentIds: current.pinnedAttachmentIds.filter((id) => id !== fileId) }
+                : {}),
             } satisfies ComposerThreadDraftState;
             const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
             if (shouldRemoveDraft(nextDraft)) {
@@ -4071,7 +4104,34 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           await Promise.resolve();
           verifyPersistedAttachments(threadKey, attachments, set);
         },
-        clearComposerContent: (threadRef) => {
+        setAttachmentPinned: (threadRef, attachmentId, pinned) => {
+          const threadKey = resolveComposerDraftKey(get(), threadRef);
+          if (!threadKey) return;
+          set((state) => {
+            const current = state.draftsByThreadKey[threadKey];
+            if (
+              !current ||
+              ![...current.images, ...current.files].some(
+                (attachment) => attachment.id === attachmentId,
+              )
+            )
+              return state;
+            const ids = current.pinnedAttachmentIds ?? [];
+            if (ids.includes(attachmentId) === pinned) return state;
+            return {
+              draftsByThreadKey: {
+                ...state.draftsByThreadKey,
+                [threadKey]: {
+                  ...current,
+                  pinnedAttachmentIds: pinned
+                    ? [...ids, attachmentId]
+                    : ids.filter((id) => id !== attachmentId),
+                },
+              },
+            };
+          });
+        },
+        clearComposerContent: (threadRef, options) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
           if (threadKey.length === 0) {
             return;
@@ -4081,13 +4141,21 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             if (!current) {
               return state;
             }
+            const pinnedIds = new Set(
+              options?.preservePinnedAttachments ? current.pinnedAttachmentIds : [],
+            );
+            const images = current.images.filter((image) => pinnedIds.has(image.id));
+            const files = current.files.filter((file) => pinnedIds.has(file.id));
             const nextDraft: ComposerThreadDraftState = {
               ...current,
-              prompt: "",
-              images: [],
-              files: [],
-              nonPersistedImageIds: [],
-              persistedAttachments: [],
+              prompt: ensureInlineContextReferences("", files.map(fileContextReference)),
+              images,
+              files,
+              ...(current.pinnedAttachmentIds ? { pinnedAttachmentIds: [...pinnedIds] } : {}),
+              nonPersistedImageIds: current.nonPersistedImageIds.filter((id) => pinnedIds.has(id)),
+              persistedAttachments: current.persistedAttachments.filter((attachment) =>
+                pinnedIds.has(attachment.id),
+              ),
               terminalContexts: [],
               previewAnnotations: [],
               reviewComments: [],
@@ -4128,6 +4196,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               ]),
               images: [],
               files: [],
+              ...(current.pinnedAttachmentIds ? { pinnedAttachmentIds: [] } : {}),
               nonPersistedImageIds: [],
               persistedAttachments: [],
             };
@@ -4200,6 +4269,18 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               prompt: movedPrompt,
               images: [...destination.images, ...movedImages],
               files: [...destination.files, ...movedFiles],
+              ...(source.pinnedAttachmentIds || destination.pinnedAttachmentIds
+                ? {
+                    pinnedAttachmentIds: [
+                      ...new Set([
+                        ...(destination.pinnedAttachmentIds ?? []),
+                        ...(source.pinnedAttachmentIds ?? []).filter(
+                          (id) => movedImageIds.has(id) || movedFileIds.has(id),
+                        ),
+                      ]),
+                    ],
+                  }
+                : {}),
               nonPersistedImageIds: [
                 ...destination.nonPersistedImageIds,
                 ...source.nonPersistedImageIds.filter((imageId) => movedImageIds.has(imageId)),
@@ -4220,6 +4301,13 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               ),
               images: retainedImages,
               files: retainedFiles,
+              ...(source.pinnedAttachmentIds
+                ? {
+                    pinnedAttachmentIds: source.pinnedAttachmentIds.filter(
+                      (id) => !movedImageIds.has(id) && !movedFileIds.has(id),
+                    ),
+                  }
+                : {}),
               nonPersistedImageIds: source.nonPersistedImageIds.filter(
                 (imageId) => !movedImageIds.has(imageId),
               ),

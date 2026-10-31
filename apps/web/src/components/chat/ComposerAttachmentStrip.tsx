@@ -46,6 +46,7 @@ import {
   SnapShotAttachmentDetails,
 } from "./SnapShotAttachmentDetails";
 import { prepareVideoFirstFrame } from "../../lib/videoFirstFrame";
+import { ComposerAttachmentPin, type ComposerAttachmentPinning } from "./ComposerAttachmentPin";
 
 function ComposerVideoThumbnail({ file }: { file: File }) {
   const setVideo = (video: HTMLVideoElement | null) => {
@@ -127,6 +128,7 @@ export function ComposerAttachmentMediaRow({
   onFileOpen,
   onRemoveImage,
   onRemoveFile,
+  pinning,
 }: {
   readonly images: ReadonlyArray<ComposerImageAttachment>;
   readonly expandedImages: ReadonlyArray<ComposerImageAttachment>;
@@ -146,6 +148,7 @@ export function ComposerAttachmentMediaRow({
   readonly onFileOpen: (attachment: ChatFileAttachment) => void;
   readonly onRemoveImage: (imageId: string) => void;
   readonly onRemoveFile: (fileId: string) => void;
+  readonly pinning?: ComposerAttachmentPinning | undefined;
 }) {
   const uploadsByImageId = useAttachmentUploadStore((state) => state.uploadsByImageId);
   const pendingSnapShotIdSet = new Set(pendingSnapShotIds);
@@ -184,6 +187,9 @@ export function ComposerAttachmentMediaRow({
               animateArrival={snapShotAnimations && !snapShotAnimationPending && snapShotArrival}
               animationId={snapShotAnimationPending ? image.id : undefined}
               animationSource={snapShotAnimationPending ? source : undefined}
+              onContextMenu={
+                ready && pinning ? (event) => pinning.onContextMenu(image.id, event) : undefined
+              }
               className={cn(
                 "group/attachment shrink-0 snap-start bg-background",
                 source?.kind === "snap-shot"
@@ -230,6 +236,7 @@ export function ComposerAttachmentMediaRow({
                   {image.name}
                 </div>
               )}
+              {pinning?.pinnedIds.includes(image.id) ? <ComposerAttachmentPin /> : null}
               {source?.kind === "snap-shot" ? (
                 <SnapShotAttachmentDetails
                   source={source}
@@ -246,7 +253,10 @@ export function ComposerAttachmentMediaRow({
                       <span
                         role="img"
                         aria-label="Draft attachment may not persist"
-                        className="absolute left-1 top-1 inline-flex items-center justify-center rounded bg-background/85 p-0.5 text-warning-foreground"
+                        className={cn(
+                          "absolute left-1 inline-flex items-center justify-center rounded bg-background/85 p-0.5 text-warning-foreground",
+                          pinning?.pinnedIds.includes(image.id) ? "top-6" : "top-1",
+                        )}
                       >
                         <CircleAlertIcon className="size-3" />
                       </span>
@@ -333,6 +343,7 @@ export function ComposerAttachmentMediaRow({
         return (
           <div
             key={file.id}
+            onContextMenu={pinning ? (event) => pinning.onContextMenu(file.id, event) : undefined}
             className="relative h-16 w-16 shrink-0 snap-start overflow-hidden rounded-lg border border-border/80 bg-black"
           >
             <button
@@ -357,6 +368,7 @@ export function ComposerAttachmentMediaRow({
               )}
               <PlayIcon className="relative z-10 size-4 fill-current drop-shadow-md" />
             </button>
+            {pinning?.pinnedIds.includes(file.id) ? <ComposerAttachmentPin /> : null}
             {upload?.status === "uploading" && (
               <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-background/85 px-1 text-center text-3xs text-foreground">
                 {formatAttachmentUploadProgress(upload.progress)}
@@ -415,6 +427,7 @@ export function ComposerAttachmentFileList({
   canOperateThread,
   onPreviewFile,
   onRemoveFile,
+  pinning,
 }: {
   readonly files: ReadonlyArray<ComposerFileAttachment>;
   readonly resolvedTheme: "light" | "dark";
@@ -426,6 +439,7 @@ export function ComposerAttachmentFileList({
   readonly canOperateThread: boolean;
   readonly onPreviewFile: (fileId: string) => void;
   readonly onRemoveFile: (fileId: string) => void;
+  readonly pinning?: ComposerAttachmentPinning | undefined;
 }) {
   const uploadsByImageId = useAttachmentUploadStore((state) => state.uploadsByImageId);
   return (
@@ -441,9 +455,13 @@ export function ComposerAttachmentFileList({
         return (
           <div
             key={file.id}
+            onContextMenu={pinning ? (event) => pinning.onContextMenu(file.id, event) : undefined}
             className="flex min-w-0 items-center gap-2 py-1 text-sm text-foreground"
           >
-            <PierreEntryIcon pathValue={file.name} kind="file" theme={resolvedTheme} />
+            <span className="relative shrink-0">
+              <PierreEntryIcon pathValue={file.name} kind="file" theme={resolvedTheme} />
+              {pinning?.pinnedIds.includes(file.id) ? <ComposerAttachmentPin small /> : null}
+            </span>
             <button
               type="button"
               disabled={needsReattach}
@@ -556,12 +574,14 @@ export function ComposerRestingImagePreviews({
   resolvedTheme,
   onExpandImage,
   onShowMore,
+  pinning,
 }: {
   readonly images: ReadonlyArray<ComposerImageAttachment>;
   readonly allImages: ReadonlyArray<ComposerImageAttachment>;
   readonly resolvedTheme: "light" | "dark";
   readonly onExpandImage: (preview: ExpandedImagePreview) => void;
   readonly onShowMore: () => void;
+  readonly pinning?: ComposerAttachmentPinning | undefined;
 }) {
   const counts = getRestingComposerImagePreviewCounts(images.length);
   const visibleImages = images.slice(0, counts.visibleCount);
@@ -573,12 +593,14 @@ export function ComposerRestingImagePreviews({
           type="button"
           className="relative size-7 shrink-0 cursor-zoom-in overflow-hidden rounded-md border border-border/70 bg-muted/60"
           aria-label={`Preview ${image.name}`}
+          onContextMenu={pinning ? (event) => pinning.onContextMenu(image.id, event) : undefined}
           onPointerDown={(event) => event.preventDefault()}
           onClick={() => {
             const preview = buildExpandedImagePreview(allImages, image.id);
             if (preview) onExpandImage(preview);
           }}
         >
+          {pinning?.pinnedIds.includes(image.id) ? <ComposerAttachmentPin small /> : null}
           {image.previewUrl ? (
             <ComposerImageThumbnail
               file={image.file}

@@ -631,3 +631,17 @@ export function releaseDraftAttachments(
     releaseDraftAttachment(attachment);
   }
 }
+
+export function releaseSentDraftAttachments(
+  target: ComposerThreadTarget,
+  attachments: ReadonlyArray<ComposerImageAttachment | ComposerFileAttachment>,
+): void {
+  const store = useComposerDraftStore.getState();
+  const destination =
+    typeof target === "string" ? (store.getPromotedDraftRedirect(target) ?? target) : target;
+  const draft = store.getComposerDraft(destination);
+  const retainedIds = new Set(
+    [...(draft?.images ?? []), ...(draft?.files ?? [])].map((attachment) => attachment.id),
+  );
+  releaseDraftAttachments(attachments.filter((attachment) => !retainedIds.has(attachment.id)));
+}

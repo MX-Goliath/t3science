@@ -43,6 +43,11 @@ Uploads begin when you add an attachment. All uploads must finish before the
 message can send. Retry or remove a failed upload. On web and desktop, reloading
 before an upload finishes requires you to attach that file again.
 
+On web and desktop, right-click an attachment thumbnail beside the composer and
+choose **Pin attachment** to include it with every message in that chat. It stays
+in the composer after sending and across restarts. Choose **Unpin attachment**
+to send it just once more, or remove it to stop including it immediately.
+
 You can drag or paste images into the web or desktop composer. HEIC and HEIF
 photos are converted to JPEG there and when selected from the mobile photo
 library; photos over the image limit are also resized to fit. On mobile, you can

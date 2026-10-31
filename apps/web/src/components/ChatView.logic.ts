@@ -1457,6 +1457,7 @@ export function withMessageContext(input: {
 /** The attachments the optimistic user row shows before the server echoes the message. */
 export function optimisticMessageAttachments(
   attachments: ReadonlyArray<ComposerImageAttachment | ComposerFileAttachment>,
+  retainedAttachmentIds: ReadonlyArray<string> = [],
 ) {
   return attachments.map((attachment) =>
     attachment.type === "image"
@@ -1466,7 +1467,12 @@ export function optimisticMessageAttachments(
           name: attachment.name,
           mimeType: attachment.mimeType,
           sizeBytes: attachment.sizeBytes,
-          previewUrl: attachment.previewUrl,
+          // The optimistic row owns its blob URL; a pinned draft must keep its own preview alive.
+          previewUrl:
+            retainedAttachmentIds.includes(attachment.id) &&
+            attachment.previewUrl.startsWith("blob:")
+              ? URL.createObjectURL(attachment.file)
+              : attachment.previewUrl,
           ...(attachment.source ? { source: attachment.source } : {}),
         }
       : {

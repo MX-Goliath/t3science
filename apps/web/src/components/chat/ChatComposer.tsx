@@ -197,6 +197,10 @@ import {
   environmentContextReference,
 } from "~/lib/composerContextRecords";
 import { rememberCopiedComposerAttachments } from "~/lib/copiedComposerAttachments";
+import {
+  showComposerAttachmentPinMenu,
+  type ComposerAttachmentPinning,
+} from "./ComposerAttachmentPin";
 import { useThreadContextDrop, threadContextDropTargetProps } from "./threadContextDrag";
 import { readThreadShell } from "~/state/entities";
 import { useLinkedEnvironments } from "~/state/peerLinks";
@@ -668,6 +672,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       : null;
   const attachmentDraftTarget = questionAttachmentTarget ?? composerDraftTarget;
   const attachmentDraft = useComposerThreadDraft(attachmentDraftTarget);
+  const attachmentPinning: ComposerAttachmentPinning | undefined =
+    questionAttachmentTarget === null && !isEditingQueuedMessage && canOperateThread
+      ? {
+          pinnedIds: attachmentDraft.pinnedAttachmentIds ?? [],
+          onContextMenu: (id, event) => {
+            void showComposerAttachmentPinMenu(attachmentDraftTarget, id, event);
+          },
+        }
+      : undefined;
   const questionTakesSnapShots =
     supportsQuestionAttachments &&
     activePendingProgress?.activeQuestion?.allowCustomAnswer !== false &&
@@ -722,7 +735,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerOtherFiles = composerOtherFilesForPresentation(
     composerFiles,
     environmentId,
-    inlineFileIdSet,
+    new Set(
+      [...inlineFileIdSet].filter((id) => !attachmentDraft.pinnedAttachmentIds?.includes(id)),
+    ),
   );
   const composerTerminalContexts = composerDraft.terminalContexts;
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
@@ -2493,6 +2508,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         resolvedTheme={resolvedTheme}
         onExpandImage={onExpandImage}
         onShowMore={expandMobileComposer}
+        pinning={attachmentPinning}
       />
     ) : null;
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
@@ -3298,6 +3314,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         onFileOpen={onFileOpen}
         onRemoveImage={removeComposerImage}
         onRemoveFile={removeComposerFileFromDraft}
+        pinning={attachmentPinning}
       />
     ) : null;
   const composerAttachmentFileList =
@@ -3313,6 +3330,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         canOperateThread={canOperateThread}
         onPreviewFile={setPreviewFileId}
         onRemoveFile={removeComposerFileFromDraft}
+        pinning={attachmentPinning}
       />
     ) : null;
   const composerAttachButton = showComposerAttachAction ? (

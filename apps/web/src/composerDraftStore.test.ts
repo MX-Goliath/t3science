@@ -290,6 +290,104 @@ describe("composerDraftStore addImages", () => {
   });
 });
 
+describe("composerDraftStore pinned attachments", () => {
+  beforeEach(resetComposerDraftStore);
+
+  it("keeps only pinned attachments across sends, then clears them after unpinning", () => {
+    const target = scopeThreadRef(TEST_ENVIRONMENT_ID, ThreadId.make("pinned-attachments"));
+    const otherTarget = scopeThreadRef(TEST_ENVIRONMENT_ID, ThreadId.make("other-attachments"));
+    const image = makeImage({ id: "pinned-image", previewUrl: "data:image/png;base64,AQ==" });
+    const ordinary = makeImage({
+      id: "ordinary-image",
+      previewUrl: "data:image/png;base64,Ag==",
+      name: "other.png",
+    });
+    const file = makeFile("pinned-file");
+    const store = useComposerDraftStore.getState();
+    store.addImages(target, [image, ordinary]);
+    store.addFiles(target, [file]);
+    store.addImages(otherTarget, [image]);
+    store.setAttachmentPinned(target, image.id, true);
+    store.setAttachmentPinned(target, file.id, true);
+    store.setAttachmentPinned(target, "missing", true);
+
+    for (const prompt of ["First message", "Second message"]) {
+      store.setPrompt(target, prompt);
+      store.clearComposerContent(target, { preservePinnedAttachments: true });
+      const draft = store.getComposerDraft(target)!;
+      expect(draft.images).toEqual([image]);
+      expect(draft.files).toEqual([file]);
+      expect(draft.pinnedAttachmentIds).toEqual([image.id, file.id]);
+      expect(draft.prompt).not.toContain(prompt);
+      expect(draft.prompt).toContain("t3-context://v1/file/file_pinned-file");
+      expect(store.getComposerDraft(otherTarget)?.pinnedAttachmentIds).toBeUndefined();
+    }
+    store.setAttachmentPinned(target, image.id, false);
+    expect(store.getComposerDraft(target)?.images).toEqual([image]);
+    store.clearComposerContent(target, { preservePinnedAttachments: true });
+    expect(store.getComposerDraft(target)?.images).toEqual([]);
+    store.removeFile(target, file.id);
+    expect(store.getComposerDraft(target)).toBeNull();
+  });
+
+  it("persists image and file pins and transfers them when the draft moves", () => {
+    const target = scopeThreadRef(TEST_ENVIRONMENT_ID, ThreadId.make("pin-reload"));
+    const destination = scopeThreadRef(TEST_ENVIRONMENT_ID, ThreadId.make("pin-destination"));
+    const store = useComposerDraftStore.getState();
+    const merge = useComposerDraftStore.persist.getOptions().merge!;
+    useComposerDraftStore.setState(
+      merge(
+        {
+          draftsByThreadKey: {
+            [scopedThreadKey(target)]: {
+              prompt: "",
+              attachments: [
+                {
+                  id: "saved-image",
+                  name: "reference.png",
+                  mimeType: "image/png",
+                  sizeBytes: 1,
+                  dataUrl: "data:image/png;base64,AQ==",
+                },
+              ],
+            },
+          },
+        },
+        useComposerDraftStore.getInitialState(),
+      ),
+    );
+    const file = makeFile("pinned-upload");
+    store.addFiles(target, [file]);
+    store.setFileUpload(target, file.id, TEST_ENVIRONMENT_ID, "pending-pinned-upload");
+    store.setAttachmentPinned(target, file.id, true);
+    store.setAttachmentPinned(target, "saved-image", true);
+    const hydrated = merge(
+      JSON.parse(
+        JSON.stringify(partializeComposerDraftStoreState(useComposerDraftStore.getState())),
+      ),
+      useComposerDraftStore.getInitialState(),
+    );
+    useComposerDraftStore.setState(hydrated);
+    expect(store.getComposerDraft(target)?.pinnedAttachmentIds).toEqual([file.id, "saved-image"]);
+    expect(store.getComposerDraft(target)?.images[0]?.previewUrl).toBe(
+      "data:image/png;base64,AQ==",
+    );
+    expect(store.getComposerDraft(target)?.files[0]?.uploadedAttachmentId).toBe(
+      "pending-pinned-upload",
+    );
+    store.moveComposerPromptAndImages(target, destination);
+    expect(store.getComposerDraft(destination)?.pinnedAttachmentIds).toEqual([
+      file.id,
+      "saved-image",
+    ]);
+    store.clearComposerContent(destination, { preservePinnedAttachments: true });
+    expect(store.getComposerDraft(destination)?.files).toHaveLength(1);
+    expect(store.getComposerDraft(destination)?.images).toHaveLength(1);
+    store.clearComposerContent(destination);
+    expect(store.getComposerDraft(destination)).toBeNull();
+  });
+});
+
 describe("composerDraftStore copied attachments", () => {
   beforeEach(resetComposerDraftStore);
   afterEach(() => {

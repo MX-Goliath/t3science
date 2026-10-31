@@ -18,7 +18,7 @@ import {
   useComposerDraftStore,
 } from "../../composerDraftStore";
 import type { ComposerHandleRef } from "../../composerHandleContext";
-import { releaseDraftAttachments } from "../../lib/attachmentUploadQueue";
+import { releaseSentDraftAttachments } from "../../lib/attachmentUploadQueue";
 import type { buildMessageContext } from "../../lib/composerContextRecords";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { threadEnvironment } from "../../state/threads";
@@ -133,7 +133,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
         attachments: attachmentsSnapshot,
       });
       promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget);
+      clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
       composerRef.current?.resetCursorState();
       clearedDraft = true;
       const clearedDraftSnapshot = useComposerDraftStore
@@ -221,7 +221,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
         );
       }
       if (failedSelections.length === 0 && usesAttachmentUploads) {
-        releaseDraftAttachments(attachmentsSnapshot);
+        releaseSentDraftAttachments(composerDraftTarget, attachmentsSnapshot);
       }
     });
     if (sendResult._tag === "Failure") {

@@ -104,7 +104,7 @@ import {
   awaitAttachmentUploads,
   getUploadedAttachments,
   readAttachmentUpload,
-  releaseDraftAttachments,
+  releaseSentDraftAttachments,
   retryAttachmentUpload,
   startAttachmentUpload,
 } from "../../lib/attachmentUploadQueue";
@@ -693,7 +693,7 @@ export function useComposerSend(input: ComposerSendInput) {
         },
         clearDraft: () => {
           promptRef.current = "";
-          clearComposerDraftContent(composerDraftTarget);
+          clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
           composerRef.current?.resetCursorState();
         },
         onUpdate: (submission) => {
@@ -748,7 +748,7 @@ export function useComposerSend(input: ComposerSendInput) {
       const followUpThreadContexts = [...composerThreadContexts];
       const followUpEnvironmentContexts = [...composerEnvironmentContexts];
       promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget);
+      clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
       composerRef.current?.resetCursorState();
       const followUpSent = await submitPlanFollowUp({
         text: followUp.text,
@@ -808,7 +808,7 @@ export function useComposerSend(input: ComposerSendInput) {
     if (standaloneSlashCommand && multipleModelSelections === null) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget);
+      clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
       composerRef.current?.resetCursorState();
       return;
     }
@@ -1120,7 +1120,7 @@ export function useComposerSend(input: ComposerSendInput) {
             draftBeforeDecline
         ) {
           promptRef.current = "";
-          clearComposerDraftContent(composerDraftTarget);
+          clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
           composerRef.current?.resetCursorState();
         }
         return;
@@ -1206,7 +1206,10 @@ export function useComposerSend(input: ComposerSendInput) {
       });
       return;
     }
-    const optimisticAttachments = optimisticMessageAttachments(composerAttachmentsSnapshot);
+    const optimisticAttachments = optimisticMessageAttachments(
+      composerAttachmentsSnapshot,
+      useComposerDraftStore.getState().getComposerDraft(composerDraftTarget)?.pinnedAttachmentIds,
+    );
     if (!shouldQueueBehindActiveRun) {
       anchorNewTurn(
         scopedThreadKey(scopeThreadRef(activeThread.environmentId, threadIdForSend)),
@@ -1257,7 +1260,7 @@ export function useComposerSend(input: ComposerSendInput) {
     // Keep new-thread flows from reusing this draft while attachments and worktree setup settle.
     if (sentDraftThreadRef) markPromotedDraftThreadByRef(sentDraftThreadRef);
     promptRef.current = "";
-    clearComposerDraftContent(composerDraftTarget);
+    clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
     composerRef.current?.resetCursorState();
 
     const title = deriveThreadTitleSeed({
@@ -1414,7 +1417,7 @@ export function useComposerSend(input: ComposerSendInput) {
         setKeepFullHistory(routeThreadKey, false);
         clearUsageLimitsFor(routeThreadKey);
         if (turnUsesAttachmentUploads) {
-          releaseDraftAttachments(composerAttachmentsSnapshot);
+          releaseSentDraftAttachments(composerDraftTarget, composerAttachmentsSnapshot);
         }
         acknowledgeActiveThreadWoke();
         // A draft still on screen finalizes once its thread route takes over.
