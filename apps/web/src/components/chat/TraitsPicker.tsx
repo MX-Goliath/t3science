@@ -726,6 +726,10 @@ export const TraitsPicker = memo(function TraitsPicker({
     : isComposerOwned
       ? triggerLabel
       : null;
+  const speedIcon =
+    speedLabel === "Fast" || speedLabel === "Ultrafast" ? (
+      <FastBolt ultra={speedLabel === "Ultrafast"} />
+    ) : null;
 
   return (
     <Menu
@@ -788,38 +792,41 @@ export const TraitsPicker = memo(function TraitsPicker({
                 <EffortGlyph count={effortGlyph.count} filled={effortGlyph.filled} size={size} />
               ) : null}
               {effortWord !== null ? (
-                <>
-                  <span data-composer-control-label className="grid text-left">
-                    {effortDisplay === "label"
-                      ? primarySelectDescriptor?.options.map((option) => (
-                          <span
-                            key={option.id}
-                            aria-hidden="true"
-                            className="invisible col-start-1 row-start-1"
-                          >
-                            {option.label}
-                          </span>
-                        ))
-                      : null}
-                    <span className={cn("col-start-1 row-start-1", effortLabelClassName)}>
+                <span className="grid text-left">
+                  {effortDisplay === "label"
+                    ? primarySelectDescriptor?.options.map((option) => (
+                        <span
+                          key={option.id}
+                          aria-hidden="true"
+                          data-composer-control-label
+                          className="invisible col-start-1 row-start-1 flex items-center gap-1.5"
+                        >
+                          <span>{option.label}</span>
+                          {speedIcon}
+                        </span>
+                      ))
+                    : null}
+                  <span className="col-start-1 row-start-1 flex items-center gap-1.5">
+                    <span data-composer-control-label className={effortLabelClassName}>
                       {effortWord}
                     </span>
+                    {/* Icon-only footers hide labels and reveal this instead. */}
+                    <GaugeIcon
+                      aria-hidden="true"
+                      data-composer-control-compact-icon
+                      className="invisible absolute size-3.5"
+                    />
+                    {speedIcon}
                   </span>
-                  {/* Icon-only footers hide labels and reveal this instead. */}
-                  <GaugeIcon
-                    aria-hidden="true"
-                    data-composer-control-compact-icon
-                    className="invisible absolute size-3.5"
-                  />
-                </>
-              ) : (
-                <span data-composer-control-label className="sr-only">
-                  {triggerLabel}
                 </span>
+              ) : (
+                <>
+                  <span data-composer-control-label className="sr-only">
+                    {triggerLabel}
+                  </span>
+                  {speedIcon}
+                </>
               )}
-              {speedLabel === "Fast" || speedLabel === "Ultrafast" ? (
-                <FastBolt ultra={speedLabel === "Ultrafast"} />
-              ) : null}
               {otherLabels.length > 0 ? (
                 <span
                   aria-hidden="true"
