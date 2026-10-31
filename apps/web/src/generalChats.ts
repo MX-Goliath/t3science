@@ -34,6 +34,8 @@ export function buildGeneralChatsProjectSnapshot(input: {
   return {
     ...representative,
     projectKey: GENERAL_CHATS_PROJECT_KEY,
+    pinned: false,
+    archived: false,
     displayName: "General chats",
     groupedProjectCount: members.length,
     environmentPresence: hasLocal && hasRemote ? "mixed" : hasRemote ? "remote-only" : "local-only",
