@@ -240,14 +240,6 @@ const makeProjectConversationStorage = Effect.gen(function* () {
   const threadDocumentPath = (workspaceRoot: string, threadId: ThreadId) =>
     path.join(threadsDirectory(workspaceRoot), `${threadId}.json`);
 
-  const requireDesktop = Effect.fn("ProjectConversationStorage.requireDesktop")(function* () {
-    if (config.mode !== "desktop") {
-      return yield* storageError(
-        "Local project conversation storage is available only in the desktop app.",
-      );
-    }
-  });
-
   const readManifest = Effect.fn("ProjectConversationStorage.readManifest")(function* (
     workspaceRoot: string,
   ) {
@@ -535,7 +527,6 @@ const makeProjectConversationStorage = Effect.gen(function* () {
   const getState: ProjectConversationStorageShape["getState"] = (projectId) =>
     wrapStorageError(
       Effect.gen(function* () {
-        yield* requireDesktop();
         return yield* stateForProject(yield* resolveProject(projectId));
       }),
     );
@@ -543,7 +534,6 @@ const makeProjectConversationStorage = Effect.gen(function* () {
   const setEnabled: ProjectConversationStorageShape["setEnabled"] = (input) =>
     wrapStorageError(
       Effect.gen(function* () {
-        yield* requireDesktop();
         const project = yield* resolveProject(input.projectId);
         if (input.enabled) {
           const importedProject = yield* importProjectScripts(project);
@@ -640,7 +630,6 @@ const makeProjectConversationStorage = Effect.gen(function* () {
   const start: ProjectConversationStorageShape["start"] = Effect.fn(
     "ProjectConversationStorage.start",
   )(function* () {
-    if (config.mode !== "desktop") return;
     const afterSequence = yield* events.latestApplicationSequence.pipe(Effect.orDie);
     const snapshot = yield* engine
       .getShellSnapshot()

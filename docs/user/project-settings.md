@@ -46,6 +46,13 @@ Settings that are environment-wide stay read-only while a project is selected. W
 targets disagree, a control shows **Mixed** until you choose one value. Appearance, keyboard,
 and other phone-only settings ignore the filter.
 
+## Portable conversations
+
+In **Settings → Projects**, choose a project and enable **Save conversations** for
+the checkout you want. Conversations and their attachments are stored under
+`.t3/conversations` in that checkout, including when you control it from your phone.
+Turning this off keeps existing exports and stops automatic updates and imports.
+
 ## Worktree branch names
 
 In **Settings → Worktrees → Worktree branch naming**, choose a static prefix,

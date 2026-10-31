@@ -211,13 +211,7 @@ it.effect(
           scripts,
         }),
       );
-      const testConfig = Layer.effect(
-        ServerConfig,
-        Effect.gen(function* () {
-          const config = yield* ServerConfig;
-          return ServerConfig.of({ ...config, mode: "desktop" });
-        }),
-      ).pipe(Layer.provide(ServerConfig.layerTest(root, stateDir)));
+      const testConfig = ServerConfig.layerTest(root, stateDir);
       yield* Effect.gen(function* () {
         const projections = yield* ProjectionStore.ProjectionStoreV2;
         const eventSink = yield* EventSink.EventSinkV2;

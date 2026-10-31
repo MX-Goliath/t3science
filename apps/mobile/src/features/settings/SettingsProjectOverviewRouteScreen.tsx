@@ -33,6 +33,7 @@ import {
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
+import { ProjectConversationStorage } from "./components/ProjectConversationStorage";
 import { ListActionRow as SettingsActionRow } from "../../components/ui/ListActionRow";
 import {
   AndroidSettingsEnvironmentFilter,
@@ -332,6 +333,18 @@ function ProjectOverviewContent(props: {
             </View>
           );
         })}
+      </SettingsSection>
+      <SettingsSection title="Conversation storage">
+        {props.members.map((member) => (
+          <ProjectConversationStorage
+            key={`${member.environmentId}:${member.id}`}
+            project={member}
+            environmentLabel={
+              props.environments.find((entry) => entry.environmentId === member.environmentId)
+                ?.label ?? "Environment"
+            }
+          />
+        ))}
       </SettingsSection>
       <SettingsSection title="Danger">
         <SettingsActionRow
