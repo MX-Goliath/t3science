@@ -1,5 +1,15 @@
 # Updating T3 Code
 
+T3 Science desktop and Android releases come from
+[MX-Goliath/t3science](https://github.com/MX-Goliath/t3science/releases).
+AppImage, Windows installer and Windows portable builds use the existing
+desktop update controls on the Stable track. Keep **Settings → About → Update
+track** on Stable for these releases. Android downloads a new APK automatically and opens
+the system installer the next time you launch the app. Allow installation
+from T3 Science when Android asks, then confirm the update. To check or retry
+manually, tap the version five times in **Settings → About**. Keep the app
+installed to retain local connections and drafts.
+
 The app you use and the server running your agents can be on different machines.
 When a server is behind your web or desktop app, the update button at the bottom
 of the sidebar and **Settings → Environments** offer to update it.

@@ -570,7 +570,41 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       assert.isNull(preview.publish);
       assert.isNull(previewChannel.publish);
-      assert.isNull(release.publish);
+      assert.deepStrictEqual(release.publish, [
+        { provider: "github", owner: "MX-Goliath", repo: "t3science", channel: "latest" },
+      ]);
+      for (const [platform, target] of [
+        ["linux", "AppImage"],
+        ["win", "nsis"],
+        ["win", "portable"],
+      ] as const) {
+        const config = yield* createBuildConfig(
+          platform,
+          target,
+          "0.0.33",
+          false,
+          false,
+          undefined,
+          undefined,
+        );
+        assert.deepStrictEqual(config.publish, release.publish);
+        if (target === "portable") {
+          const portableFeed = { from: "portable-app-update.yml", to: "app-update.yml" };
+          assert.deepInclude(config.extraResources, portableFeed);
+          assert.equal(config.artifactName, "T3-Science-${version}-${arch}-portable.${ext}");
+          const portablePreview = yield* createBuildConfig(
+            "win",
+            "portable",
+            "0.0.33-pr.8182.1",
+            false,
+            false,
+            undefined,
+            undefined,
+          );
+          assert.isNull(portablePreview.publish);
+          assert.notDeepInclude(portablePreview.extraResources, portableFeed);
+        }
+      }
     }).pipe(
       Effect.provide(
         ConfigProvider.layer(

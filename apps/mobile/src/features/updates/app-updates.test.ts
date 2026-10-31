@@ -17,6 +17,10 @@ vi.mock("expo-updates", () => ({
   reloadAsync: vi.fn(),
 }));
 
+vi.mock("./android-app-update-client", () => ({
+  createAndroidAppUpdateClient: () => null,
+}));
+
 vi.mock("react-native", () => ({
   AppState: {
     currentState: "active",
@@ -76,6 +80,32 @@ function makeAvailableUpdateClient(overrides: Partial<AppUpdateClient> = {}): Ap
 }
 
 describe("runAppUpdateCheck", () => {
+  it("keeps an APK ready until the next launch and allows retrying the system installer", async () => {
+    const client = makeAvailableUpdateClient({ installOnNextLaunch: true });
+    const { backgroundCallbacks, foregroundStayCallbacks, environment } = makeUpdateEnvironment();
+    const deferral = createAppUpdateDeferral();
+    const states: AppUpdateCheckState[] = [];
+    const options = {
+      client,
+      environment,
+      deferral,
+      onStateChange: (state: AppUpdateCheckState) => states.push(state),
+    };
+
+    await runAppUpdateCheck(options);
+    expect(states).toEqual(["checking", "downloading", "ready"]);
+    expect(backgroundCallbacks).toHaveLength(0);
+    expect(foregroundStayCallbacks).toHaveLength(0);
+    expect(client.reloadAsync).not.toHaveBeenCalled();
+    expect(deferral.pendingInstall).toBe(true);
+
+    await runAppUpdateCheck({ ...options, applyMode: "immediate" });
+    await runAppUpdateCheck({ ...options, applyMode: "immediate" });
+    expect(client.checkForUpdateAsync).toHaveBeenCalledOnce();
+    expect(client.reloadAsync).toHaveBeenCalledTimes(2);
+    expect(deferral.installInProgress).toBe(false);
+    expect(states.at(-1)).toBe("ready");
+  });
   it("flushes pending writes before restarting", async () => {
     const client = makeAvailableUpdateClient();
     const { environment } = makeUpdateEnvironment();
@@ -304,6 +334,20 @@ describe("runAppUpdateCheck", () => {
 });
 
 describe("installAppUpdateChecks", () => {
+  it("hands a saved APK to the installer at launch before checking the next release", async () => {
+    let finishInstall!: () => void;
+    const client = makeUpdateClient({
+      installPendingOnLaunch: () =>
+        new Promise<void>((resolve) => {
+          finishInstall = resolve;
+        }),
+    });
+    const dispose = installAppUpdateChecks(client);
+    expect(client.checkForUpdateAsync).not.toHaveBeenCalled();
+    finishInstall();
+    await vi.waitFor(() => expect(client.checkForUpdateAsync).toHaveBeenCalledOnce());
+    dispose();
+  });
   it("checks once at launch and stops listening for foregrounds when disposed", () => {
     const remove = vi.fn();
     vi.mocked(AppState.addEventListener).mockReturnValueOnce({ remove });

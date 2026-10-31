@@ -2924,20 +2924,29 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),
       ...(platform === "linux" ? LINUX_BROWSER_SECRET_EXTRA_RESOURCES : []),
       ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
+      ...(platform === "win" && target === "portable" && !isDesktopPreviewVersion(version)
+        ? [{ from: "portable-app-update.yml", to: "app-update.yml" }]
+        : []),
       ...(platform === "win" && wslRuntimeBundled ? WSL_RUNTIME_EXTRA_RESOURCES : []),
     ],
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
   // Missing publish config infers a GitHub feed from tokens; staging has no repository, so manifest generation would crash.
   buildConfig.publish = null;
-  // T3 Science has a distinct application identity, so upstream artifacts are incompatible.
-  if (!isDesktopPreviewVersion(version) && mockUpdates) {
+  if (!isDesktopPreviewVersion(version)) {
     buildConfig.publish = [
-      {
-        provider: "generic",
-        url: resolveMockUpdateServerUrl(mockUpdateServerPort),
-      },
+      mockUpdates
+        ? { provider: "generic", url: resolveMockUpdateServerUrl(mockUpdateServerPort) }
+        : {
+            provider: "github",
+            owner: "MX-Goliath",
+            repo: "t3science",
+            channel: updateChannel,
+          },
     ];
+  }
+  if (platform === "win" && target === "portable") {
+    buildConfig.artifactName = `${DESKTOP_ARTIFACT_BASE_NAME}-\${version}-\${arch}-portable.\${ext}`;
   }
 
   if (platform === "mac") {
@@ -4027,6 +4036,16 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   yield* fs.writeFileString(path.join(stageAppDir, "package.json"), `${stagePackageJsonString}\n`);
   if (options.platform === "linux") {
     yield* fs.writeFileString(path.join(stageAppDir, "after-pack.cjs"), renderLinuxAfterPackHook());
+  }
+  if (
+    options.platform === "win" &&
+    options.target === "portable" &&
+    !isDesktopPreviewVersion(appVersion)
+  ) {
+    yield* fs.writeFileString(
+      path.join(stageAppDir, "portable-app-update.yml"),
+      "provider: generic\nurl: https://github.com/MX-Goliath/t3science/releases/latest/download/\nupdaterCacheDirName: t3science-portable-updater\n",
+    );
   }
   const stageWorkspaceConfig = createStageWorkspaceConfig({
     platform: options.platform,
