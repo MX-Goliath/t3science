@@ -39,7 +39,26 @@ it.effect("publishes portable and APK manifests for the exact release assets", (
     ]) {
       yield* fs.writeFileString(path.join(directory, file), file);
     }
+    yield* fs.writeFileString(
+      path.join(directory, "latest-linux.yml"),
+      `version: 2.2.1
+files:
+  - url: T3-Science-2.2.1-x86_64.AppImage
+    sha512: image-checksum
+    size: 100
+    blockMapSize: 20
+  - url: T3-Science-2.2.1-amd64.deb
+    sha512: deb-checksum
+    size: 200
+path: T3-Science-2.2.1-x86_64.AppImage
+sha512: image-checksum
+releaseDate: '2026-10-31T00:00:00.000Z'
+`,
+    );
     yield* prepareScienceRelease(directory, "2.2.1", "2002001");
+    const linuxManifest = yield* fs.readFileString(path.join(directory, "latest-linux.yml"));
+    assert.notInclude(linuxManifest, ".deb");
+    assert.include(linuxManifest, "blockMapSize: 20");
     const manifest = parseUpdateManifest(
       yield* fs.readFileString(path.join(directory, "latest-portable.yml")),
       "latest-portable.yml",

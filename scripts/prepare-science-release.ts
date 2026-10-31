@@ -7,10 +7,29 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { Argument, Command } from "effect/cli";
+import { fromYaml } from "@t3tools/shared/schemaYaml";
 
 import { serializeUpdateManifest } from "./lib/update-manifest.ts";
 
 const encodeMetadata = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+const LinuxUpdateManifest = fromYaml(
+  Schema.Struct({
+    version: Schema.String,
+    files: Schema.Array(
+      Schema.Struct({
+        url: Schema.String,
+        sha512: Schema.String,
+        size: Schema.Number,
+        blockMapSize: Schema.optional(Schema.Number),
+      }),
+    ),
+    path: Schema.String,
+    sha512: Schema.String,
+    releaseDate: Schema.String,
+  }),
+);
+const decodeLinuxManifest = Schema.decodeEffect(LinuxUpdateManifest);
+const encodeLinuxManifest = Schema.encodeEffect(LinuxUpdateManifest);
 
 export function validateScienceReleaseVersion(version: string, versionCode: string): number {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
@@ -43,6 +62,22 @@ export const prepareScienceRelease = Effect.fn("prepareScienceRelease")(function
   ]) {
     yield* fs.stat(path.join(directory, file));
   }
+  const linuxManifestPath = path.join(directory, "latest-linux.yml");
+  const linuxManifest = yield* decodeLinuxManifest(yield* fs.readFileString(linuxManifestPath));
+  const appImage = linuxManifest.files.find(
+    (file) => file.url === `T3-Science-${version}-x86_64.AppImage`,
+  );
+  if (linuxManifest.version !== version || !appImage)
+    throw new Error("Linux update manifest does not match this release.");
+  yield* fs.writeFileString(
+    linuxManifestPath,
+    yield* encodeLinuxManifest({
+      ...linuxManifest,
+      files: [appImage],
+      path: appImage.url,
+      sha512: appImage.sha512,
+    }),
+  );
   const portableBytes = yield* fs.readFile(path.join(directory, portable));
   const sha512 = Buffer.from(yield* crypto.digest("SHA-512", portableBytes)).toString("base64");
   yield* fs.writeFileString(
