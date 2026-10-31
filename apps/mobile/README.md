@@ -1,7 +1,7 @@
-# T3 Code Mobile
+# T3 Science Mobile
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> T3 Science Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
 
 ## Quickstart
 
@@ -10,9 +10,9 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
-- `production`: store/release build as `T3 Code`
+- `development`: Expo dev client, installable side-by-side as `T3 Science Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `T3 Science Preview`
+- `production`: store/release build as `T3 Science`
 
 Run commands from `apps/mobile`.
 
@@ -124,7 +124,24 @@ node ../../scripts/mobile-native-static-check.ts
 
 The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin. Missing native tools are reported as warnings and skipped locally. CI installs the default toolset from `apps/mobile/Brewfile` before running the native checks.
 
+## Standalone Android APK
+
+From the repository root, run `vp run dist:mobile:android`. It builds the production
+app with its JavaScript bundle and writes `release/t3science-android.apk`; Metro is
+not needed. Install it with `adb -s <phone-serial> install -r release/t3science-android.apk`.
+The default ABI is `arm64-v8a`; use `--abi x86_64` for an emulator or `--abi all`
+for a universal APK. Set `ANDROID_HOME` and `JAVA_HOME` to your local SDK and JDK.
+The Expo project's local signing key signs this sideload build; store distribution
+needs your own signing configuration.
+
+T3 Science uses its own package IDs and schemes, so it installs alongside upstream
+T3 Code. Pair this app with the T3 Science environment after installation.
+
 ## EAS Builds
+
+Fork builds do not use upstream's Expo update project. OTA updates are off unless
+`T3SCIENCE_MOBILE_UPDATE_URL` is set. Configure your own `T3SCIENCE_EXPO_PROJECT_ID`
+when using EAS and update the EAS submit profile for your store accounts.
 
 Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
 

@@ -1,11 +1,22 @@
 import Constants from "expo-constants";
-import { Observe } from "expo-observe";
 
-// Importing expo-observe installs its global JS error handler; reports leave only through the relay.
 const relayUrl: unknown = Constants.expoConfig?.extra?.relay?.url;
 const appVariant: unknown = Constants.expoConfig?.extra?.appVariant;
+const projectId: unknown = Constants.expoConfig?.extra?.eas?.projectId;
+// Observe's native module throws on import without an EAS project, including in local builds.
+const observe =
+  typeof projectId === "string" && projectId.trim() !== ""
+    ? import("expo-observe").then(({ Observe }) => Observe)
+    : null;
 
-export const crashReportingAvailable = typeof relayUrl === "string" && relayUrl.trim() !== "";
+export const crashReportingAvailable =
+  observe !== null && typeof relayUrl === "string" && relayUrl.trim() !== "";
+
+export function reportCrashError(error: unknown) {
+  void observe
+    ?.then((reporter) => reporter.reportError(error))
+    .catch((failure: unknown) => console.warn("[observe] could not report error", failure));
+}
 
 interface PromiseRejectionTracker {
   readonly enablePromiseRejectionTracker?: (options: {
@@ -19,7 +30,7 @@ if (!__DEV__) {
   const hermes: PromiseRejectionTracker | undefined = Reflect.get(globalThis, "HermesInternal");
   hermes?.enablePromiseRejectionTracker?.({
     allRejections: true,
-    onUnhandled: (_id, rejection) => Observe.reportError(rejection),
+    onUnhandled: (_id, rejection) => reportCrashError(rejection),
   });
 }
 
@@ -29,12 +40,14 @@ let latestConfiguration = 0;
 // Best effort: Observe skips the pass while it is backing off from a failed send.
 export async function setCrashReportsEnabled(enabled: boolean) {
   const configuration = ++latestConfiguration;
+  const reporter = await observe;
+  if (!reporter || configuration !== latestConfiguration) return;
   const dispatchingEnabled = crashReportingAvailable && enabled;
   if (dispatchingEnabled) {
-    await Observe.dispatchEvents();
+    await reporter.dispatchEvents();
     if (configuration !== latestConfiguration) return;
   }
-  Observe.configure({
+  reporter.configure({
     dispatchingEnabled,
     ...(typeof appVariant === "string" ? { environment: appVariant } : {}),
   });

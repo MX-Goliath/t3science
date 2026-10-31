@@ -47,7 +47,9 @@ vi.mock("../../components/ui/Dialog", () => ({ alert: vi.fn() }));
 vi.mock("../../components/ui/ScreenScrollView", () => ({ ScreenScrollView: Children }));
 vi.mock("../../components/ui/AppText", () => ({
   AppText: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  AppTextInput: () => null,
+  AppTextInput: (props: { accessibilityLabel?: string; value?: string }) => (
+    <input aria-label={props.accessibilityLabel} value={props.value} readOnly />
+  ),
 }));
 vi.mock("../../components/ui/FrostedCutout", () => ({ FrostedCutout: () => null }));
 vi.mock("../../components/ui/AppSymbol", () => ({ SymbolView: () => null }));
@@ -91,12 +93,28 @@ it("does not show another feature's error as a pairing failure", () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   vi.stubGlobal("__DEV__", false);
   harness.pendingConnectionError = "Could not send the message.";
+  harness.connectPress.mockClear();
   const container = document.createElement("div");
   const root = createRoot(container);
-  act(() => root.render(<ConnectionsNewRouteScreen route={{ params: undefined }} />));
+  act(() =>
+    root.render(
+      <ConnectionsNewRouteScreen
+        route={{
+          params: { pairingUrl: "https://science.example.com/pair#token=review-this-token" },
+        }}
+      />,
+    ),
+  );
 
   expect(container.textContent).not.toContain("Could not send the message.");
   expect(container.textContent).toContain("For machines on your local network or tailnet.");
+  expect(container.querySelector<HTMLInputElement>('[aria-label="Address"]')?.value).toBe(
+    "https://science.example.com",
+  );
+  expect(container.querySelector<HTMLInputElement>('[aria-label="Code"]')?.value).toBe(
+    "review-this-token",
+  );
+  expect(harness.connectPress).not.toHaveBeenCalled();
 
   act(() => root.unmount());
   // Leaving the form must not wipe an error that belongs to another screen.

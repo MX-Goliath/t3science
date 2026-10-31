@@ -44,8 +44,8 @@ export function ConnectionsNewRouteScreen({
   route,
 }: StaticScreenProps<ConnectionsNewRouteParams | undefined>) {
   const params = route.params ?? {};
-  // Dev-only prefill prevents production links from supplying an attacker-chosen host and token.
-  const routePairingUrl = __DEV__ ? (params.pairingUrl?.trim() ?? "") : "";
+  // Release links fill a review form; pairing still requires the user's Connect tap.
+  const routePairingUrl = params.pairingUrl?.trim() ?? "";
   // A new prefill link replaces whatever the form held.
   return (
     <PairingForm

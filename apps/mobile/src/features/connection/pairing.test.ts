@@ -23,16 +23,30 @@ describe("buildPairingUrl", () => {
 });
 
 describe("extractPairingUrlFromQrPayload", () => {
-  it("unwraps mobile deep links that carry an encoded pairing url", () => {
+  it.each([
+    "t3code",
+    "t3code-dev",
+    "t3code-preview",
+    "t3science",
+    "t3science-dev",
+    "t3science-preview",
+  ])("unwraps %s deep links that carry an encoded pairing url", (scheme) => {
     expect(
       extractPairingUrlFromQrPayload(
-        "t3code://pair?pairingUrl=https%3A%2F%2Fremote.example.com%2Fpair%23token%3Dpairing-token",
+        `${scheme}://pair?pairingUrl=https%3A%2F%2Fremote.example.com%2Fpair%23token%3Dpairing-token`,
       ),
     ).toBe("https://remote.example.com/pair#token=pairing-token");
   });
 });
 
 describe("parsePairingUrl", () => {
+  it("reads a pasted t3science app link into backend host fields", () => {
+    expect(
+      parsePairingUrl(
+        "t3science://pair?pairingUrl=https%3A%2F%2Fremote.example.com%2Fpair%23token%3Dpairing-token",
+      ),
+    ).toEqual({ host: "https://remote.example.com", code: "pairing-token" });
+  });
   it("reads hosted pairing links into backend host fields", () => {
     expect(
       parsePairingUrl(
