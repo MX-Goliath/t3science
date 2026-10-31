@@ -37,6 +37,23 @@ and its passwords: every future APK must use them. The workflow fails before
 building if a required secret is missing. It never falls back to a debug key.
 No Expo account or OTA server is required for Android APK updates.
 
+## Independent platform builds
+
+**Actions → Build T3 Science Windows → Run workflow** builds the NSIS installer
+and portable EXE. Supply only the stable version; no Android secrets or version
+code are needed. Download `windows-release` from the completed run, including
+its Windows update manifests.
+
+**Actions → Build T3 Science Android → Run workflow** builds and verifies the
+signed universal APK. Supply the stable version and Android version code, with
+the signing secrets configured above. Download `android-release`, containing
+the APK and `android-update.json`.
+
+These workflows run independently and only on manual dispatch or when called
+by the full release workflow. They do not create or publish a GitHub release.
+The full release calls these same builds and waits for their artifacts before
+creating its draft.
+
 ## Build and publish
 
 1. Commit and push the configuration to the repository's default branch so the

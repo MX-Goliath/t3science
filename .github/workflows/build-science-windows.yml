@@ -1,0 +1,88 @@
+name: Build T3 Science Windows
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version without v (for example 2.2.1)
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: Stable version without v (for example 2.2.1)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: science-windows-${{ github.ref }}
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+env:
+  RELEASE_VERSION: ${{ inputs.version }}
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ci-deps
+      - name: Validate build version
+        run: |-
+          node --input-type=module <<'NODE'
+          const version=process.env.RELEASE_VERSION;
+          if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Use a stable version without v.');
+          NODE
+      - name: Check Windows build code
+        run: vp run --filter @t3tools/desktop --filter @t3tools/scripts typecheck
+      - name: Test desktop updates and packaging
+        run: vp test run scripts/build-desktop-artifact.test.ts scripts/prepare-science-release.test.ts apps/desktop/src/updates/DesktopUpdates.test.ts apps/desktop/src/updates/DesktopRemoteUpdates.test.ts
+  build:
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - nsis
+          - portable
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: ./.github/actions/setup-ci-deps
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: vp run dist:desktop:artifact --platform win --target "${{ matrix.target }}" --arch x64 --build-version "$RELEASE_VERSION" --output-dir release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          if-no-files-found: error
+          path: |-
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+  artifacts:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ci-deps
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-nsis
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-portable
+          path: release
+      - name: Prepare Windows update feed
+        run: node scripts/prepare-science-release.ts release "$RELEASE_VERSION" --platform windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          if-no-files-found: error
+          path: release/*

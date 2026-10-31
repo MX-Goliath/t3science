@@ -1,5 +1,4 @@
 name: Release T3 Science
-
 on:
   workflow_dispatch:
     inputs:
@@ -11,22 +10,17 @@ on:
         description: Android version code, greater than every previous APK
         required: true
         type: string
-
 permissions:
   contents: read
-
 concurrency:
   group: release-science
   cancel-in-progress: false
-
 defaults:
   run:
     shell: bash
-
 env:
   RELEASE_VERSION: ${{ inputs.version }}
   T3SCIENCE_ANDROID_VERSION_CODE: ${{ inputs.android_version_code }}
-
 jobs:
   preflight:
     runs-on: ubuntu-24.04
@@ -35,21 +29,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: package.json
-      - name: Validate release and signing credentials
+      - name: Validate release version
         env:
           GH_TOKEN: ${{ github.token }}
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          T3SCIENCE_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          T3SCIENCE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          T3SCIENCE_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           node --input-type=module <<'NODE'
           const { RELEASE_VERSION: version, T3SCIENCE_ANDROID_VERSION_CODE: code } = process.env;
           if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Use a stable version without v.');
           if (!/^[1-9]\d*$/.test(code) || Number(code) > 2100000000) throw new Error('Invalid Android version code.');
-          for (const key of ['ANDROID_KEYSTORE_BASE64', 'T3SCIENCE_ANDROID_STORE_PASSWORD', 'T3SCIENCE_ANDROID_KEY_ALIAS', 'T3SCIENCE_ANDROID_KEY_PASSWORD']) {
-            if (!process.env[key]) throw new Error(`Configure GitHub secret for ${key}.`);
-          }
           NODE
           if gh release view "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo 'This release already exists. Choose a new version.' >&2
@@ -74,34 +61,9 @@ jobs:
             }
           }
           NODE
-
-  quality:
+  linux:
     needs: preflight
     runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-ci-deps
-      - name: Check affected packages
-        run: vp run --filter @t3tools/desktop --filter @t3tools/mobile --filter @t3tools/scripts typecheck
-      - name: Test update and release behavior
-        run: vp test run scripts/build-desktop-artifact.test.ts scripts/prepare-science-release.test.ts apps/mobile/src/features/updates/app-updates.test.ts apps/mobile/app.config.test.ts apps/mobile/android-release-signing.test.ts
-
-  desktop:
-    needs: preflight
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            platform: linux
-            target: AppImage
-          - runner: windows-2025
-            platform: win
-            target: nsis
-          - runner: windows-2025
-            platform: win
-            target: portable
-    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,71 +71,39 @@ jobs:
       - uses: ./.github/actions/setup-ci-deps
       - uses: dtolnay/rust-toolchain@stable
       - name: Linux build dependencies
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libsecret-1-dev libdbus-1-dev libwayland-dev libgbm-dev libxkbcommon-dev libpipewire-0.3-dev libspa-0.2-dev libegl1-mesa-dev libgl-dev libfuse2 imagemagick
       - name: Build desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: vp run dist:desktop:artifact --platform "${{ matrix.platform }}" --target "${{ matrix.target }}" --arch x64 --build-version "$RELEASE_VERSION" --output-dir release
+        run: vp run dist:desktop:artifact --platform linux --target AppImage --arch x64 --build-version "$RELEASE_VERSION" --output-dir release
+      - name: Prepare AppImage update feed
+        run: node scripts/prepare-science-release.ts release "$RELEASE_VERSION" --platform linux
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.target }}
+          name: linux-release
           if-no-files-found: error
-          path: |
+          path: |-
             release/*.AppImage
-            release/*.exe
-            release/*.blockmap
-            release/latest.yml
             release/latest-linux.yml
-
+  windows:
+    needs: preflight
+    uses: ./.github/workflows/build-science-windows.yml
+    with:
+      version: ${{ inputs.version }}
   android:
     needs: preflight
-    runs-on: ubuntu-24.04
-    env:
-      APP_VARIANT: production
-      T3CODE_MOBILE_VERSION: ${{ inputs.version }}
-      T3CODE_MOBILE_UPDATES_ENABLED: "0"
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      T3SCIENCE_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-      T3SCIENCE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      T3SCIENCE_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-      - uses: ./.github/actions/setup-ci-deps
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-      - name: Restore signing key
-        run: |
-          umask 077
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
-          echo "T3SCIENCE_ANDROID_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
-      - name: Build signed APK
-        run: vp run dist:mobile:android --abi all --output "release/T3-Science-$RELEASE_VERSION-android.apk"
-      - name: Test Android APK validation
-        working-directory: apps/mobile/android
-        run: ./gradlew :t3tools-mobile-app-updates:testReleaseUnitTest
-      - name: Verify APK signature and version
-        run: |
-          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          "$build_tools/apksigner" verify --verbose "release/T3-Science-$RELEASE_VERSION-android.apk"
-          "$build_tools/aapt" dump badging "release/T3-Science-$RELEASE_VERSION-android.apk" | head -n 1 | grep -F "versionCode='$T3SCIENCE_ANDROID_VERSION_CODE'" | grep -F "versionName='$RELEASE_VERSION'"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android
-          if-no-files-found: error
-          path: release/*.apk
-
+    uses: ./.github/workflows/build-science-android.yml
+    with:
+      version: ${{ inputs.version }}
+      android_version_code: ${{ inputs.android_version_code }}
+    secrets: inherit
   draft:
-    needs: [quality, desktop, android]
+    needs:
+      - linux
+      - windows
+      - android
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -184,8 +114,7 @@ jobs:
         with:
           path: release
           merge-multiple: true
-      - name: Generate update manifests
-        run: node scripts/prepare-science-release.ts release "$RELEASE_VERSION" "$T3SCIENCE_ANDROID_VERSION_CODE"
+          pattern: "*-release"
       - name: Create draft for manual publication
         env:
           GH_TOKEN: ${{ github.token }}

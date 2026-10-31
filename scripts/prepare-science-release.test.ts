@@ -7,7 +7,12 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import { parseUpdateManifest } from "./lib/update-manifest.ts";
-import { prepareScienceRelease, validateScienceReleaseVersion } from "./prepare-science-release.ts";
+import {
+  prepareLinuxRelease,
+  prepareWindowsRelease,
+  prepareAndroidRelease,
+  validateScienceReleaseVersion,
+} from "./prepare-science-release.ts";
 
 const decodeMetadata = Schema.decodeEffect(
   Schema.fromJsonString(
@@ -21,26 +26,23 @@ const decodeMetadata = Schema.decodeEffect(
   ),
 );
 
-it.effect("publishes portable and APK manifests for the exact release assets", () =>
+it.effect("prepares each platform independently using only its own release assets", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const crypto = yield* Crypto.Crypto;
-    const directory = yield* fs.makeTempDirectoryScoped();
+    const linux = yield* fs.makeTempDirectoryScoped();
+    const windows = yield* fs.makeTempDirectoryScoped();
+    const android = yield* fs.makeTempDirectoryScoped();
     const portable = "T3-Science-2.2.1-x64-portable.exe";
     const apk = "T3-Science-2.2.1-android.apk";
-    for (const file of [
-      portable,
-      apk,
-      "T3-Science-2.2.1-x64.exe",
-      "T3-Science-2.2.1-x86_64.AppImage",
-      "latest.yml",
-      "latest-linux.yml",
-    ]) {
-      yield* fs.writeFileString(path.join(directory, file), file);
+    for (const file of [portable, "T3-Science-2.2.1-x64.exe", "latest.yml"]) {
+      yield* fs.writeFileString(path.join(windows, file), file);
     }
+    yield* fs.writeFileString(path.join(linux, "T3-Science-2.2.1-x86_64.AppImage"), "image");
+    yield* fs.writeFileString(path.join(android, apk), apk);
     yield* fs.writeFileString(
-      path.join(directory, "latest-linux.yml"),
+      path.join(linux, "latest-linux.yml"),
       `version: 2.2.1
 files:
   - url: T3-Science-2.2.1-x86_64.AppImage
@@ -55,12 +57,14 @@ sha512: image-checksum
 releaseDate: '2026-10-31T00:00:00.000Z'
 `,
     );
-    yield* prepareScienceRelease(directory, "2.2.1", "2002001");
-    const linuxManifest = yield* fs.readFileString(path.join(directory, "latest-linux.yml"));
+    yield* prepareLinuxRelease(linux, "2.2.1");
+    yield* prepareWindowsRelease(windows, "2.2.1");
+    yield* prepareAndroidRelease(android, "2.2.1", "2002001");
+    const linuxManifest = yield* fs.readFileString(path.join(linux, "latest-linux.yml"));
     assert.notInclude(linuxManifest, ".deb");
     assert.include(linuxManifest, "blockMapSize: 20");
     const manifest = parseUpdateManifest(
-      yield* fs.readFileString(path.join(directory, "latest-portable.yml")),
+      yield* fs.readFileString(path.join(windows, "latest-portable.yml")),
       "latest-portable.yml",
       "Windows portable",
     );
@@ -75,7 +79,7 @@ releaseDate: '2026-10-31T00:00:00.000Z'
       },
     ]);
     const metadata = yield* decodeMetadata(
-      yield* fs.readFileString(path.join(directory, "android-update.json")),
+      yield* fs.readFileString(path.join(android, "android-update.json")),
     );
     assert.deepEqual(metadata, {
       versionName: "2.2.1",
