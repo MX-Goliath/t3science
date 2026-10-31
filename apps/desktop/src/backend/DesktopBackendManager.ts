@@ -33,6 +33,8 @@ import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
 
 const INITIAL_RESTART_DELAY = Duration.millis(500);
 const MAX_RESTART_DELAY = Duration.seconds(10);
+// A recently closed desktop can release its profile before its server finishes shutting down.
+const MAX_OWNERSHIP_RESTART_ATTEMPTS = 5;
 const MAX_PREFLIGHT_FAILURE_ATTEMPTS = 5;
 const DEFAULT_BACKEND_READINESS_TIMEOUT = Duration.minutes(1);
 const DEFAULT_BACKEND_READINESS_INTERVAL = Duration.millis(100);
@@ -265,6 +267,7 @@ interface BackendManagerState {
   readonly active: Option.Option<ActiveBackendRun>;
   readonly restartAttempt: number;
   readonly preflightFailureAttempt: number;
+  readonly ownershipRestartAttempt: number;
   readonly restartFiber: Option.Option<Fiber.Fiber<void, never>>;
   readonly nextRunId: number;
 }
@@ -276,6 +279,7 @@ const initialState: BackendManagerState = {
   active: Option.none(),
   restartAttempt: 0,
   preflightFailureAttempt: 0,
+  ownershipRestartAttempt: 0,
   restartFiber: Option.none(),
   nextRunId: 1,
 };
@@ -718,6 +722,7 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
           ready: false,
           config: Option.some(config.value),
           preflightFailureAttempt: resetFatalPreflightCounter ? 0 : latest.preflightFailureAttempt,
+          ownershipRestartAttempt: current.desiredRunning ? latest.ownershipRestartAttempt : 0,
         }));
 
         const preflightFailure = config.value.preflightFailure;
@@ -872,6 +877,10 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
 
               if (isCurrentRun && nextState.desiredRunning) {
                 if (stateDirOwned && !stopRequested) {
+                  if (nextState.ownershipRestartAttempt < MAX_OWNERSHIP_RESTART_ATTEMPTS) {
+                    yield* scheduleRestart(reason, true);
+                    return;
+                  }
                   yield* Ref.update(state, (latest) => ({ ...latest, desiredRunning: false }));
                   yield* (spec.onStateDirOwned?.() ?? Effect.void).pipe(Effect.ignore);
                   return;
@@ -917,6 +926,7 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
                 {
                   ...latest,
                   restartAttempt: 0,
+                  ownershipRestartAttempt: 0,
                   ready: true,
                 },
               ] as const;
@@ -976,16 +986,23 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
 
   const scheduleRestart = Effect.fn("desktop.backendInstance.scheduleRestart")(function* (
     reason: string,
+    stateDirOwned = false,
   ) {
     const scheduled = yield* Ref.modify(state, (latest) => {
       if (!latest.desiredRunning || Option.isSome(latest.restartFiber)) {
         return [Option.none<{ delay: Duration.Duration; attempt: number }>(), latest] as const;
       }
 
-      const attempt = latest.restartAttempt + 1;
+      const previousAttempt = stateDirOwned
+        ? latest.ownershipRestartAttempt
+        : latest.restartAttempt;
+      const attempt = previousAttempt + 1;
       return [
-        Option.some({ delay: calculateRestartDelay(latest.restartAttempt), attempt }),
-        { ...latest, restartAttempt: attempt },
+        Option.some({ delay: calculateRestartDelay(previousAttempt), attempt }),
+        {
+          ...latest,
+          ...(stateDirOwned ? { ownershipRestartAttempt: attempt } : { restartAttempt: attempt }),
+        },
       ] as const;
     });
 
@@ -995,11 +1012,16 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
         delay,
         attempt,
       }) {
-        yield* logInstanceError("backend exited unexpectedly; restart scheduled", {
-          reason,
-          delayMs: Duration.toMillis(delay),
-        });
-        if (attempt >= STARTUP_FAILURE_RESTART_ATTEMPTS) {
+        yield* (stateDirOwned ? logInstanceWarning : logInstanceError)(
+          stateDirOwned
+            ? "T3 home still owned; waiting for the previous server to stop"
+            : "backend exited unexpectedly; restart scheduled",
+          {
+            reason,
+            delayMs: Duration.toMillis(delay),
+          },
+        );
+        if (!stateDirOwned && attempt >= STARTUP_FAILURE_RESTART_ATTEMPTS) {
           yield* reportStartupFailure(`The server could not start (${reason}).`);
         }
         const restartFiber = yield* Effect.forkIn(

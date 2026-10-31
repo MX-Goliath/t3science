@@ -547,10 +547,11 @@ describe("DesktopBackendManager", () => {
     ),
   );
 
-  it.effect("reports state-directory ownership once without scheduling another backend", () =>
+  it.effect("reports persistent state-directory ownership once after bounded retries", () =>
     Effect.scoped(
       Effect.gen(function* () {
         let startCount = 0;
+        const firstExit = yield* Deferred.make<void>();
         const refused = yield* Deferred.make<void>();
         const instance = yield* makeTestInstance({
           spawnerLayer: Layer.succeed(
@@ -567,15 +568,72 @@ describe("DesktopBackendManager", () => {
             ),
           ),
           httpClientLayer: layerHttpClient(() => Effect.never),
+          backendOutputLog: {
+            persistFailure: () => Deferred.succeed(firstExit, undefined).pipe(Effect.asVoid),
+          },
           onStateDirOwned: Deferred.succeed(refused, undefined).pipe(Effect.asVoid),
         });
         yield* instance.start;
+        yield* Deferred.await(firstExit);
+        yield* TestClock.adjust(Duration.minutes(1));
         yield* Deferred.await(refused);
         const snapshot = yield* instance.snapshot;
         assert.isFalse(snapshot.desiredRunning);
         assert.isFalse(snapshot.restartScheduled);
         yield* TestClock.adjust(Duration.minutes(1));
-        assert.equal(startCount, 1);
+        assert.equal(startCount, 6);
+      }).pipe(Effect.provide(TestClock.layer())),
+    ),
+  );
+
+  it.effect("starts when the previous server releases ownership during restart backoff", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        let startCount = 0;
+        let refusalCount = 0;
+        let startupFailureCount = 0;
+        const firstExit = yield* Deferred.make<void>();
+        const instance = yield* makeTestInstance({
+          spawnerLayer: Layer.succeed(
+            ChildProcessSpawner.ChildProcessSpawner,
+            ChildProcessSpawner.make(() =>
+              Effect.sync(() => {
+                startCount += 1;
+                return makeProcess({
+                  exitCode:
+                    startCount <= 3
+                      ? Effect.succeed(
+                          ChildProcessSpawner.ExitCode(SERVER_EXIT_CODE_STATE_DIR_OWNED),
+                        )
+                      : Effect.never,
+                });
+              }),
+            ),
+          ),
+          httpClientLayer: layerHttpClient((request) =>
+            startCount <= 3 ? Effect.never : Effect.succeed(responseForRequest(request, 200)),
+          ),
+          backendOutputLog: {
+            persistFailure: () => Deferred.succeed(firstExit, undefined).pipe(Effect.asVoid),
+          },
+          onStateDirOwned: Effect.sync(() => {
+            refusalCount += 1;
+          }),
+          onStartupFailure: () =>
+            Effect.sync(() => {
+              startupFailureCount += 1;
+            }),
+        });
+        yield* instance.start;
+        yield* Deferred.await(firstExit);
+        yield* TestClock.adjust(Duration.minutes(1));
+        const snapshot = yield* instance.snapshot;
+        assert.equal(startCount, 4);
+        assert.isTrue(snapshot.ready);
+        assert.isTrue(snapshot.desiredRunning);
+        assert.isFalse(snapshot.restartScheduled);
+        assert.equal(refusalCount, 0);
+        assert.equal(startupFailureCount, 0);
       }).pipe(Effect.provide(TestClock.layer())),
     ),
   );
