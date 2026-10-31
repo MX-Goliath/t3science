@@ -1,3 +1,4 @@
+import { resetMobileImages } from "../../state/imageGalleryNavigation";
 import { Keyboard } from "react-native";
 
 import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
@@ -10,6 +11,7 @@ export function useSelectWorkspaceTab() {
   const { openWorkspaceTab } = useAdaptiveWorkspaceLayout();
   return (tab: WorkspaceTab | "settings") => {
     Keyboard.dismiss();
+    if (tab === "images") resetMobileImages();
     openWorkspaceTab(tab);
     if (tab !== "settings") dispatch?.({ type: "select", tab });
   };

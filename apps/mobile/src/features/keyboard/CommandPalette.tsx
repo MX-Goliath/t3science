@@ -333,6 +333,13 @@ export function CommandPalette(props: {
         run: () => openSettings(navigation, "SettingsScheduledTasks"),
       },
       {
+        key: "images",
+        kind: "action",
+        title: "Images",
+        searchTerms: ["images", "gallery", "photos", "изображения"],
+        run: () => navigation.navigate("Images"),
+      },
+      {
         key: "webChat",
         kind: "action",
         title: "Web chat",

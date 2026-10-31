@@ -1,3 +1,4 @@
+import { ImagesScreen } from "./features/images/ImagesScreen";
 import { isDraftThreadRoute } from "./features/threads/thread-route-state";
 import { ComponentCatalogScreen } from "./features/development/ComponentCatalogScreen";
 import { PullRequestGuideStopScreen } from "./features/pull-requests/guide/PullRequestGuideScreen";
@@ -231,6 +232,11 @@ const THREAD_SETTINGS_SHEET_OPTIONS = {
 const SETTINGS_PAGE_OPTIONS = SHEET_GLASS_HEADER_OPTIONS;
 
 const SETTINGS_SCREENS = {
+  Images: createNativeStackScreen({
+    screen: ImagesScreen,
+    linking: "images",
+    options: { ...SETTINGS_PAGE_OPTIONS, title: "Images", headerShown: false },
+  }),
   SettingsWebChat: createNativeStackScreen({
     screen: WebChatRouteScreen,
     linking: "web-chat",

@@ -198,6 +198,7 @@ function useCompactComposerEditor(text: ScaledTextRole, value: string) {
 
 export interface ThreadComposerProps {
   readonly isDraft?: boolean;
+  readonly modelControl?: ReactNode;
   readonly canOperateThread: boolean;
   readonly placeholder: string;
   readonly contentMaxWidth?: number;
@@ -799,7 +800,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     </>
   ) : null;
 
-  const modelControl = (
+  const modelControl = props.modelControl ?? (
     <View className="min-w-0 shrink">
       <ComposerModelControl
         size={usesLargeControls ? "large" : "regular"}
