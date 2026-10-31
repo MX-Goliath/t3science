@@ -20,6 +20,9 @@ import { AppText } from "../../components/ui/AppText";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 
 export function CustomSnoozeSheet(props: {
+  readonly title?: string;
+  readonly description?: string;
+  readonly submitLabel?: string;
   readonly onClose: () => void;
   readonly onSnooze: (snoozedUntil: string) => void;
 }) {
@@ -42,10 +45,10 @@ export function CustomSnoozeSheet(props: {
           contentContainerStyle={{ padding: 24, paddingBottom: 24, gap: 20 }}
         >
           <AppText accessibilityRole="header" className="text-xl font-t3-semibold">
-            Custom snooze
+            {props.title ?? "Custom snooze"}
           </AppText>
           <AppText className="text-base text-foreground-secondary">
-            Choose when snoozed threads return to your inbox.
+            {props.description ?? "Choose when snoozed threads return to your inbox."}
           </AppText>
           <SegmentedControl
             options={
@@ -146,7 +149,7 @@ export function CustomSnoozeSheet(props: {
           <View className="flex-row justify-end gap-3">
             <Button label="Cancel" tone="text" onPress={props.onClose} />
             <Button
-              label="Snooze"
+              label={props.submitLabel ?? "Snooze"}
               tone="secondary"
               onPress={() => {
                 const input: CustomSnoozeInput =

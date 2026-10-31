@@ -8,6 +8,7 @@ import {
   nextOpenTerminalId,
   previousLiveTerminalId,
   resolveProjectScriptTerminalId,
+  canRunProjectAction,
   type TerminalMenuSession,
 } from "./terminalMenu";
 
@@ -86,5 +87,16 @@ describe("resolveProjectScriptTerminalId", () => {
       uniqueSuffix: "783c91cc-a413-47c7-8312-c2a5a1f05e40",
     });
     expect(terminalId).not.toBe(DEFAULT_TERMINAL_ID);
+  });
+});
+
+describe("project action permissions", () => {
+  it.each([
+    { kind: "prompt" as const, canOperateThread: true, canOperateTerminal: false, allowed: true },
+    { kind: "prompt" as const, canOperateThread: false, canOperateTerminal: true, allowed: false },
+    { kind: undefined, canOperateThread: true, canOperateTerminal: false, allowed: false },
+    { kind: undefined, canOperateThread: false, canOperateTerminal: true, allowed: true },
+  ])("checks the destination capability for $kind actions", ({ kind, allowed, ...permissions }) => {
+    expect(canRunProjectAction({ kind }, permissions)).toBe(allowed);
   });
 });

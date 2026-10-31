@@ -285,6 +285,7 @@ export interface ThreadDetailScreenProps {
       text: string,
       hasAttachmentsOrContext: boolean,
     ) => Promise<boolean | "responded">,
+    scheduledAt?: string,
   ) => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly canSwitchThreadProvider: boolean;
@@ -1165,7 +1166,13 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
   const handleSendMessage = async (
     followUp?: ActiveTurnComposerAction,
     stillSendable?: () => boolean,
+    scheduledAt?: string,
   ) => {
+    if (
+      scheduledAt !== undefined &&
+      (props.activePendingApprovals.length > 0 || props.activePendingUserInput !== null)
+    )
+      return null;
     const scope = threadScope.current.signal;
     const targetThreadKey = selectedThreadKey;
     const hasUserMessage = selectedThreadFeed.some(
@@ -1207,7 +1214,7 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
             );
           }
         : undefined;
-    const messageId = await props.onSendMessage(followUp, declineBeforeDispatch);
+    const messageId = await props.onSendMessage(followUp, declineBeforeDispatch, scheduledAt);
     if (messageId === null || scope.aborted) {
       return messageId;
     }
@@ -1648,6 +1655,12 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
                   ) : (
                     <>
                       <ThreadComposer
+                        allowSchedule={
+                          !props.draftMode &&
+                          props.queuedRunEdit === null &&
+                          props.activePendingApprovals.length === 0 &&
+                          props.activePendingUserInput === null
+                        }
                         isDraft={Boolean(props.draftMode)}
                         canOperateThread={props.canOperateThread}
                         reportedModelSelection={reportedModelSelection}

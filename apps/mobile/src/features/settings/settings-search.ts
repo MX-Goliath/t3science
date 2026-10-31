@@ -4,6 +4,7 @@ import type { SettingsPageTarget } from "./components/settings-page-targets";
 
 /** What each page holds besides its row's label, so search finds a setting by its own name. */
 const SETTINGS_SEARCH_TERMS = {
+  SettingsWebChat: ["chatgpt", "claude", "grok", "perplexity", "web chat", "browser"],
   account: ["sign in", "sign out", "login", "clerk", "connect"],
   SettingsEnvironments: [
     "servers",
@@ -31,7 +32,15 @@ const SETTINGS_SEARCH_TERMS = {
   SettingsKeyboard: ["return key", "send message", "new line", "hardware keyboard"],
   SettingsMicrophone: ["voice", "dictation", "audio input", "bluetooth"],
   SettingsScheduledTasks: ["automations", "schedule", "cron", "recurring", "webhook"],
-  SettingsProjectOverview: ["project", "overview", "checkouts", "delete project"],
+  SettingsProjectOverview: [
+    "project",
+    "overview",
+    "checkouts",
+    "delete project",
+    "conversation storage",
+    "portable",
+    "export conversations",
+  ],
   SettingsOrganization: [
     "project grouping",
     "group projects",

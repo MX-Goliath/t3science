@@ -64,6 +64,7 @@ import {
   buildTerminalMenuSessions,
   nextOpenTerminalId,
   resolveProjectScriptTerminalId,
+  canRunProjectAction,
 } from "../terminal/terminalMenu";
 import {
   resolvePreferredThreadWorktreePath,
@@ -742,7 +743,16 @@ function ThreadRouteContent(
     if (
       !selectedThread ||
       !selectedThreadProject?.workspaceRoot ||
-      !readEnvironmentScope(selectedThread.environmentId, AuthTerminalOperateScope)
+      !canRunProjectAction(script, {
+        canOperateThread: readEnvironmentScope(
+          selectedThread.environmentId,
+          AuthOrchestrationOperateScope,
+        ),
+        canOperateTerminal: readEnvironmentScope(
+          selectedThread.environmentId,
+          AuthTerminalOperateScope,
+        ),
+      })
     ) {
       return;
     }
@@ -837,6 +847,7 @@ function ThreadRouteContent(
     canOpenTerminal:
       Boolean(selectedThreadProject?.workspaceRoot) && (canReadTerminal || canOperateTerminal),
     canOperateTerminal,
+    canOperateThread,
     canOpenFiles: Boolean(selectedThreadProject?.workspaceRoot),
     projectScripts: selectedThreadProject
       ? resolveProjectScripts(

@@ -326,6 +326,49 @@ afterEach(() => {
 });
 
 describe("queued task operation access", () => {
+  it("delivers immediate messages ahead of a future send and wakes the persisted send at its deadline", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-05T12:00:00.000Z"));
+    try {
+      setOperateGrant("secondary", true);
+      const scheduled = message({ scheduledAt: "2026-09-05T12:01:00.000Z" });
+      const immediate = message({
+        messageId: MessageId.make("immediate"),
+        commandId: CommandId.make("immediate"),
+        createdAt: "2026-09-05T12:00:01.000Z",
+      });
+      await state.manager.enqueue(scheduled);
+      await state.manager.enqueue(immediate);
+      await runDrain();
+      expect(state.start).toHaveBeenCalledOnce();
+      expect(remaining()).toEqual([scheduled]);
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(state.start).toHaveBeenCalledOnce();
+      const delivered = Promise.withResolvers<void>();
+      const release = appAtomRegistry.subscribe(dispatchingQueuedMessageIdAtom, (id) => {
+        if (id === null) delivered.resolve();
+      });
+      try {
+        await vi.advanceTimersByTimeAsync(1);
+        await delivered.promise;
+      } finally {
+        release();
+      }
+      expect(state.start).toHaveBeenCalledTimes(2);
+      expect(remaining()).toEqual([]);
+      const cancelled = message({
+        messageId: MessageId.make("cancelled"),
+        scheduledAt: "2026-09-05T12:02:00.000Z",
+      });
+      await state.manager.enqueue(cancelled);
+      await state.manager.remove(cancelled);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(state.start).toHaveBeenCalledTimes(2);
+    } finally {
+      state.delivery?.dispose();
+      vi.useRealTimers();
+    }
+  });
   it("parks a connected read-only target, then delivers its unchanged queue after a grant", async () => {
     const queued = message();
     await state.manager.enqueue(queued);

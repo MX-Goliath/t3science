@@ -1,23 +1,7 @@
-import type { WebChatProvider } from "@t3tools/contracts/settings";
+export { WEB_CHAT_PROVIDERS, getWebChatProviderDefinition } from "@t3tools/shared/webChat";
 
 export const WEB_CHAT_ROUTE = "/web-chat" as const;
 export const WEB_CHAT_BROWSER_TAB_ID = "web-chat";
-
-export interface WebChatProviderDefinition {
-  readonly label: string;
-  readonly url: string;
-}
-
-export const WEB_CHAT_PROVIDERS = {
-  chatgpt: { label: "ChatGPT", url: "https://chatgpt.com/" },
-  claude: { label: "Claude", url: "https://claude.ai/new" },
-  grok: { label: "Grok", url: "https://grok.com/" },
-  perplexity: { label: "Perplexity", url: "https://www.perplexity.ai/" },
-} as const satisfies Record<WebChatProvider, WebChatProviderDefinition>;
-
-export function getWebChatProviderDefinition(provider: WebChatProvider): WebChatProviderDefinition {
-  return WEB_CHAT_PROVIDERS[provider];
-}
 
 export function findMostRecentlyVisitedLocalProjectRoot(input: {
   readonly primaryEnvironmentId: string | null;

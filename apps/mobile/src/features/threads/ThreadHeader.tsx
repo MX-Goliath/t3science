@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { Platform } from "react-native";
+import { isProjectPromptAction, projectScriptMenuLabel } from "@t3tools/shared/projectScripts";
 import { AppBar } from "../../components/ui/AppBar";
 import { ScreenHeaderButton } from "../../components/ui/ScreenHeaderButton";
 import type { AppBarAction } from "../../components/ui/AppBar.types";
@@ -7,6 +9,11 @@ import type { ThreadInspectorMode } from "./thread-inspector-content-stack";
 import { useThreadHeaderOptions } from "./useThreadHeaderOptions";
 import { useWorkspaceBackNavigation } from "../workspace/useAndroidWorkspaceNavigation";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
+import {
+  canRunProjectAction,
+  getTerminalStatusLabel,
+  projectScriptMenuIcon,
+} from "../terminal/terminalMenu";
 
 export function ThreadHeader(
   props: Parameters<typeof useThreadHeaderOptions>[0] & {
@@ -42,13 +49,6 @@ export function ThreadHeader(
         onPress: filesVisible ? toggleAuxiliaryPane : props.onOpenFilesInspector,
       });
     }
-    if (props.hasWorkspaceRoot && props.gitControls.canOpenTerminal) {
-      actions.push({
-        accessibilityLabel: "Open terminal",
-        icon: "terminal",
-        onPress: () => onOpenTerminal(null),
-      });
-    }
     actions.push({
       accessibilityLabel: "Open git controls",
       icon: "point.topleft.down.curvedto.point.bottomright.up",
@@ -66,15 +66,59 @@ export function ThreadHeader(
     props.inspectorMode,
     panes.auxiliaryPaneVisible,
     props.onOpenFilesInspector,
-    onOpenTerminal,
     onMergeBack,
     props.onOpenGitInspector,
     toggleAuxiliaryPane,
     props.onReturnToThread,
     props.hasThreadCwd,
-    props.hasWorkspaceRoot,
-    props.gitControls.canOpenTerminal,
   ]);
+
+  const controls = props.gitControls;
+  const showActions =
+    props.hasWorkspaceRoot && (controls.canOpenTerminal || controls.projectScripts.length > 0);
+  const menus =
+    Platform.OS === "android" && showActions
+      ? [
+          {
+            title: "Terminal and project actions",
+            icon: "terminal" as const,
+            items: [
+              ...controls.projectScripts.map((script) => ({
+                id: `script:${script.id}`,
+                title: projectScriptMenuLabel(script),
+                icon: projectScriptMenuIcon(script.icon),
+                subtitle: isProjectPromptAction(script)
+                  ? `${script.modelSelection.model} · ${script.prompt}`
+                  : script.command,
+                disabled: !canRunProjectAction(script, controls),
+                onPress: () => void controls.onRunProjectScript(script),
+              })),
+              ...controls.terminalSessions.map((session) => ({
+                id: `terminal:${session.terminalId}`,
+                title: session.displayLabel,
+                icon: "terminal",
+                subtitle: getTerminalStatusLabel(session),
+                disabled: !controls.canOpenTerminal,
+                onPress: () => onOpenTerminal(session.terminalId),
+              })),
+              {
+                id: "terminal:open",
+                title: "Open terminal",
+                icon: "terminal",
+                disabled: !controls.canOpenTerminal,
+                onPress: () => onOpenTerminal(null),
+              },
+              {
+                id: "terminal:new",
+                title: "Open new terminal",
+                icon: "plus",
+                disabled: !controls.canOperateTerminal,
+                onPress: controls.onOpenNewTerminal,
+              },
+            ],
+          },
+        ]
+      : undefined;
 
   return (
     <>
@@ -100,6 +144,7 @@ export function ThreadHeader(
         }
         onBack={layout.usesSplitView ? undefined : goBack}
         actions={androidHeaderActions}
+        menus={menus}
         hideBottomBorder
         compact={composerKeyboardActive}
       />

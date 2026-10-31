@@ -60,6 +60,7 @@ import { ReviewSheet } from "./features/review/ReviewSheet";
 import { ThreadTerminalRouteScreen } from "./features/terminal/ThreadTerminalRouteScreen";
 import { DevicePreviewRouteScreen } from "./features/devices/DevicePreviewRouteScreen";
 import { BrowserPreviewRouteScreen } from "./features/browser/BrowserPreviewRouteScreen";
+import { WebChatRouteScreen } from "./features/browser/WebChatRouteScreen";
 import { GitBranchesSheet } from "./features/threads/git/GitBranchesSheet";
 import { GitCommitSheet } from "./features/threads/git/GitCommitSheet";
 import { GitConfirmSheet } from "./features/threads/git/GitConfirmSheet";
@@ -230,6 +231,11 @@ const THREAD_SETTINGS_SHEET_OPTIONS = {
 const SETTINGS_PAGE_OPTIONS = SHEET_GLASS_HEADER_OPTIONS;
 
 const SETTINGS_SCREENS = {
+  SettingsWebChat: createNativeStackScreen({
+    screen: WebChatRouteScreen,
+    linking: "web-chat",
+    options: { ...SETTINGS_PAGE_OPTIONS, title: "Web chat", headerShown: false },
+  }),
   Settings: createNativeStackScreen({
     screen: SettingsRouteScreen,
     linking: "settings",
@@ -998,7 +1004,7 @@ const RootStackConfig = createWorkspaceStackNavigator({
     }),
     ConnectionsNew: createNativeStackScreen({
       screen: ConnectionsNewRouteScreen,
-      linking: "connections/new",
+      linking: { path: "connections/new", alias: ["pair"] },
       options: {
         // Mount the iOS header immediately to avoid remounting the pairing form.
         ...(Platform.OS === "ios" ? SHEET_GLASS_HEADER_OPTIONS : undefined),

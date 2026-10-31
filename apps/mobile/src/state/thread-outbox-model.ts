@@ -46,7 +46,7 @@ const QueuedThreadCreationSchema = Schema.Struct({
 });
 
 export const QueuedThreadMessageSchema = Schema.Struct({
-  schemaVersion: Schema.Literals([1, 2, THREAD_OUTBOX_SCHEMA_VERSION, 4]),
+  schemaVersion: Schema.Literals([1, 2, THREAD_OUTBOX_SCHEMA_VERSION, 4, 5]),
   environmentId: EnvironmentId,
   threadId: ThreadId,
   messageId: MessageId,
@@ -60,6 +60,7 @@ export const QueuedThreadMessageSchema = Schema.Struct({
   interactionMode: Schema.optional(ProviderInteractionMode),
   creation: Schema.optional(QueuedThreadCreationSchema),
   createdAt: IsoDateTime,
+  scheduledAt: Schema.optional(IsoDateTime),
 });
 
 const decodeStoredQueuedThreadMessage = Schema.decodeUnknownSync(QueuedThreadMessageSchema);
@@ -91,6 +92,7 @@ export interface QueuedThreadMessage {
   readonly dispatchMode?: ComposerDispatchMode;
   readonly creation?: QueuedThreadCreation;
   readonly createdAt: string;
+  readonly scheduledAt?: string;
 }
 
 export interface ThreadSettingsSnapshot {
@@ -128,7 +130,8 @@ export function modelSelectionsEqual(left: ModelSelectionType, right: ModelSelec
 
 export function encodeQueuedThreadMessage(message: QueuedThreadMessage): unknown {
   return encodeStoredQueuedThreadMessage({
-    schemaVersion: THREAD_OUTBOX_SCHEMA_VERSION,
+    // Older readers must reject scheduled records rather than sending them immediately.
+    schemaVersion: message.scheduledAt === undefined ? THREAD_OUTBOX_SCHEMA_VERSION : 5,
     ...message,
   });
 }
@@ -174,18 +177,24 @@ export function resolveThreadOutboxDeliveryAction(input: {
   readonly threadExists: boolean;
   readonly shellStatus: EnvironmentShellStatus;
   readonly environmentConnected: boolean;
+  readonly scheduledAt?: string;
+  readonly nowMs?: number;
   /**
    * Set when the shell can leave idle subagent children out: absence alone is not deletion there,
    * only a settled family read without the row is.
    */
   readonly familyRead?: ThreadFamilyRead;
 }): ThreadOutboxDeliveryAction {
+  const ready =
+    input.environmentConnected &&
+    (input.scheduledAt === undefined ||
+      Date.parse(input.scheduledAt) <= (input.nowMs ?? Date.now()));
   if (input.isCreation) {
     if (input.threadExists) {
       return "remove";
     }
     // Wait for live shells; an unsynchronized list can hide delivered creations and cause duplicate re-issuance.
-    return input.environmentConnected && input.shellStatus === "live" ? "send" : "wait";
+    return ready && input.shellStatus === "live" ? "send" : "wait";
   }
   if (!input.threadExists) {
     return input.shellStatus === "live" &&
@@ -193,7 +202,7 @@ export function resolveThreadOutboxDeliveryAction(input: {
       ? "remove"
       : "wait";
   }
-  return input.environmentConnected ? "send" : "wait";
+  return ready ? "send" : "wait";
 }
 
 export type ThreadOutboxDispatchStep =

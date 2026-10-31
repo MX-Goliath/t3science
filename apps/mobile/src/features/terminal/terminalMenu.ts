@@ -150,3 +150,10 @@ export function projectScriptMenuIcon(icon: ProjectScript["icon"]) {
   if (icon === "debug") return "ladybug";
   return "play";
 }
+
+export function canRunProjectAction(
+  script: Pick<ProjectScript, "kind">,
+  permissions: { readonly canOperateThread: boolean; readonly canOperateTerminal: boolean },
+): boolean {
+  return script.kind === "prompt" ? permissions.canOperateThread : permissions.canOperateTerminal;
+}

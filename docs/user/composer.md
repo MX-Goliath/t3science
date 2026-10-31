@@ -376,6 +376,12 @@ after the current agent finishes, or after another thread's agent finishes. Rese
 scheduling uses the provider's reported allowance reset. Review or cancel the scheduled
 message in the composer. Keep this client connected for a scheduled message to send.
 
+On mobile, long-press Send in an existing thread and choose **Schedule send…**.
+The message and its attachments stay on that phone. Keep T3 Science running and
+connected; if you close it, the message sends after you reopen it. Tap the
+scheduled message's time to send it now or cancel. Edit it with the pencil to
+return it to the composer and choose a new time.
+
 ## Response streaming
 
 Choose **Settings → Threads → Advanced → Response streaming** to show text as it arrives,

@@ -116,6 +116,7 @@ describe("thread outbox", () => {
     const message: QueuedThreadMessage = {
       ...queuedMessage({ messageId: "context-message", createdAt: "2026-09-06T12:00:00.000Z" }),
       text: "[Build](t3-context://v1/terminal/build-output)",
+      scheduledAt: "2026-09-07T12:00:00.000Z",
       context: {
         version: 1,
         records: [
@@ -1095,6 +1096,26 @@ describe("thread outbox", () => {
   });
 
   it("only removes a missing-thread message after shell synchronization is live", () => {
+    const scheduled = {
+      isCreation: false,
+      threadExists: true,
+      shellStatus: "live" as const,
+      environmentConnected: true,
+      scheduledAt: "2026-09-07T12:00:00.000Z",
+    };
+    expect(
+      resolveThreadOutboxDeliveryAction({
+        ...scheduled,
+        nowMs: Date.parse("2026-09-07T11:59:59.999Z"),
+      }),
+    ).toBe("wait");
+    expect(
+      resolveThreadOutboxDeliveryAction({
+        ...scheduled,
+        nowMs: Date.parse("2026-09-07T12:00:00.000Z"),
+      }),
+    ).toBe("send");
+    expect(resolveThreadOutboxDeliveryAction({ ...scheduled, threadExists: false })).toBe("remove");
     expect(
       resolveThreadOutboxDeliveryAction({
         isCreation: false,

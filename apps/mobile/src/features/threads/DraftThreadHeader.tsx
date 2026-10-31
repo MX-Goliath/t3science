@@ -69,6 +69,7 @@ export function DraftThreadHeader(props: {
         gitOperationLabel: progress.currentLabel,
         canOpenTerminal: false,
         canOperateTerminal: false,
+        canOperateThread: false,
         canOpenFiles: canReadFiles && props.cwd !== null,
         projectScripts: [],
         terminalSessions: [],

@@ -333,6 +333,13 @@ export function CommandPalette(props: {
         run: () => openSettings(navigation, "SettingsScheduledTasks"),
       },
       {
+        key: "webChat",
+        kind: "action",
+        title: "Web chat",
+        searchTerms: ["chatgpt", "claude", "grok", "perplexity", "browser"],
+        run: () => openSettings(navigation, "SettingsWebChat"),
+      },
+      {
         key: "usage",
         kind: "action",
         title: "Usage",

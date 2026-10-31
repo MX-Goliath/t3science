@@ -497,6 +497,7 @@ export function useThreadComposerState() {
       text: string,
       hasAttachmentsOrContext: boolean,
     ) => Promise<boolean | "responded">,
+    scheduledAt?: string,
   ) => {
     if (
       selectedThreadShell &&
@@ -507,6 +508,11 @@ export function useThreadComposerState() {
     if (!selectedThreadShell) {
       return null;
     }
+    if (
+      scheduledAt !== undefined &&
+      (!Number.isFinite(Date.parse(scheduledAt)) || Date.parse(scheduledAt) <= Date.now())
+    )
+      return null;
     // Before thread creation succeeds, follow-ups could become orphaned and be dropped by the drain.
     if (selectedThreadCreation !== null) {
       return null;
@@ -574,6 +580,13 @@ export function useThreadComposerState() {
         ? parseCodexFeedbackCommand(text)
         : null;
     if (feedbackCommand) {
+      if (scheduledAt !== undefined) {
+        Dialog.alert(
+          "Feedback cannot be scheduled",
+          "Send feedback now or schedule a regular message.",
+        );
+        return null;
+      }
       if (!readEnvironmentScope(selectedThreadShell.environmentId, AuthOrchestrationOperateScope))
         return null;
       if (thread.activeProviderThreadId === null) {
@@ -672,7 +685,11 @@ export function useThreadComposerState() {
         provider,
         draft.interactionMode ?? thread.interactionMode,
       ),
-      ...(followUpDispatchMode === null ? {} : { dispatchMode: followUpDispatchMode }),
+      ...(scheduledAt !== undefined
+        ? { scheduledAt, dispatchMode: "queue" as const }
+        : followUpDispatchMode === null
+          ? {}
+          : { dispatchMode: followUpDispatchMode }),
       createdAt: metadata.createdAt,
     });
     clearComposerDraftContent(threadKey, { deferAttachmentCleanup: true });

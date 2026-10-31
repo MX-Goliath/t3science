@@ -92,6 +92,7 @@ import { useScaledTextRole, type ScaledTextRole } from "../settings/appearance/u
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { MOBILE_TYPOGRAPHY } from "../../lib/typography";
 import { Menu } from "../../components/ui/Menu";
+import { CustomSnoozeSheet } from "./CustomSnoozeSheet";
 import type { ActiveTurnComposerAction } from "@t3tools/client-runtime/state/composer-dispatch";
 import type { FollowUpBehavior } from "../../lib/followUpBehavior";
 import {
@@ -238,8 +239,10 @@ export interface ThreadComposerProps {
   readonly onSendMessage: (
     followUp?: ActiveTurnComposerAction,
     stillSendable?: () => boolean,
+    scheduledAt?: string,
   ) => Promise<MessageId | null>;
   readonly onShowUsageLimits: (report: UsageLimitsReport | null) => void;
+  readonly allowSchedule?: boolean;
   readonly canSwitchProvider: boolean;
   readonly onUpdateInteractionMode?: (interactionMode: ProviderInteractionMode) => void;
   readonly onHeightChange?: (height: number) => void;
@@ -300,6 +303,7 @@ function SendActionButton(props: {
   readonly presentation: ComposerSendPresentation;
   readonly disabled: boolean;
   readonly onSend: (followUp?: ActiveTurnComposerAction) => void;
+  readonly onSchedule?: () => void;
 }) {
   const { presentation } = props;
   const button = (
@@ -312,25 +316,37 @@ function SendActionButton(props: {
       onPress={() => props.onSend()}
     />
   );
-  if (!presentation.offersFollowUpChoice || presentation.action === null || props.disabled) {
+  if (props.disabled || (!presentation.offersFollowUpChoice && !props.onSchedule)) {
     return button;
   }
-  const actions = [presentation.action, presentation.alternate].filter(
-    (action): action is ActiveTurnComposerAction => action !== null,
-  );
+  const actions = (
+    presentation.offersFollowUpChoice ? [presentation.action, presentation.alternate] : []
+  ).filter((action): action is ActiveTurnComposerAction => action !== null);
   return (
     <Menu
       accessibilityLabel="Choose how to send this message"
       shouldOpenOnLongPress
-      actions={actions.map((action) => ({
-        id: action,
-        title: FOLLOW_UP_ACTION_LABEL[action],
-        subtitle: FOLLOW_UP_ACTION_SUBTITLE[action],
-        state: action === presentation.action ? ("on" as const) : ("off" as const),
-      }))}
-      onPressAction={({ nativeEvent }) =>
-        props.onSend(nativeEvent.event as ActiveTurnComposerAction)
-      }
+      actions={[
+        ...actions.map((action) => ({
+          id: action,
+          title: FOLLOW_UP_ACTION_LABEL[action],
+          subtitle: FOLLOW_UP_ACTION_SUBTITLE[action],
+          state: action === presentation.action ? ("on" as const) : ("off" as const),
+        })),
+        ...(props.onSchedule
+          ? [
+              {
+                id: "schedule",
+                title: "Schedule send…",
+                subtitle: "Send at a chosen date and time",
+              },
+            ]
+          : []),
+      ]}
+      onPressAction={({ nativeEvent }) => {
+        if (nativeEvent.event === "schedule") props.onSchedule?.();
+        else props.onSend(nativeEvent.event as ActiveTurnComposerAction);
+      }}
     >
       {button}
     </Menu>
@@ -654,7 +670,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     onEditorFocusChange?.(false);
     setComposerEditing(false);
   };
-  const handleSend = async (followUp?: ActiveTurnComposerAction) => {
+  const [scheduling, setScheduling] = useState(false);
+  const handleSend = async (followUp?: ActiveTurnComposerAction, scheduledAt?: string) => {
     if (
       isSubmissionLocked ||
       sendBlockedReason !== null ||
@@ -682,7 +699,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
         )
       );
     };
-    const sent = await settlePromise(() => onSendMessage(followUp, stillSendable));
+    const sent = await settlePromise(() => onSendMessage(followUp, stillSendable, scheduledAt));
     inFlightThreadIdsRef.current.delete(threadKey);
     if (AsyncResult.isFailure(sent)) {
       console.error("[composer] send failed", squashAtomCommandFailure(sent));
@@ -693,7 +710,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     armAgentAwarenessLiveActivityForLocalWork({
       environmentId: props.environmentId,
       threadTitle: props.selectedThread.title,
-      projectTitle: props.environmentLabel ?? "T3 Code",
+      projectTitle: props.environmentLabel ?? "T3 Science",
     });
   };
 
@@ -976,6 +993,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     presentation={sendPresentation}
                     disabled={!canSend}
                     onSend={handleSend}
+                    onSchedule={props.allowSchedule ? () => setScheduling(true) : undefined}
                   />
                 )}
               </View>
@@ -1179,6 +1197,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                       presentation={sendPresentation}
                       disabled={!canSend}
                       onSend={handleSend}
+                      onSchedule={props.allowSchedule ? () => setScheduling(true) : undefined}
                     />
                   ) : null}
                 </View>
@@ -1195,6 +1214,15 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       </Animated.View>
 
       <VideoPreviewModal source={previewVideo} onRequestClose={closePreview} />
+      {scheduling ? (
+        <CustomSnoozeSheet
+          title="Schedule send"
+          description="Sends from this phone when T3 Science is running and connected. If the app is closed, it sends after you reopen it."
+          submitLabel="Schedule"
+          onClose={() => setScheduling(false)}
+          onSnooze={(scheduledAt) => void handleSend(undefined, scheduledAt)}
+        />
+      ) : null}
       <FilePreviewModal source={previewFile} onRequestClose={closePreview} />
     </Animated.View>
   );

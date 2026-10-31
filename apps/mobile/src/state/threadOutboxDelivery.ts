@@ -675,6 +675,10 @@ export function createThreadOutboxDelivery(): {
 } {
   let disposed = false;
   const retries = new Map<MessageId, ThreadOutboxRetry>();
+  const schedules = new Map<
+    MessageId,
+    { readonly at: string; readonly timer: ReturnType<typeof setTimeout> }
+  >();
   // Existing-thread turns the server accepted but whose outbox removal has
   // not landed; the next pass retries only the removal, never the send.
   const acknowledgedExistingThreadMessageIds = new Set<MessageId>();
@@ -1124,6 +1128,32 @@ export function createThreadOutboxDelivery(): {
         .flat()
         .map((message) => message.messageId),
     );
+    for (const [id, schedule] of schedules) {
+      if (!queuedMessageIds.has(id)) {
+        clearTimeout(schedule.timer);
+        schedules.delete(id);
+      }
+    }
+    for (const message of Object.values(queuedMessagesByThreadKey).flat()) {
+      const at = message.scheduledAt;
+      const previous = schedules.get(message.messageId);
+      if (previous?.at === at) continue;
+      if (previous) {
+        clearTimeout(previous.timer);
+        schedules.delete(message.messageId);
+      }
+      if (at === undefined || Date.parse(at) <= Date.now()) continue;
+      schedules.set(message.messageId, {
+        at,
+        timer: setTimeout(
+          () => {
+            schedules.delete(message.messageId);
+            drain();
+          },
+          Math.min(Date.parse(at) - Date.now(), 2_147_483_647),
+        ),
+      });
+    }
     for (const messageId of acknowledgedExistingThreadMessageIds) {
       if (!queuedMessageIds.has(messageId)) {
         acknowledgedExistingThreadMessageIds.delete(messageId);
@@ -1137,7 +1167,10 @@ export function createThreadOutboxDelivery(): {
     }
 
     for (const [threadKey, queuedMessages] of Object.entries(queuedMessagesByThreadKey)) {
-      const nextQueuedMessage = queuedMessages[0];
+      const nextQueuedMessage = queuedMessages.find(
+        (message) =>
+          message.scheduledAt === undefined || Date.parse(message.scheduledAt) <= Date.now(),
+      );
       if (!nextQueuedMessage) {
         continue;
       }
@@ -1228,6 +1261,7 @@ export function createThreadOutboxDelivery(): {
         threadExists: thread !== undefined,
         shellStatus,
         environmentConnected: environment?.connectionState === "connected",
+        scheduledAt: nextQueuedMessage.scheduledAt,
         ...(familyRead === undefined ? {} : { familyRead }),
       });
       if (
@@ -1323,6 +1357,7 @@ export function createThreadOutboxDelivery(): {
             threadExists: liveThread !== undefined,
             shellStatus,
             environmentConnected: environment?.connectionState === "connected",
+            scheduledAt: nextQueuedMessage.scheduledAt,
           });
           if (liveDeliveryAction !== "send") {
             return true;
@@ -1363,6 +1398,8 @@ export function createThreadOutboxDelivery(): {
       stopCollectingOutcomes();
       for (const retry of retries.values()) clearTimeout(retry.timer);
       retries.clear();
+      for (const schedule of schedules.values()) clearTimeout(schedule.timer);
+      schedules.clear();
       for (const blocked of blockedRecoveries.values()) blocked.unsubscribe();
       blockedRecoveries.clear();
       for (const release of familyMounts.values()) release();

@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./webChat": {
+      "types": "./src/webChat.ts",
+      "import": "./src/webChat.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"
