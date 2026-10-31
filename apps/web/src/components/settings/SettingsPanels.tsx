@@ -644,6 +644,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.generalChatsEnabled !== DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled
       ? ["General chats"]
       : []),
+    ...(settings.imagesEnabled !== DEFAULT_UNIFIED_SETTINGS.imagesEnabled ? ["Images"] : []),
     ...(settings.webChatProvider !== DEFAULT_UNIFIED_SETTINGS.webChatProvider
       ? ["Web chat provider"]
       : []),
@@ -757,6 +758,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
       webChatEnabled: DEFAULT_UNIFIED_SETTINGS.webChatEnabled,
       generalChatsEnabled: DEFAULT_UNIFIED_SETTINGS.generalChatsEnabled,
+      imagesEnabled: DEFAULT_UNIFIED_SETTINGS.imagesEnabled,
       webChatProvider: DEFAULT_UNIFIED_SETTINGS.webChatProvider,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
@@ -988,6 +990,29 @@ export function GeneralSettingsPanel() {
                 updateSettings({ generalChatsEnabled: Boolean(checked) })
               }
               aria-label="General chats"
+            />
+          }
+        />
+      </SettingsSection>
+      <SettingsSection id="images" title="Images">
+        <SettingsRow
+          {...searchableSetting("images")}
+          description="Browse and edit images in the Images section. Saved on this device."
+          resetAction={
+            settings.imagesEnabled !== DEFAULT_UNIFIED_SETTINGS.imagesEnabled ? (
+              <SettingResetButton
+                label="Images"
+                onClick={() =>
+                  updateSettings({ imagesEnabled: DEFAULT_UNIFIED_SETTINGS.imagesEnabled })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.imagesEnabled}
+              onCheckedChange={(checked) => updateSettings({ imagesEnabled: Boolean(checked) })}
+              aria-label="Images"
             />
           }
         />

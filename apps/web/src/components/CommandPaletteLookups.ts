@@ -48,6 +48,7 @@ export function useProjectLookups() {
 
 export const selectCommandPaletteClientSettings = (settings: ClientSettings) => ({
   generalChatsEnabled: settings.generalChatsEnabled,
+  imagesEnabled: settings.imagesEnabled,
   sidebarProjectGroupingMode: settings.sidebarProjectGroupingMode,
   sidebarProjectGroupingOverrides: settings.sidebarProjectGroupingOverrides,
   sidebarProjectSortOrder: settings.sidebarProjectSortOrder,

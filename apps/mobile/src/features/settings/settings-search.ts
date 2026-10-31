@@ -28,7 +28,7 @@ const SETTINGS_SEARCH_TERMS = {
     "word break",
     "math",
   ],
-  SettingsNavigation: ["tabs", "tab order", "reorder", "hide tabs"],
+  SettingsNavigation: ["tabs", "tab order", "reorder", "hide tabs", "images", "gallery", "photos"],
   SettingsKeyboard: ["return key", "send message", "new line", "hardware keyboard"],
   SettingsMicrophone: ["voice", "dictation", "audio input", "bluetooth"],
   SettingsScheduledTasks: ["automations", "schedule", "cron", "recurring", "webhook"],

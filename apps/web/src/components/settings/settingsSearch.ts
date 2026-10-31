@@ -449,6 +449,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
+    id: "images",
+    title: "Images",
+    to: "/settings/general",
+    searchTerms: ["gallery", "photos", "image generation", "изображения", "галерея"],
+  },
+  {
     id: "composer-context",
     title: "Composer context",
     to: "/settings/appearance",

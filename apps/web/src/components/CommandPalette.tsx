@@ -1568,17 +1568,18 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
-  actionItems.push({
-    kind: "action",
-    value: "action:images",
-    searchTerms: ["images", "photos", "gallery", "codex", "изображения", "галерея"],
-    title: imageLibraryCopy().images,
-    icon: <ImagesIcon className={ITEM_ICON_CLASS} />,
-    run: async () => {
-      resetImageGallery();
-      await navigate({ to: "/images" });
-    },
-  });
+  if (clientSettings.imagesEnabled)
+    actionItems.push({
+      kind: "action",
+      value: "action:images",
+      searchTerms: ["images", "photos", "gallery", "codex", "изображения", "галерея"],
+      title: imageLibraryCopy().images,
+      icon: <ImagesIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        resetImageGallery();
+        await navigate({ to: "/images" });
+      },
+    });
 
   for (const direction of [1, -1] as const) {
     const title = direction === 1 ? "Focus Next Workspace Area" : "Focus Previous Workspace Area";

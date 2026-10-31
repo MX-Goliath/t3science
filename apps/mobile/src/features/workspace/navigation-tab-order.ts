@@ -43,6 +43,18 @@ export function resolveHiddenNavigationTabs(saved?: readonly unknown[]): readonl
   return [...new Set(saved?.filter(isNavigationTab) ?? [])];
 }
 
+export function featureHiddenNavigationTabs(
+  saved?: readonly unknown[],
+  imagesEnabled = false,
+): readonly NavigationTab[] {
+  return [
+    ...new Set([
+      ...resolveHiddenNavigationTabs(saved),
+      ...(!imagesEnabled ? ["images" as const] : []),
+    ]),
+  ];
+}
+
 export function toggleNavigationTabVisibility(
   saved: readonly unknown[] | undefined,
   tab: NavigationTab,

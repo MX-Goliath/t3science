@@ -23,6 +23,7 @@ import {
 } from "../workspace/navigation-tabs";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
+import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { resolveWorkspaceTabOrder } from "../workspace/workspace-tabs-state";
 
 export function SettingsNavigationRouteScreen() {
@@ -43,6 +44,15 @@ export function SettingsNavigationRouteScreen() {
         contentContainerClassName="gap-4 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       >
+        <SettingsSection title="Images">
+          <SettingsSwitchRow
+            label="Images"
+            subtitle="Show the Images section to browse and edit images. Saved on this device."
+            value={AsyncResult.isSuccess(preferences) && preferences.value.imagesEnabled === true}
+            disabled={!AsyncResult.isSuccess(preferences) || preferences.waiting}
+            onValueChange={(imagesEnabled) => save({ imagesEnabled })}
+          />
+        </SettingsSection>
         <Text className="px-2 text-sm text-foreground-muted">
           {customizable
             ? "Phones show the first four enabled sections; Android tablet rails show all enabled sections. Remaining sections appear at the top of Settings. Hidden sections appear only here. Settings always stays last. Saved on this device."

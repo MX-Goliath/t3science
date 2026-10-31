@@ -10,6 +10,9 @@ import { createShellEnvironmentAtoms } from "@t3tools/client-runtime/state/shell
 import { useAtomValue } from "@effect/atom-react";
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { imageGalleryResetRevision } from "../../state/imageGalleryNavigation";
+import { mobilePreferencesAtom } from "../../state/preferences";
+import { AsyncResult } from "effect/reactivity";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useAssetUrlState } from "../../state/assets";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -33,6 +36,26 @@ import { imageLibraryCopy } from "./imageLibraryCopy";
 const shell = createShellEnvironmentAtoms(connectionAtomRuntime);
 
 export function ImagesScreen(props: { workspace?: boolean }) {
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const navigation = useNavigation();
+  if (!AsyncResult.isSuccess(preferences)) return null;
+  return preferences.value.imagesEnabled === true ? (
+    <EnabledImagesScreen {...props} />
+  ) : (
+    <View className="flex-1 bg-screen">
+      <AppBar title="Images" />
+      <View className="flex-1 items-center justify-center gap-4 px-6">
+        <EmptyState
+          title="Images is turned off"
+          detail="Enable Images in Settings → Navigation tabs."
+        />
+        <Button label="Open settings" onPress={() => navigation.navigate("SettingsNavigation")} />
+      </View>
+    </View>
+  );
+}
+
+function EnabledImagesScreen(props: { workspace?: boolean }) {
   const copy = imageLibraryCopy();
   const navigation = useNavigation();
   const workspace = useWorkspaceTabs();

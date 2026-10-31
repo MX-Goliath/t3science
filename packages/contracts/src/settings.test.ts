@@ -485,11 +485,14 @@ describe("server model preferences", () => {
   });
 });
 
-it("defaults general chats off and preserves an explicit opt-in", () => {
-  expect(decodeClientSettings({}).generalChatsEnabled).toBe(false);
-  expect(decodeClientSettings({ generalChatsEnabled: true }).generalChatsEnabled).toBe(true);
-  expect(decodeClientSettingsPatch({ generalChatsEnabled: true }).generalChatsEnabled).toBe(true);
-});
+it.each(["generalChatsEnabled", "imagesEnabled"] as const)(
+  "defaults %s off and preserves an explicit opt-in",
+  (key) => {
+    expect(decodeClientSettings({})[key]).toBe(false);
+    expect(decodeClientSettings({ [key]: true })[key]).toBe(true);
+    expect(decodeClientSettingsPatch({ [key]: true })[key]).toBe(true);
+  },
+);
 
 describe("ClientSettings web chat", () => {
   it("defaults off with ChatGPT selected", () => {

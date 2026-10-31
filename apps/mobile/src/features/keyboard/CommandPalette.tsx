@@ -72,6 +72,7 @@ import { threadJumpIndex } from "./threadKeyboardShortcuts";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { openSettings } from "../settings/settings-navigation";
 import { useSelectWorkspaceTab } from "../workspace/useSelectWorkspaceTab";
+import { useEnabledNavigationTabs } from "../workspace/navigation-tabs";
 import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 const PALETTE_COMMANDS: ReadonlyArray<HardwareKeyboardCommand> = [
@@ -222,6 +223,7 @@ export function CommandPalette(props: {
 }) {
   const navigation = useNavigation();
   const selectTab = useSelectWorkspaceTab();
+  const enabledTabs = useEnabledNavigationTabs();
   const { themeVariables } = useAppearancePreferences();
   const selectDetail = useSelectWorkspaceDetail();
   const runCommand = props.onCommand;
@@ -332,13 +334,17 @@ export function CommandPalette(props: {
         searchTerms: ["schedule", "automations", "recurring"],
         run: () => openSettings(navigation, "SettingsScheduledTasks"),
       },
-      {
-        key: "images",
-        kind: "action",
-        title: "Images",
-        searchTerms: ["images", "gallery", "photos", "изображения"],
-        run: () => navigation.navigate("Images"),
-      },
+      ...(enabledTabs.includes("images")
+        ? [
+            {
+              key: "images",
+              kind: "action" as const,
+              title: "Images",
+              searchTerms: ["images", "gallery", "photos", "изображения"],
+              run: () => navigation.navigate("Images"),
+            },
+          ]
+        : []),
       {
         key: "webChat",
         kind: "action",
@@ -476,6 +482,7 @@ export function CommandPalette(props: {
     return [...actions, ...projectItems, ...threadItems];
   }, [
     selectTab,
+    enabledTabs,
     activeThread,
     activeThreadRef,
     environments.length,

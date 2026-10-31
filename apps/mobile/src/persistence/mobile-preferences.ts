@@ -89,6 +89,7 @@ const ThreadProject = Schema.Struct({
 const isThreadProject = Schema.is(ThreadProject);
 
 export interface Preferences {
+  readonly imagesEnabled?: boolean;
   readonly webChatProvider?: WebChatProvider;
   readonly navigationTabOrder?: readonly string[];
   readonly hiddenNavigationTabs?: readonly string[];
@@ -172,6 +173,7 @@ export class MobilePreferencesStore extends Context.Service<
 
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
+    imagesEnabled?: boolean;
     webChatProvider?: WebChatProvider;
     navigationTabOrder?: readonly string[];
     hiddenNavigationTabs?: readonly string[];
@@ -210,6 +212,10 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
   } = {};
+
+  if (typeof parsed.imagesEnabled === "boolean") {
+    preferences.imagesEnabled = parsed.imagesEnabled;
+  }
 
   if (isWebChatProvider(parsed.webChatProvider)) {
     preferences.webChatProvider = parsed.webChatProvider;

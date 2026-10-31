@@ -5,6 +5,7 @@ import {
   moveNavigationTab,
   overflowNavigationTabs,
   enabledNavigationTabs,
+  featureHiddenNavigationTabs,
   toggleNavigationTabVisibility,
   resolveSelectedNavigationTab,
   resolveNavigationTabOrder,
@@ -57,6 +58,14 @@ describe("navigation tab order", () => {
     expect(enabledNavigationTabs(undefined, ["home", "issues", "settings"])).toEqual(
       NAVIGATION_TAB_ORDER,
     );
+    const featureHidden = featureHiddenNavigationTabs(hidden);
+    expect(enabledNavigationTabs(order, featureHidden)).toEqual(["threads", "pullRequests"]);
+    expect(resolveSelectedNavigationTab(order, featureHidden, "images")).toBe("threads");
+    expect(enabledNavigationTabs(order, featureHiddenNavigationTabs(hidden, true))).toEqual([
+      "threads",
+      "pullRequests",
+      "images",
+    ]);
   });
 
   it("falls back when the selected section is hidden, including when all are hidden", () => {

@@ -5,7 +5,7 @@ import { createContext, use, useState, type Dispatch, type ReactNode } from "rea
 import { mobilePreferencesAtom } from "../../state/preferences";
 import {
   navigationCustomizationAvailable,
-  resolveHiddenNavigationTabs,
+  featureHiddenNavigationTabs,
   resolveSelectedNavigationTab,
 } from "./navigation-tab-order";
 import {
@@ -41,9 +41,10 @@ function resolveWorkspaceTabsSelection(
 ): WorkspaceTabsState {
   const saved = AsyncResult.isSuccess(preferences) ? preferences.value : undefined;
   const order = resolveWorkspaceTabOrder(saved?.navigationTabOrder);
-  const hidden = navigationCustomizationAvailable()
-    ? resolveHiddenNavigationTabs(saved?.hiddenNavigationTabs)
-    : [];
+  const hidden = featureHiddenNavigationTabs(
+    navigationCustomizationAvailable() ? saved?.hiddenNavigationTabs : [],
+    saved?.imagesEnabled === true,
+  );
   const selected = resolveSelectedNavigationTab(order, hidden, state.selectedTab);
   return selected && selected !== state.selectedTab
     ? workspaceTabsReducer(state, { type: "select", tab: selected })

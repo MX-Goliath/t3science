@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 import {
   NAVIGATION_TAB_LABELS,
   navigationCustomizationAvailable,
-  resolveHiddenNavigationTabs,
+  featureHiddenNavigationTabs,
   enabledNavigationTabs,
   type NavigationTab,
 } from "./navigation-tab-order";
@@ -38,7 +38,10 @@ export function useHiddenNavigationTabs() {
   const saved = AsyncResult.isSuccess(preferences)
     ? preferences.value.hiddenNavigationTabs
     : undefined;
-  return navigationCustomizationAvailable() ? resolveHiddenNavigationTabs(saved) : [];
+  return featureHiddenNavigationTabs(
+    navigationCustomizationAvailable() ? saved : [],
+    AsyncResult.isSuccess(preferences) && preferences.value.imagesEnabled === true,
+  );
 }
 
 export function useEnabledNavigationTabs() {

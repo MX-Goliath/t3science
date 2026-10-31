@@ -3,11 +3,14 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
 import { resetImageGallery } from "./imageGalleryNavigation";
 import { imageLibraryCopy } from "./imageLibraryCopy";
+import { useClientSettings } from "~/hooks/useSettings";
 
 export function ImagesSidebarItem() {
   const navigate = useNavigate();
   const active = useLocation({ select: (location) => location.pathname === "/images" });
   const copy = imageLibraryCopy();
+  const enabled = useClientSettings((settings) => settings.imagesEnabled);
+  if (!enabled) return null;
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
