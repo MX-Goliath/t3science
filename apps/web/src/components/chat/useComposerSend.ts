@@ -160,6 +160,9 @@ type UsageLimitsPanel = ReturnType<typeof useUsageLimitsPanel>;
 type TimelineFollow = ReturnType<typeof useTimelineFollow>;
 
 interface ComposerSendInput {
+  readonly prepareSendImages?:
+    | ((attachmentCount: number) => Promise<ReadonlyArray<ComposerImageAttachment> | null>)
+    | undefined;
   readonly environmentId: EnvironmentId;
   readonly routeThreadKey: string;
   readonly currentRouteThreadKeyRef: { readonly current: string | null };
@@ -775,6 +778,24 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
     const threadIdForSend = activeThread.id;
+    let preparedImages: ReadonlyArray<ComposerImageAttachment> = [];
+    if (input.prepareSendImages) {
+      sendInFlightRef.current = true;
+      const images = await input
+        .prepareSendImages(composerImages.length + composerFiles.length)
+        .catch((cause: unknown) => {
+          setThreadError(
+            threadIdForSend,
+            cause instanceof Error ? cause.message : "Could not prepare message attachments.",
+          );
+          return null;
+        })
+        .finally(() => {
+          sendInFlightRef.current = false;
+        });
+      if (images === null || currentRouteThreadKeyRef.current !== routeThreadKey) return;
+      preparedImages = images;
+    }
     const sendSnapshot = snapshotComposerSend({
       prompt: promptForSend,
       images: composerImages,
@@ -788,7 +809,6 @@ export function useComposerSend(input: ComposerSendInput) {
     });
     const {
       files: composerFilesSnapshot,
-      attachments: composerAttachmentsSnapshot,
       terminalContexts: composerTerminalContextsSnapshot,
       previewAnnotations: composerPreviewAnnotationsSnapshot,
       reviewComments: composerReviewCommentsSnapshot,
@@ -796,6 +816,7 @@ export function useComposerSend(input: ComposerSendInput) {
       environmentContexts: composerEnvironmentContextsSnapshot,
       messageText: messageTextForSend,
     } = sendSnapshot;
+    const composerAttachmentsSnapshot = [...preparedImages, ...sendSnapshot.attachments];
     const {
       missingWorktreeBaseBranch,
       baseBranchForWorktree,

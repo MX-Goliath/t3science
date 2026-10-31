@@ -51,6 +51,12 @@ describe("RPC authorization scopes", () => {
     );
   });
 
+  it("requires host file access for the image library and native conversation history", () => {
+    for (const method of [WS_METHODS.imagesList, WS_METHODS.imagesGetConversation]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthFilesystemReadScope);
+    }
+  });
+
   it("separates passive terminal observation from operations that can change a shell", () => {
     for (const method of [WS_METHODS.terminalObserve, WS_METHODS.subscribeTerminalMetadata]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthTerminalReadScope);

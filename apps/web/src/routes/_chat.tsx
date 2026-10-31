@@ -7,6 +7,7 @@ import { isAppModalPage } from "../components/sidebar/mainAppLocation";
 import { SidebarInset } from "../components/ui/sidebar";
 import { resolveThreadRouteTarget, type ThreadRouteTarget } from "../threadRoutes";
 import { retainThreadFindForRoute } from "../components/chat/threadFindStore";
+import { retainThreadMessageNavigation } from "../components/chat/threadMessageNavigation";
 import { ThreadLinkPrompt } from "../components/promptLinks/ThreadLinkPrompt";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 
@@ -59,7 +60,10 @@ export const Route = createFileRoute("/_chat")({
   // Every match carries the whole location's params, so this layout sees the thread route's too.
   onEnter: ({ context, params }) => retainThreadFindForRouteMatch(context.appModalPage, params),
   onStay: ({ context, params }) => retainThreadFindForRouteMatch(context.appModalPage, params),
-  onLeave: () => retainThreadFindForRoute({ modalPage: false, threadRef: null }),
+  onLeave: () => {
+    retainThreadFindForRoute({ modalPage: false, threadRef: null });
+    retainThreadMessageNavigation({ modalPage: false, threadRef: null });
+  },
 });
 
 function retainThreadFindForRouteMatch(
@@ -68,6 +72,10 @@ function retainThreadFindForRouteMatch(
 ) {
   const target = resolveThreadRouteTarget(params);
   retainThreadFindForRoute({
+    modalPage,
+    threadRef: target?.kind === "server" ? target.threadRef : null,
+  });
+  retainThreadMessageNavigation({
     modalPage,
     threadRef: target?.kind === "server" ? target.threadRef : null,
   });

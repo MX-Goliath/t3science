@@ -12,6 +12,7 @@ export function ChatCanvas({
   threadRef,
   preview,
   composerOverlayElement,
+  composerReservedHeight = 0,
   detailsCardTopInset = 0,
   children,
   ...props
@@ -22,6 +23,7 @@ export function ChatCanvas({
   /** The thread's mini player while it renders on this canvas. */
   preview: ChatCanvasPreview | null;
   composerOverlayElement: HTMLElement | null;
+  composerReservedHeight?: number;
   detailsCardTopInset?: number;
 }) {
   const elementRef = useRef<HTMLDivElement | null>(null);
@@ -101,6 +103,7 @@ export function ChatCanvas({
         className="relative flex min-h-0 min-w-0 flex-1 flex-col"
         style={
           {
+            "--chat-composer-inset": `${composerReservedHeight}px`,
             "--chat-timeline-gutter": `${measurements.timelineGutter}px`,
             "--chat-lane-inset-start": `${layout.chat.insetStart}px`,
             "--chat-lane-inset-end": `${layout.chat.insetEnd}px`,

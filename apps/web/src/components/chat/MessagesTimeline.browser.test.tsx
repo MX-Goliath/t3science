@@ -33,6 +33,8 @@ import { toastManager } from "../ui/toast";
 import type { CitedHistory } from "./citationProcedure";
 import type { TimelineNavigation } from "./timelineViewport";
 import { rememberTimelinePosition } from "./timelineScrollAnchoring";
+import { requestThreadMessageNavigation } from "./threadMessageNavigation";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   COMPOSER_CONTEXT_CLIPBOARD_MIME,
   decodeComposerContextFragment,
@@ -166,6 +168,68 @@ const TASK_ID = ScheduledTaskId.make("task-1");
 const AUTOMATION_PROMPT = "Triage the inbox\n\nLabel every new issue and close duplicates.";
 
 describe("MessagesTimeline messages", () => {
+  it("opens an image message outside the loaded history without searching its hidden filename", async () => {
+    setup();
+    const props = baseProps();
+    const image = message(
+      "![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=)",
+      { role: "assistant" },
+      "gallery-image",
+    );
+    const earlier = [message("Draw a fox", {}, "image-prompt"), image];
+    const recent = Array.from({ length: 40 }, (_, index) =>
+      message(
+        `Later reply ${index}\n\n${"line\n\n".repeat(8)}`,
+        { role: "assistant" },
+        `gallery-later-${index}`,
+      ),
+    );
+    const loadEarlier = vi.fn();
+    requestThreadMessageNavigation(
+      scopeThreadRef(
+        ENVIRONMENT_ID,
+        ThreadId.make(props.routeThreadKey.slice(`${ENVIRONMENT_ID}:`.length)),
+      ),
+      image.id,
+    );
+    await using screen = await renderElement(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={recent}
+        liveFollowEnabled={false}
+        historyControls={{
+          hasMoreHistory: true,
+          loading: false,
+          error: null,
+          onLoadEarlier: loadEarlier,
+        }}
+      />,
+    );
+    await vi.waitFor(() => expect(loadEarlier).toHaveBeenCalledWith(image.id));
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={[...earlier, ...recent]}
+        liveFollowEnabled={false}
+        historyControls={{
+          hasMoreHistory: false,
+          loading: false,
+          error: null,
+          onLoadEarlier: loadEarlier,
+        }}
+      />,
+    );
+    await vi.waitFor(() => {
+      const viewport = props.listRef.current!.getScrollableNode()!;
+      const row = screen.container.querySelector(`[data-timeline-row-id="${image.id}"]`);
+      expect(row).not.toBeNull();
+      const bounds = viewport.getBoundingClientRect();
+      const top = row!.getBoundingClientRect().top;
+      expect(top).toBeGreaterThanOrEqual(bounds.top - 2);
+      expect(top).toBeLessThan(bounds.bottom);
+    });
+  });
+
   it("settles when equally long messages have very different rendered heights", async () => {
     const props = baseProps();
     const tall = message("a\n\n".repeat(6000), { role: "assistant" }, "tall");

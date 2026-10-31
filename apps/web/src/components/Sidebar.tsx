@@ -3,6 +3,8 @@ import { MessageSquareIcon } from "lucide-react";
 import { useGeneralChatsProjects } from "../state/entities";
 import { SidebarMenu, SidebarMenuButton } from "./ui/sidebar";
 import { WebChatSidebarItem } from "./web-chat/WebChatSidebarItem";
+import { ImagesSidebarItem } from "./images/ImagesSidebarItem";
+import { isImageGalleryDraft } from "./images/imageGalleryDraft";
 import { attachSidebarTree, SIDEBAR_TREE_PROPS } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -1177,7 +1179,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const visibleDraftSessionCount = useComposerDraftStore((store) => {
     let count = 0;
     for (const [draftKey, session] of Object.entries(store.draftThreadsByThreadKey)) {
-      if (session.promotedTo != null) {
+      if (session.promotedTo != null || isImageGalleryDraft(session)) {
         continue;
       }
       if (!composerDraftHasUserContent(store.draftsByThreadKey[draftKey])) {
@@ -2929,6 +2931,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           <SidebarGroup className="z-[1]">
             <SidebarMenu>
               <WebChatSidebarItem />
+              <ImagesSidebarItem />
               {generalChatsEnabled ? (
                 <SidebarMenuButton
                   type="button"

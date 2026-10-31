@@ -168,7 +168,7 @@ export const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   const drafts = (() => {
     const rows: SidebarDraftRowData[] = [];
     for (const [draftKey, session] of Object.entries(draftThreadsByThreadKey)) {
-      if (session.promotedTo != null) {
+      if (session.promotedTo != null || isImageGalleryDraft(session)) {
         continue;
       }
       if (
@@ -221,3 +221,4 @@ export const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     </>
   );
 });
+import { isImageGalleryDraft } from "../images/imageGalleryDraft";

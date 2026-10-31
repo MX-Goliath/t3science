@@ -277,7 +277,7 @@ import {
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
 import { useStableCallback } from "../../hooks/useStableCallback";
-import { usePanelAnimationSettings } from "../../panelAnimations";
+import { useComposerAnimationSettings } from "./useComposerAnimationSettings";
 import { readEnvironmentScope } from "../../state/session";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
 import { useComposerRestingTransition } from "./useComposerRestingTransition";
@@ -365,6 +365,8 @@ export interface ChatComposerHandle {
 }
 
 export interface ChatComposerProps {
+  placeholder?: string | undefined;
+  collapseWhenUnfocused?: boolean | undefined;
   composerDraftTarget: ScopedThreadRef | DraftId;
   environmentId: EnvironmentId;
   canOperateThread: boolean;
@@ -1049,7 +1051,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // A pending question stays expanded: its card moves into the banner dock,
   // so collapsing would leave the surface empty and squashed beneath it.
   const isComposerCollapsedMobile =
-    isMobileViewport &&
+    (isMobileViewport || props.collapseWhenUnfocused === true) &&
     !forceExpandedOnMobile &&
     !isComposerFocused &&
     !hasMultilinePrompt &&
@@ -2475,7 +2477,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hasBlockingComposerTopDrawer = pendingUserInputs.length > 0;
   const composerControlsCollapsed = isComposerCollapsedMobile;
   // The collapsed mobile web composer keeps a second controls row inside the card.
-  const showInlineRestingControls = isComposerCollapsedMobile;
+  const showInlineRestingControls = isComposerCollapsedMobile && isMobileViewport;
   const composerControlsHidden = showInlineRestingControls && !restingControlsVisible;
   if (composerControlsHidden && isComposerModelPickerOpen) {
     setIsComposerModelPickerOpen(false);
@@ -2491,7 +2493,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       />
     ) : null;
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
-    usePanelAnimationSettings();
+    useComposerAnimationSettings(props.collapseWhenUnfocused === true);
   const composerMainSurfaceRef = useComposerRestingTransition(
     composerControlsCollapsed,
     restingComposerControlsRef,
@@ -2936,7 +2938,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     handleImplementPlanInNewThreadPrimaryAction,
   );
   const scheduleComposerCollapseCheck = () => {
-    if (!isMobileViewport || mobileComposerExpandInFlightRef.current) {
+    if (
+      (!isMobileViewport && !props.collapseWhenUnfocused) ||
+      mobileComposerExpandInFlightRef.current
+    ) {
       return;
     }
     if (composerBlurFrameRef.current !== null) {
@@ -3417,7 +3422,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <div className="relative">
         <ComposerSurface.Main
           ref={composerMainSurfaceRef}
-          data-inline-resting-controls="true"
+          data-inline-resting-controls={isMobileViewport ? "true" : undefined}
           className={composerProviderState.composerFrameClassName}
         >
           <div
@@ -3446,7 +3451,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   aria-label="Expand composer"
                 >
                   {prompt.trim() ||
-                    (showProviderUnavailable ? "Enable a provider in Settings" : "Ask anything...")}
+                    (showProviderUnavailable
+                      ? "Enable a provider in Settings"
+                      : (props.placeholder ?? "Ask anything..."))}
                 </button>
                 {collapsedComposerImagePreviews}
                 <button
@@ -3611,7 +3618,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                               ? "Choose a project above to start a thread"
                               : showProviderUnavailable
                                 ? "Enable a provider in Settings to send a message"
-                                : DEFAULT_COMPOSER_PLACEHOLDER
+                                : (props.placeholder ?? DEFAULT_COMPOSER_PLACEHOLDER)
                     }
                     disabled={
                       projectSelectionRequired ||

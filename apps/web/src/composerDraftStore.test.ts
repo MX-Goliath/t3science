@@ -8,6 +8,10 @@ import {
   type EnvironmentShellStatus,
 } from "@t3tools/client-runtime/state/shell";
 import { makeThreadProjectionFixture } from "./test-fixtures";
+import {
+  discardUneditedImageDraft,
+  openImageGalleryDraft,
+} from "./components/images/imageGalleryDraft";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import {
@@ -22,6 +26,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
   EnvironmentId,
+  ChatAttachmentId,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -2512,4 +2517,47 @@ describe("composerDraftStore attachment references", () => {
       prompt,
     );
   });
+});
+it("keeps image edits in separate scratch drafts and preserves their prompt and attachment", () => {
+  resetComposerDraftStore();
+  const project = scopeProjectRef(TEST_ENVIRONMENT_ID, ProjectId.make("scratch-images"));
+  const original = scopeThreadRef(TEST_ENVIRONMENT_ID, ThreadId.make("original-image-thread"));
+  const store = useComposerDraftStore.getState();
+  store.setPrompt(original, "Keep the original conversation unchanged");
+  const model = { instanceId: CODEX_SECONDARY_INSTANCE, model: "test-image-model", options: [] };
+  const draftId = openImageGalleryDraft(project, "image-one", model);
+  const file = new File(["image"], "generated.png", { type: "image/png" });
+  const image = {
+    id: ChatAttachmentId.make("image-edit-attachment"),
+    type: "image" as const,
+    name: file.name,
+    mimeType: file.type,
+    sizeBytes: file.size,
+    file,
+    previewUrl: "data:image/png;base64,aW1hZ2U=",
+  };
+  store.addImage(draftId, image);
+  store.setPrompt(draftId, "Make the sky blue");
+  expect(openImageGalleryDraft(project, "image-one", model)).toBe(draftId);
+  expect(store.getComposerDraft(draftId)?.prompt).toBe("Make the sky blue");
+  expect(store.getComposerDraft(draftId)?.images).toEqual([image]);
+  discardUneditedImageDraft(draftId, image.name);
+  expect(store.getComposerDraft(draftId)?.prompt).toBe("Make the sky blue");
+  expect(store.getDraftSession(draftId)).toMatchObject({
+    environmentId: project.environmentId,
+    projectId: project.projectId,
+    envMode: "local",
+    branch: null,
+    worktreePath: null,
+  });
+  const other = openImageGalleryDraft(project, "image-two", model);
+  expect(other).not.toBe(draftId);
+  expect(store.getComposerDraft(other)?.images ?? []).toEqual([]);
+  store.addImage(other, image);
+  discardUneditedImageDraft(other, image.name);
+  expect(store.getDraftSession(other)).toBeNull();
+  expect(store.getComposerDraft(original)?.prompt).toBe("Keep the original conversation unchanged");
+  const session = store.getDraftSession(draftId)!;
+  markPromotedDraftThreadByRef(scopeThreadRef(session.environmentId, session.threadId));
+  expect(openImageGalleryDraft(project, "image-one", model)).not.toBe(draftId);
 });

@@ -351,7 +351,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   findOpen = false,
   findExpanded = false,
   findQuery = "",
-  activeFindMatch = null,
+  activeFindMatch: findMatch = null,
   findNavigationId = 0,
   latestRun,
   announcedRun = null,
@@ -401,6 +401,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
   historyControls,
 }: MessagesTimelineProps) {
   const listIdentityKey = displayThreadKey ?? routeThreadKey;
+  const messageNavigation = usePendingThreadMessage(listIdentityKey);
+  const activeFindMatch =
+    findMatch ??
+    (messageNavigation
+      ? { entryId: messageNavigation.messageId, runId: null, occurrence: 0 }
+      : null);
   // Snapshot restore positions on identity changes; ongoing scroll writes must not move them.
   // Find open at the opening is part of the snapshot: opening find later
   // announces its own navigation (threadFindStore's announceOpening).
@@ -581,17 +587,20 @@ const ConversationTimeline = memo(function ConversationTimeline({
   }
 
   // Imported turns and post-steer work fold under synthetic keys, not the entries' run ids.
-  const findFoldRunIds = findActive
-    ? timelineTurnFoldRunIdsByEntryId({
-        timelineEntries,
-        latestRun,
-        runningRunId,
-        isWorking,
-        runlessWorkActive,
-      })
-    : null;
+  const findFoldRunIds =
+    findActive || messageNavigation !== null
+      ? timelineTurnFoldRunIdsByEntryId({
+          timelineEntries,
+          latestRun,
+          runningRunId,
+          isWorking,
+          runlessWorkActive,
+        })
+      : null;
   const activeFindRunId =
-    findActive && activeFindMatch ? findFoldRunIds?.get(activeFindMatch.entryId) : undefined;
+    (findActive || messageNavigation !== null) && activeFindMatch
+      ? findFoldRunIds?.get(activeFindMatch.entryId)
+      : undefined;
   const [expandedFindRunId, setExpandedFindRunId] = useState<RunId | undefined>();
   if (expandedFindRunId !== activeFindRunId) {
     setExpandedFindRunId(activeFindRunId);
@@ -808,6 +817,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const firstMessageRow = rows.find(isMessageRow);
   const lastMessageRow = rows.findLast(isMessageRow);
   const alwaysRenderKeys = [
+    ...(messageNavigation ? [messageNavigation.messageId] : []),
     ...(firstMessageRow ? [firstMessageRow.id] : []),
     ...(lastMessageRow && lastMessageRow !== firstMessageRow ? [lastMessageRow.id] : []),
     ...(citationAlwaysRender?.keys ?? []),
@@ -1212,11 +1222,23 @@ const ConversationTimeline = memo(function ConversationTimeline({
     entries: timelineEntries,
     container: timelineViewportElement,
     query: normalizedFindQuery,
-    match: activeFindMatch,
+    match: findMatch,
     navigationId: findNavigationId,
     rowIndex: activeFindMatch ? rows.findIndex((row) => row.id === activeFindMatch.entryId) : -1,
     listRef,
     contentInsetEndAdjustment,
+  });
+
+  useThreadMessageNavigation({
+    request: messageNavigation,
+    ready: findListReady && !restoringThreadPosition,
+    rowIndex: messageNavigation
+      ? rows.findIndex((row) => row.id === messageNavigation.messageId)
+      : -1,
+    firstEntryId: timelineEntries[0]?.id,
+    history: historyControls,
+    list: listRef,
+    viewport: viewportRef,
   });
 
   // LegendList moves rows one commit late; per-row providers prevent thread context leaks.
@@ -1336,7 +1358,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
               renderItem={renderItem}
               estimatedItemSize={90}
               initialScrollAtEnd={
-                !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
+                messageNavigation === null &&
+                !findActive &&
+                citationRequest === null &&
+                rememberedPosition?.atEnd !== false
               }
               // Legend needs a data refresh to mount new pins without a scroll event.
               dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
@@ -1345,6 +1370,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
               {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
               contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
               maintainScrollAtEnd={
+                messageNavigation !== null ||
                 citationPositioning ||
                 (restoringThreadPosition && rememberedPosition?.atEnd === false) ||
                 anchoredEndSpace ||
@@ -1357,6 +1383,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
                     : TIMELINE_MAINTAIN_SCROLL_AT_END
               }
               maintainVisibleContentPosition={
+                messageNavigation !== null ||
                 findActive ||
                 citationPositioning ||
                 (restoringThreadPosition && rememberedPosition?.atEnd === false)
@@ -1722,3 +1749,4 @@ function AttemptFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "at
     </div>
   );
 }
+import { usePendingThreadMessage, useThreadMessageNavigation } from "./threadMessageNavigation";

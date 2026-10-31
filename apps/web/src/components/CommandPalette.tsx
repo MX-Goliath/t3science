@@ -61,6 +61,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  ImagesIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -73,6 +74,8 @@ import {
   UserPlusIcon,
 } from "lucide-react";
 import { openThreadFind } from "./chat/threadFindStore";
+import { resetImageGallery } from "./images/imageGalleryNavigation";
+import { imageLibraryCopy } from "./images/imageLibraryCopy";
 import {
   useDeferredValue,
   useEffect,
@@ -1502,6 +1505,18 @@ function OpenCommandPaletteDialog(props: {
     shortcutCommand: "usage.open",
     run: async () => {
       await navigate({ to: "/usage" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:images",
+    searchTerms: ["images", "photos", "gallery", "codex", "изображения", "галерея"],
+    title: imageLibraryCopy().images,
+    icon: <ImagesIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      resetImageGallery();
+      await navigate({ to: "/images" });
     },
   });
 

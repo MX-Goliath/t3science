@@ -425,6 +425,8 @@ export const WS_METHODS = {
   filesystemBrowse: "filesystem.browse",
   filesystemGetMetadata: "filesystem.getMetadata",
   agentSessionsScan: "agentSessions.scan",
+  imagesList: "images.list",
+  imagesGetConversation: "images.getConversation",
   agentSessionsImport: "agentSessions.import",
   assetsCreateUrl: "assets.createUrl",
   assetsPersistChatAttachments: "assets.persistChatAttachments",
@@ -1370,6 +1372,17 @@ const WsAgentSessionsScanRpc = Rpc.make(WS_METHODS.agentSessionsScan, {
   error: Schema.Union([AgentSessionScanError, EnvironmentAuthorizationError]),
 });
 
+const WsImagesListRpc = Rpc.make(WS_METHODS.imagesList, {
+  payload: ImageLibraryListInput,
+  success: ImageLibraryListResult,
+  error: Schema.Union([ImageLibraryError, EnvironmentAuthorizationError]),
+});
+const WsImagesGetConversationRpc = Rpc.make(WS_METHODS.imagesGetConversation, {
+  payload: ImageLibraryConversationInput,
+  success: ImageLibraryConversation,
+  error: Schema.Union([ImageLibraryError, EnvironmentAuthorizationError]),
+});
+
 const WsAgentSessionsImportRpc = Rpc.make(WS_METHODS.agentSessionsImport, {
   payload: AgentSessionImportInput,
   success: AgentSessionImportResult,
@@ -2098,6 +2111,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsFilesystemBrowseRpc,
   WsFilesystemGetMetadataRpc,
   WsAgentSessionsScanRpc,
+  WsImagesListRpc,
+  WsImagesGetConversationRpc,
   WsAgentSessionsImportRpc,
   WsAssetsCreateUrlRpc,
   WsAssetsPersistChatAttachmentsRpc,
@@ -2179,3 +2194,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeThreadRpc,
   WsOrchestrationV2SubscribeCommandOutputRpc,
 ).middleware(RpcScopeAuthorization);
+import {
+  ImageLibraryListInput,
+  ImageLibraryListResult,
+  ImageLibraryConversationInput,
+  ImageLibraryConversation,
+  ImageLibraryError,
+} from "./imageLibrary.ts";
