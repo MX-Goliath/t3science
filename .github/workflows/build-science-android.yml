@@ -88,13 +88,14 @@ jobs:
       - name: Test Android APK validation
         working-directory: apps/mobile/android
         run: ./gradlew :t3tools-mobile-app-updates:testReleaseUnitTest
-      - name: Build signed APK
-        run: vp run dist:mobile:android --abi all --output "release/T3-Science-$RELEASE_VERSION-android.apk"
-      - name: Verify APK signature and version
+      - name: Build signed ARM64 APK
+        run: vp run dist:mobile:android --abi arm64-v8a --output "release/T3-Science-$RELEASE_VERSION-android.apk"
+      - name: Verify APK signature, version and architecture
         run: |
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
           "$build_tools/apksigner" verify --verbose "release/T3-Science-$RELEASE_VERSION-android.apk"
           "$build_tools/aapt" dump badging "release/T3-Science-$RELEASE_VERSION-android.apk" | head -n 1 | grep -F "versionCode='$T3SCIENCE_ANDROID_VERSION_CODE'" | grep -F "versionName='$RELEASE_VERSION'"
+          "$build_tools/aapt" dump badging "release/T3-Science-$RELEASE_VERSION-android.apk" | grep -Fx "native-code: 'arm64-v8a'"
       - name: Prepare Android update feed
         run: node scripts/prepare-science-release.ts release "$RELEASE_VERSION" "$T3SCIENCE_ANDROID_VERSION_CODE" --platform android
       - uses: actions/upload-artifact@v4

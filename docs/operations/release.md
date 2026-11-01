@@ -45,7 +45,7 @@ code are needed. Download `windows-release` from the completed run, including
 its Windows update manifests.
 
 **Actions → Build T3 Science Android → Run workflow** builds and verifies the
-signed universal APK. Supply the stable version and Android version code, with
+signed ARM64 APK. Supply the stable version and Android version code, with
 the signing secrets configured above. Download `android-release`, containing
 the APK and `android-update.json`.
 
@@ -73,7 +73,7 @@ creating its draft.
    it only after publication.
 
 The draft contains Linux x64 AppImage, Windows x64 NSIS installer and portable
-EXE, and a universal Android APK. It also includes `latest.yml`,
+EXE, and an ARM64 Android APK. It also includes `latest.yml`,
 `latest-linux.yml`, `latest-portable.yml`, blockmaps where generated, and
 `android-update.json`. Keep the manifests and their exact referenced filenames
 attached to the same release. The portable manifest references only the portable
