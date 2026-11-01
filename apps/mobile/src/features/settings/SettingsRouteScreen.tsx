@@ -1,7 +1,4 @@
-import {
-  navigationCustomizationAvailable,
-  overflowNavigationTabs,
-} from "../workspace/navigation-tab-order";
+import { overflowNavigationTabs } from "../workspace/navigation-tab-order";
 import {
   NAVIGATION_TAB_ICONS,
   WORKSPACE_TAB_LABELS,
@@ -242,9 +239,7 @@ function useSettingsIndexSections(): SettingsListSection[] {
         page("SettingsAppearance", "paintbrush", "Appearance"),
         page("SettingsFollowUp", "bubble.left.and.bubble.right", "Chat"),
         page("SettingsWebChat", "globe", "Web chat"),
-        ...(navigationCustomizationAvailable()
-          ? [page("SettingsNavigation", "line.3.horizontal", "Navigation tabs")]
-          : []),
+        page("SettingsNavigation", "line.3.horizontal", "Navigation tabs"),
         ...(Platform.OS === "ios"
           ? [
               page("SettingsKeyboard", "keyboard", "Keyboard"),
