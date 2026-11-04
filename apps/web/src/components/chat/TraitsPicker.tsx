@@ -26,6 +26,8 @@ import {
   normalizeModelSlug,
 } from "@t3tools/shared/model";
 import { memo, type ReactNode, useRef } from "react";
+import { flushSync } from "react-dom";
+import "./modelPickerTransition.css";
 import { GaugeIcon, ZapIcon } from "lucide-react";
 import {
   Menu,
@@ -800,19 +802,6 @@ export const TraitsPicker = memo(function TraitsPicker({
               ) : null}
               {effortWord !== null ? (
                 <span className="grid text-left">
-                  {effortDisplay === "label"
-                    ? primarySelectDescriptor?.options.map((option) => (
-                        <span
-                          key={option.id}
-                          aria-hidden="true"
-                          data-composer-control-label
-                          className="invisible col-start-1 row-start-1 flex items-center gap-1.5"
-                        >
-                          <span>{option.label}</span>
-                          {speedIcon}
-                        </span>
-                      ))
-                    : null}
                   <span className="col-start-1 row-start-1 flex items-center gap-1.5">
                     <span data-composer-control-label className={effortLabelClassName}>
                       {effortWord}
@@ -879,10 +868,21 @@ export const TraitsPicker = memo(function TraitsPicker({
         <TooltipPopup side="top">{triggerDescription}</TooltipPopup>
       </Tooltip>
       <MenuPopup
-        align={isComposerOwned ? "center" : "start"}
+        align="start"
+        anchor={
+          isComposerOwned
+            ? () =>
+                triggerRef.current?.closest<HTMLElement>(
+                  "[data-chat-composer-footer-controls], [data-chat-composer-resting-controls]",
+                ) ?? triggerRef.current
+            : undefined
+        }
         className={
           isComposerOwned ? "w-[calc(--spacing(72)+2px)] max-w-[calc(100vw-2rem)]" : undefined
         }
+        style={{
+          viewTransitionName: isComposerOwned && isMenuOpen ? "composer-model-picker" : "none",
+        }}
         shadow={isComposerOwned ? "none" : "default"}
         {...(isComposerOwned ? composerFloatingLayerProps : {})}
         {...(isComposerOwned && onOpenModelPicker
@@ -909,8 +909,24 @@ export const TraitsPicker = memo(function TraitsPicker({
             ? {
                 onOpenModelPicker: () => {
                   openingModelPickerRef.current = true;
-                  setIsMenuOpen(false);
-                  onOpenModelPicker();
+                  const openPicker = () => {
+                    setIsMenuOpen(false);
+                    onOpenModelPicker();
+                  };
+                  if (
+                    !isComposerOwned ||
+                    !document.startViewTransition ||
+                    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                  ) {
+                    openPicker();
+                    return;
+                  }
+                  void document
+                    .startViewTransition({
+                      types: ["composer-model-picker"],
+                      update: () => flushSync(openPicker),
+                    })
+                    .finished.catch(() => {});
                 },
               }
             : {})}

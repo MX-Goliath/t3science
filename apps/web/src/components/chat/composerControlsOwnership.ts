@@ -4,7 +4,7 @@
  * The rule: Permissions have exactly one visible home and composer.mode exactly one target.
  */
 export function resolveComposerControlsOwnership(input: {
-  /** Permissions hide while the mode is the default, or while the new-thread strip names it. */
+  /** Non-default permissions show their label when there is room. */
   readonly matchesDefault: boolean;
   /** The model has an effort (traits) menu, which then always holds Permissions. */
   readonly hasTraits: boolean;
@@ -17,11 +17,8 @@ export function resolveComposerControlsOwnership(input: {
     ? input.collapsed
       ? ("icon" as const)
       : ("label" as const)
-    : // Without traits there is no effort menu to hold Permissions, so keep an icon.
-      input.hasTraits
-      ? ("hidden" as const)
-      : ("icon" as const);
-  const showModeBlock = !(accessDisplay === "hidden" && !input.planModeUiEnabled);
+    : ("icon" as const);
+  const showModeBlock = true;
   const blockIds = [
     ...(input.hasTraits ? ["traits" as const] : []),
     ...(showModeBlock ? ["mode" as const] : []),
@@ -54,10 +51,10 @@ export function resolveComposerControlsOwnership(input: {
     traitsHidden,
     modeHidden,
     /**
-     * The effort chip answers composer.mode while the chip is hidden or overflowed, until the
+     * The effort chip answers composer.mode while the permissions chip is overflowed, until the
      * effort chip overflows too; then the overflow menu (which holds Permissions) answers it.
      */
-    effortOwnsModeShortcut: (input.matchesDefault || modeHidden) && !traitsHidden,
+    effortOwnsModeShortcut: input.hasTraits && modeHidden && !traitsHidden,
     overflowShowsPermissions: overflowShowsPermissionsFor(hiddenBlockIds),
   };
 }

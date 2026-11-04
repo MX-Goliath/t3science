@@ -4,6 +4,7 @@ import { ChevronRightIcon, RotateCcwIcon, ZapIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import styles from "./ReasoningSettingsCard.module.css";
+import { ModelName } from "./ModelName";
 
 type SelectDescriptor = Extract<ProviderOptionDescriptor, { type: "select" }>;
 
@@ -105,7 +106,7 @@ export function ReasoningSettingsCard(props: {
               aria-label={`Change model: ${props.modelLabel}`}
               className="group/model flex max-w-full items-center rounded-sm text-xs text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
-              <span className="truncate">{props.modelLabel}</span>
+              <ModelName>{props.modelLabel}</ModelName>
               <ChevronRightIcon className="size-3 shrink-0 transition-transform duration-150 group-hover/model:translate-x-0.5 motion-reduce:transition-none" />
             </button>
           ) : (

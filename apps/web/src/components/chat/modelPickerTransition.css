@@ -1,0 +1,26 @@
+:active-view-transition-type(composer-model-picker) {
+  &::view-transition-group(root),
+  &::view-transition-old(root),
+  &::view-transition-new(root) {
+    animation: none;
+  }
+
+  &::view-transition-group(composer-model-picker) {
+    animation-duration: 240ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  &::view-transition-old(composer-model-picker),
+  &::view-transition-new(composer-model-picker) {
+    height: 100%;
+    overflow: clip;
+    border-radius: var(--radius-lg);
+    animation-duration: 160ms;
+  }
+
+  & [data-chat-model-picker-popup] {
+    scale: 1;
+    opacity: 1;
+    transition: none;
+  }
+}

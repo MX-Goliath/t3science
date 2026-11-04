@@ -18,6 +18,7 @@ import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../provi
 import { ComposerControl, type ComposerControlSize } from "./ComposerControl";
 import { takeOpenTarget, useComposerMenuProps } from "./composerEventScope";
 import { shortcutLabelForCommand } from "../../keybindings";
+import "./modelPickerTransition.css";
 
 /** Holds the page still behind the open picker; its lifetime is the popup element's. */
 function lockBackgroundScroll(popup: HTMLElement | null) {
@@ -415,19 +416,25 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           };
         }}
         initialFocus={searchInputRef}
-        align={props.isComposerOwned ? "center" : "start"}
+        align="start"
         anchor={
           props.isComposerOwned
             ? () => {
                 const trigger = triggerRef.current;
-                const effort = trigger?.parentElement?.querySelector<HTMLElement>(
-                  '[data-composer-shortcut~="composer.effort"]',
+                return (
+                  trigger?.closest<HTMLElement>(
+                    "[data-chat-composer-footer-controls], [data-chat-composer-resting-controls]",
+                  ) ?? trigger
                 );
-                return effort && !effort.closest("[inert]") ? effort : trigger;
               }
             : undefined
         }
+        data-chat-model-picker-popup
         className="before:hidden"
+        style={{
+          viewTransitionName:
+            props.isComposerOwned && isMenuOpen ? "composer-model-picker" : "none",
+        }}
         padding="none"
         touchBackdrop
       >
