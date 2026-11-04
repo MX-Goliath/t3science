@@ -153,8 +153,8 @@ export function runStopNowItem(input: {
   };
 }
 
-/** Background commands and subagents attached above the composer. */
-export function backgroundWorkBannerItem(input: {
+/** Background commands and subagents, for the end of the timeline. */
+export function backgroundWorkNowItem(input: {
   readonly threadId: ThreadId;
   readonly tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>;
   readonly turnItems: ThreadStructure["turnItems"];
@@ -162,7 +162,7 @@ export function backgroundWorkBannerItem(input: {
   readonly stopping: boolean;
   readonly onStop: () => Promise<void>;
   readonly onOpenThread: (threadId: ThreadId) => void;
-}): ComposerBannerStackItem | null {
+}): ThreadNowItem | null {
   const { onOpenThread } = input;
   const presentation = presentPendingBackgroundWork(input.tasks);
   if (presentation === null) return null;
@@ -199,8 +199,6 @@ export function backgroundWorkBannerItem(input: {
   const startedAtMs = only?.startedAtMs ?? null;
   return {
     id: `background-work:${input.threadId}`,
-    variant: "default",
-    layout: "inline",
     icon: rows.every(isCommand) ? <TerminalIcon /> : <CircleDashedIcon />,
     title:
       only && typeof only.label !== "string" && only.task.label !== only.task.kind ? (

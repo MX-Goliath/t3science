@@ -71,7 +71,7 @@ function lockBackgroundScroll(popup: HTMLElement | null) {
 }
 
 /** What a docked effort column needs from its picker: the model it serves. */
-const DockedPickerContext = createContext<{ modelLabel: string }>({ modelLabel: "" });
+export const DockedPickerContext = createContext<{ modelLabel: string }>({ modelLabel: "" });
 
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   environmentId: EnvironmentId | null;
@@ -404,7 +404,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         </span>
       </PopoverTrigger>
       <PopoverPopup
-        shadow={props.isComposerOwned ? "none" : "default"}
         {...(props.isComposerOwned ? composerFloatingLayerProps : {})}
         ref={(popup) => {
           popupRef.current = popup;
@@ -415,18 +414,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           };
         }}
         initialFocus={searchInputRef}
-        align={props.isComposerOwned ? "center" : "start"}
-        anchor={
-          props.isComposerOwned
-            ? () => {
-                const trigger = triggerRef.current;
-                const effort = trigger?.parentElement?.querySelector<HTMLElement>(
-                  '[data-composer-shortcut~="composer.effort"]',
-                );
-                return effort && !effort.closest("[inert]") ? effort : trigger;
-              }
-            : undefined
-        }
+        align={props.popupAlign ?? "start"}
+        // Docked, the popup opens above the composer and slides over it when that space is short,
+        // so a short window gets its full height (Floating UI sizes to the viewport) instead of a sliver.
+        {...(docked
+          ? { side: "top" as const, collisionAvoidance: { side: "shift", align: "shift" } as const }
+          : {})}
         className="before:hidden"
         padding="none"
         touchBackdrop

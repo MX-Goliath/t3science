@@ -16,7 +16,6 @@ export interface ComposerBannerStackItem {
   readonly id: string;
   readonly variant: ComposerBannerVariant;
   readonly group?: ComposerBannerGroup;
-  readonly layout?: "inline" | "wrap-actions";
   readonly icon: ReactNode;
   readonly title: ReactNode;
   readonly description?: ReactNode;
@@ -179,7 +178,7 @@ function NoticeCard({
       density="comfortable"
       data-chat-composer-collapsed-controls="true"
     >
-      <ComposerBanner.Row layout={item.layout ?? "wrap-actions"}>
+      <ComposerBanner.Row layout="wrap-actions">
         <ComposerBanner.Icon className="h-(--composer-banner-icon-column) self-start">
           {item.icon}
         </ComposerBanner.Icon>
