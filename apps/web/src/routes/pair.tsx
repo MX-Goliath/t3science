@@ -7,7 +7,18 @@ import {
 } from "../components/auth/PairingRouteSurface";
 
 export const Route = createFileRoute("/pair")({
-  beforeLoad: async ({ context }) => {
+  validateSearch: (search: Record<string, unknown>): { returnTo?: string } => {
+    if (typeof search.returnTo !== "string" || !search.returnTo.startsWith("/")) return {};
+    const origin = "https://pairing.invalid";
+    try {
+      const url = new URL(search.returnTo, origin);
+      if (url.origin !== origin || url.pathname === "/pair") return {};
+      return { returnTo: `${url.pathname}${url.search}${url.hash}` };
+    } catch {
+      return {};
+    }
+  },
+  beforeLoad: async ({ context, search }) => {
     const { authGateState } = context;
     if (authGateState.status === "hosted-pairing") {
       return {
@@ -20,7 +31,7 @@ export const Route = createFileRoute("/pair")({
       authGateState.status === "hosted-static" ||
       authGateState.status === "guest"
     ) {
-      throw redirect({ to: "/", replace: true });
+      throw redirect({ href: search.returnTo ?? "/", replace: true });
     }
     return {
       authGateState,
@@ -32,6 +43,7 @@ export const Route = createFileRoute("/pair")({
 
 function PairRouteView() {
   const router = useRouter();
+  const { returnTo } = Route.useSearch();
   const { authGateState } = Route.useRouteContext();
 
   if (!authGateState) {
@@ -47,7 +59,7 @@ function PairRouteView() {
       auth={authGateState.auth}
       onAuthenticated={() => {
         // Recreate the connection so WebSocket and cached scopes use the new pairing cookie.
-        router.history.replace("/");
+        router.history.replace(returnTo ?? "/");
         router.history.flush();
         window.location.reload();
       }}

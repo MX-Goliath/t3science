@@ -54,3 +54,13 @@ before it replaces it.
 T3 Code removes characters you cannot see, such as zero-width and hidden tag characters, because
 they can hide instructions for the agent. When a prompt had them, T3 Code warns you that it may be
 malicious.
+
+## Share a thread
+
+**Copy thread** copies a link to the thread on your Science server, such as
+`https://science.lan/threads/<environment>/<thread>`. Enable network access in
+**Settings → Connections** first. Share the link with another device on the same
+network; that device must pair with the server before it can read the thread.
+Science prefers an available HTTPS address and otherwise uses the server's HTTP
+address. The link opens the server's web interface without depending on app.t3.codes.
+Pasting a copied thread into a Science composer keeps its thread chip.

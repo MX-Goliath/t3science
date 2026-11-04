@@ -3,10 +3,10 @@ import {
   decodeComposerContextFragment,
   encodeComposerContextFragment,
 } from "@t3tools/shared/composerContextClipboard";
-import { collectComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { threadLinkContextReferences } from "@t3tools/shared/composerContextReferences";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveThreadReferenceCopyTarget } from "./threadReference.ts";
+import { resolveThreadReferenceCopyTarget, networkThreadCopyTarget } from "./threadReference.ts";
 
 const thread = {
   threadRef: { environmentId: EnvironmentId.make("env-1"), threadId: ThreadId.make("thread-1") },
@@ -98,13 +98,53 @@ describe("resolveThreadReferenceCopyTarget", () => {
         }),
       ],
     });
-    // A paste keeps only the records its plain text references.
-    expect(collectComposerContextReferences(target!.value)).toEqual([
-      expect.objectContaining({
-        kind: "thread",
-        contextId: pasted!.records[0]!.contextId,
-        label: "Fix the login flow",
-      }),
-    ]);
+    // The plain text opens the thread anywhere and pastes back as the copied record's chip.
+    expect(target!.value).toBe("https://app.t3.codes/threads/env-1/thread-1");
+    expect(threadLinkContextReferences(target!.value, pasted!.records, () => undefined)).toEqual({
+      text: `[Fix the login flow](t3-context://v1/thread/${pasted!.records[0]!.contextId})`,
+      records: pasted!.records,
+    });
+  });
+
+  it("links through the build's hosted app", () => {
+    expect(
+      resolveThreadReferenceCopyTarget({ ...thread, hostedAppUrl: "https://preview.t3.codes" })
+        ?.value,
+    ).toBe("https://preview.t3.codes/threads/env-1/thread-1");
+  });
+});
+
+describe("network thread copies", () => {
+  it.each([
+    [["http://127.0.0.1:3773", "https://science.lan:7443"], "https://science.lan:7443"],
+    [["http://192.168.1.20:3773", "https://science.lan"], "https://science.lan"],
+    [["http://192.168.1.20:3773"], "http://192.168.1.20:3773"],
+    [["http://[fd00::1]:3773"], "http://[fd00::1]:3773"],
+    [["https://user:password@science.lan/path?token=secret#fragment"], "https://science.lan"],
+  ])("uses a network URL from %j", (urls, origin) => {
+    const target = resolveThreadReferenceCopyTarget(thread)!;
+    const copy = networkThreadCopyTarget(target, urls);
+    expect(copy.value).toBe(`${origin}/threads/env-1/thread-1`);
+    expect(copy.fragment).toEqual(target.fragment);
+    expect(
+      threadLinkContextReferences(copy.value, copy.fragment!.records, () => undefined).records,
+    ).toEqual(copy.fragment!.records);
+  });
+
+  it("refuses to share a device-local or unrelated hosted address", () => {
+    const target = resolveThreadReferenceCopyTarget(thread)!;
+    expect(() =>
+      networkThreadCopyTarget(target, [
+        "http://localhost:3773",
+        "t3science://app",
+        "http://0.0.0.0:3773",
+        "https://app.t3.codes",
+      ]),
+    ).toThrow(/network/i);
+    const pr = resolveThreadReferenceCopyTarget({
+      ...thread,
+      linkedPullRequestUrl: "https://github.com/a/b/pull/1",
+    })!;
+    expect(networkThreadCopyTarget(pr, [])).toBe(pr);
   });
 });

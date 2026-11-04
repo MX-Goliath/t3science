@@ -52,7 +52,7 @@ export const Route = createFileRoute("/_chat")({
       context.authGateState.status !== "authenticated" &&
       context.authGateState.status !== "hosted-static"
     ) {
-      throw redirect({ to: "/pair", replace: true });
+      throw redirect({ to: "/pair", search: { returnTo: location.href }, replace: true });
     }
     return { appModalPage: isAppModalPage(location.pathname) };
   },

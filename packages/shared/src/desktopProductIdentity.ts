@@ -3,7 +3,6 @@ export const DESKTOP_APP_ID = "com.t3tools.t3science";
 export const DESKTOP_PRODUCTION_SCHEME = "t3science";
 export const DESKTOP_DEVELOPMENT_SCHEME = "t3science-dev";
 export const DESKTOP_PRODUCTION_LINUX_WM_CLASS = "t3science";
-export const DESKTOP_DEVELOPMENT_LINUX_WM_CLASS = "t3science-dev";
 export const DESKTOP_LINUX_EXECUTABLE_NAME = "t3science";
 export const DESKTOP_ARTIFACT_BASE_NAME = "T3-Science";
 export const DESKTOP_DEFAULT_HOME_DIR_NAME = ".t3science";

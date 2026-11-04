@@ -1,4 +1,3 @@
-import { WORKING_EXIT_GRACE_MS } from "@t3tools/client-runtime/state/thread-inbox";
 import type { AnyRouter } from "@tanstack/react-router";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -6,7 +5,7 @@ import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 
-import { fakeTimers, stubGlobal } from "../../test/render";
+import { stubGlobal } from "../../test/render";
 
 const state = vi.hoisted(() => ({
   mode: "notifications",
@@ -253,24 +252,18 @@ it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
   },
 );
 
-it("holds a completion through a continuation gap and notifies once it settles", async () => {
+it("presents completion notifications and sound as soon as the shell completes", async () => {
   await using app = setup();
+  state.mode = "notifications-and-sound";
   app.start();
-  using _timers = fakeTimers();
-  const finished = (turnId: string, completedAt: string) => ({
-    latestTurn: { turnId, state: "completed", completedAt },
-  });
-  state.shells.set("one", shell(finished("turn-1", "2026-09-13T07:00:01.000Z")));
   state.shells.set(
     "one",
-    shell({ latestTurn: { turnId: "turn-2", state: "running", completedAt: null } }),
+    shell({
+      latestTurn: { turnId: "turn", state: "completed", completedAt: "2026-09-13T07:00:01.000Z" },
+    }),
   );
-  state.shells.set("one", shell(finished("turn-2", "2026-09-13T07:00:02.000Z")));
-  expect(TestNotification.sent).toEqual([]);
-  await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS - 1);
-  expect(TestNotification.sent).toEqual([]);
-  await vi.advanceTimersByTimeAsync(1);
   expect(TestNotification.sent.map((sent) => sent.title)).toEqual(["Done · Test thread"]);
+  expect(state.sound).toHaveBeenCalledWith("completion", expect.any(Function));
 });
 
 function nativeNotifications() {
@@ -308,10 +301,9 @@ it("uses native Linux alerts over HTTP and opens the matching environment", asyn
   await using app = setup();
   using native = nativeNotifications();
   app.start();
-  using _timers = fakeTimers();
   complete("one");
   complete("two");
-  await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
+
   await vi.waitFor(() => expect(native.bridge.show).toHaveBeenCalledTimes(2));
   expect(TestNotification.sent).toHaveLength(0);
   expect(state.badge).toHaveBeenLastCalledWith(2);
@@ -337,12 +329,11 @@ it("replaces native alerts for a thread and closes them when notifications are d
   await using app = setup();
   using native = nativeNotifications();
   app.start();
-  using _timers = fakeTimers();
   complete();
-  await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
+
   const first = native.bridge.show.mock.calls[0]![0];
   complete("one", "2026-09-13T09:00:00Z");
-  await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
+
   expect(native.bridge.close).toHaveBeenCalledWith(first.id);
   expect(native.listeners.size).toBe(1);
   state.mode = "off";
@@ -358,11 +349,10 @@ it.each(["refused", "rejected"])(
     await using app = setup();
     using native = nativeNotifications();
     app.start();
-    using _timers = fakeTimers();
     if (outcome === "refused") native.bridge.show.mockResolvedValue(false);
     else native.bridge.show.mockRejectedValue(new Error("IPC unavailable"));
     complete();
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
+
     await vi.waitFor(() => expect(native.listeners.size).toBe(0));
     expect(native.bridge.close).toHaveBeenCalledOnce();
     expect(state.badge).toHaveBeenLastCalledWith(0);
@@ -385,7 +375,6 @@ it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
     };
     state.shells.set("one", shell({ id: "working" }, { id: "asking" }, { id: "offline" }, done));
     app.start();
-    using _timers = fakeTimers();
     state.shells.set("one", shell({ id: "working" }, asking, { id: "offline" }, done));
     state.shells.set("one", {
       ...shell({ id: "working" }, asking, { id: "offline" }, done),
@@ -404,41 +393,36 @@ it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
 
     expect(TestNotification.sent.map(({ title }) => title)).toEqual([
       "Approval needed · Test thread",
+      "Done · Test thread",
       flag === "hasPendingApprovals"
         ? "Approval needed · Test thread"
         : "Input needed · Test thread",
     ]);
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
     state.shells.set("one", { ...shell(completed, asking, offline, done), status: "cached" });
     state.shells.set("one", shell(completed, asking, offline, done));
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
     expect(TestNotification.sent.map(({ title }) => title)).toEqual([
       "Approval needed · Test thread",
+      "Done · Test thread",
       flag === "hasPendingApprovals"
         ? "Approval needed · Test thread"
         : "Input needed · Test thread",
-      "Done · Test thread",
     ]);
   },
 );
 
 it.each([false, true])(
-  "rechecks a pending completion after reconnect (continued: %s)",
+  "does not replay a notified completion after reconnect (continued: %s)",
   async (continued) => {
     await using app = setup();
     app.start();
-    using _timers = fakeTimers();
     const completed = shell({
       latestTurn: { turnId: "turn", state: "completed", completedAt: "2026-09-13T07:05:00.000Z" },
     });
     state.shells.set("one", completed);
     state.shells.set("one", { ...completed, status: "cached" });
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
-    expect(TestNotification.sent).toEqual([]);
+    expect(TestNotification.sent.map(({ title }) => title)).toEqual(["Done · Test thread"]);
     state.shells.set("one", continued ? shell() : completed);
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
-    expect(TestNotification.sent.map(({ title }) => title)).toEqual(
-      continued ? [] : ["Done · Test thread"],
-    );
+
+    expect(TestNotification.sent.map(({ title }) => title)).toEqual(["Done · Test thread"]);
   },
 );

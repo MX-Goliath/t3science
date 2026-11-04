@@ -20,7 +20,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -213,7 +213,7 @@ const makeProjectConversationStorage = Effect.gen(function* () {
   const config = yield* ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
   const engine = yield* OrchestratorV2;
   const projects = yield* ProjectStoreV2;
   const eventSink = yield* EventSinkV2;
@@ -465,7 +465,7 @@ const makeProjectConversationStorage = Effect.gen(function* () {
           }
         : snapshot.thread;
       yield* copyAttachments(project.workspaceRoot, snapshot.messages, true);
-      const uuid = yield* crypto.randomUUIDv4();
+      const uuid = yield* crypto.uuidV4();
       const occurredAt = yield* DateTime.now;
       const importedEvents: ReadonlyArray<OrchestrationV2DomainEvent> = [
         {

@@ -4,8 +4,8 @@ import {
   getTraitSelectChange,
   replaceDescriptorCurrentValue,
   selectableProviderOptionChoices,
-  REASONING_SELECT_DESCRIPTOR_IDS,
   ULTRATHINK_PROMPT_PREFIX,
+  isReasoningSelect,
 } from "@t3tools/client-runtime/model-traits";
 import {
   type ModelSelection,
@@ -268,10 +268,9 @@ export function getReasoningTraitStep(input: {
     input.planModeEnabled,
   );
   if (selected.modelIsUnavailable || selected.ultrathinkInBodyText) return null;
-  const descriptor = selected.selectDescriptors.find((entry) =>
-    REASONING_SELECT_DESCRIPTOR_IDS.has(entry.id),
-  );
-  if (!descriptor || descriptor.options.length < 2) return null;
+  const descriptor = selected.selectDescriptors.find(isReasoningSelect);
+  const choices = descriptor ? selectableProviderOptionChoices(descriptor) : [];
+  if (!descriptor || choices.length < 2) return null;
   const isPrimary = descriptor.id === selected.primarySelectDescriptor?.id;
   const current =
     isPrimary && selected.ultrathinkPromptControlled
@@ -415,7 +414,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     if ("modelOptions" in change) updateModelOptions(change.modelOptions);
   };
   const reasoningDescriptor = isComposerOwned
-    ? selectDescriptors.find((descriptor) => REASONING_SELECT_DESCRIPTOR_IDS.has(descriptor.id))
+    ? selectDescriptors.find(isReasoningSelect)
     : undefined;
   const speedDescriptor = reasoningDescriptor
     ? (selectDescriptors.find((descriptor) => descriptor.id === "serviceTier") ??
@@ -716,9 +715,7 @@ export const TraitsPicker = memo(function TraitsPicker({
         reportedModelSelection,
       );
   const effortLabelClassName =
-    primarySelectDescriptor &&
-    REASONING_SELECT_DESCRIPTOR_IDS.has(primarySelectDescriptor.id) &&
-    effortValue === "ultra"
+    primarySelectDescriptor && isReasoningSelect(primarySelectDescriptor) && effortValue === "ultra"
       ? reasoningStyles.ultraLabel
       : undefined;
   // In the composer the glyph has no word, so the tooltip and label name the control.
@@ -726,9 +723,7 @@ export const TraitsPicker = memo(function TraitsPicker({
     ? [`Effort: ${triggerLabel}`, speedLabel, extraMenuHint].filter(Boolean).join(" · ")
     : triggerLabel;
   const effortGlyph =
-    isComposerOwned &&
-    primarySelectDescriptor &&
-    REASONING_SELECT_DESCRIPTOR_IDS.has(primarySelectDescriptor.id)
+    isComposerOwned && primarySelectDescriptor && isReasoningSelect(primarySelectDescriptor)
       ? resolveEffortGlyph(primarySelectDescriptor, effortValue)
       : null;
   // Workflow levels such as Ultracode always show their name; the setting names every level.

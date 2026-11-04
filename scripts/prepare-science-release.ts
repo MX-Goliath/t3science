@@ -1,6 +1,7 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -85,13 +86,13 @@ export const prepareWindowsRelease = Effect.fn("prepareWindowsRelease")(function
   validateStableVersion(version);
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* Digest.Digest;
   const now = yield* DateTime.now;
   const portable = `T3-Science-${version}-x64-portable.exe`;
   yield* fs.stat(path.join(directory, `T3-Science-${version}-x64.exe`));
   yield* fs.stat(path.join(directory, "latest.yml"));
   const portableBytes = yield* fs.readFile(path.join(directory, portable));
-  const sha512 = Buffer.from(yield* crypto.digest("SHA-512", portableBytes)).toString("base64");
+  const sha512 = Buffer.from(yield* crypto.digest(Digest.sha512, portableBytes)).toString("base64");
   yield* fs.writeFileString(
     path.join(directory, "latest-portable.yml"),
     serializeUpdateManifest(
@@ -114,10 +115,10 @@ export const prepareAndroidRelease = Effect.fn("prepareAndroidRelease")(function
   const code = validateScienceReleaseVersion(version, versionCode);
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* Digest.Digest;
   const apk = `T3-Science-${version}-android.apk`;
   const apkBytes = yield* fs.readFile(path.join(directory, apk));
-  const sha256 = Buffer.from(yield* crypto.digest("SHA-256", apkBytes)).toString("hex");
+  const sha256 = Buffer.from(yield* crypto.digest(Digest.sha256, apkBytes)).toString("hex");
   const metadata = yield* encodeMetadata({
     versionName: version,
     versionCode: code,
@@ -170,5 +171,5 @@ if (import.meta.main) {
       }),
     ),
     { version: "0.0.0" },
-  ).pipe(Effect.provide(NodeServices.layer), NodeRuntime.runMain);
+  ).pipe(Effect.provide([NodeServices.layer, NodeCrypto.layer]), NodeRuntime.runMain);
 }

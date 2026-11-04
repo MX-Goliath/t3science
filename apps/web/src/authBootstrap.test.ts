@@ -134,6 +134,24 @@ describe("resolveInitialServerAuthGateState", () => {
     vi.restoreAllMocks();
   });
 
+  it("returns to the shared thread after pairing instead of the home page", async () => {
+    const { Route } = await import("./routes/pair");
+    const returnTo = "/environment/thread?message=message-id";
+    const validateSearch = Route.options.validateSearch as (search: Record<string, unknown>) => {
+      returnTo?: string;
+    };
+    expect(validateSearch({ returnTo })).toEqual({ returnTo });
+    for (const unsafe of ["https://other.test/", "//other.test/", "/\\other.test/", "/pair", 1]) {
+      expect(validateSearch({ returnTo: unsafe })).toEqual({});
+    }
+    await expect(
+      Route.options.beforeLoad!({
+        context: { authGateState: { status: "authenticated" } },
+        search: { returnTo },
+      } as never),
+    ).rejects.toMatchObject({ options: { href: returnTo, replace: true } });
+  });
+
   it("reuses an in-flight silent bootstrap attempt", async () => {
     const nextSession = sequence(
       unauthenticatedSession(DESKTOP_AUTH),

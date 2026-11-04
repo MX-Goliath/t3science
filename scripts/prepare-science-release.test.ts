@@ -1,6 +1,7 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -30,7 +31,7 @@ it.effect("prepares each platform independently using only its own release asset
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* Digest.Digest;
     const linux = yield* fs.makeTempDirectoryScoped();
     const windows = yield* fs.makeTempDirectoryScoped();
     const android = yield* fs.makeTempDirectoryScoped();
@@ -74,7 +75,7 @@ releaseDate: '2026-10-31T00:00:00.000Z'
         url: portable,
         size: portable.length,
         sha512: Buffer.from(
-          yield* crypto.digest("SHA-512", new TextEncoder().encode(portable)),
+          yield* crypto.digest(Digest.sha512, new TextEncoder().encode(portable)),
         ).toString("base64"),
       },
     ]);
@@ -86,11 +87,11 @@ releaseDate: '2026-10-31T00:00:00.000Z'
       versionCode: 2002001,
       packageName: "com.t3tools.t3science",
       url: `https://github.com/MX-Goliath/t3science/releases/download/v2.2.1/${apk}`,
-      sha256: Buffer.from(yield* crypto.digest("SHA-256", new TextEncoder().encode(apk))).toString(
-        "hex",
-      ),
+      sha256: Buffer.from(
+        yield* crypto.digest(Digest.sha256, new TextEncoder().encode(apk)),
+      ).toString("hex"),
     });
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide([NodeServices.layer, NodeCrypto.layer])),
 );
 
 it("rejects prereleases, unsafe tags and invalid Android version codes", () => {

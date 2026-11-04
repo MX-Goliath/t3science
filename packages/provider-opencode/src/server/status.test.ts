@@ -1,6 +1,7 @@
 import * as NodeAssert from "node:assert/strict";
 import * as NodeSqlite from "node:sqlite";
 
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { it } from "@effect/vitest";
@@ -70,7 +71,7 @@ it.effect("keeps partial Go quotas with missing resets and reads macOS credentia
           ),
         ),
       ),
-      Effect.provide(NodeServices.layer),
+      Effect.provide([NodeServices.layer, NodeCrypto.layer]),
     );
     NodeAssert.equal(limits.unavailable, undefined);
     NodeAssert.deepEqual(
@@ -125,7 +126,7 @@ it.effect("reads Go limits with the instance's XDG credentials and preserves res
           );
         }),
       ),
-      Effect.provide(NodeServices.layer),
+      Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
     );
     NodeAssert.equal(limits.unavailable, undefined);
     NodeAssert.equal(
@@ -275,7 +276,7 @@ it.effect(
           consoleStatus === 500 ? undefined : fingerprints.get(requested.at(-1)!),
         );
       }
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.effect("prefers the selected stored Go key over the auth.json key OpenCode 2 imported", () =>
@@ -344,7 +345,7 @@ it.effect("prefers the selected stored Go key over the auth.json key OpenCode 2 
       NodeAssert.equal(limits.unavailable, undefined);
       NodeAssert.equal(limits.windows.length, 3);
     }
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.effect("does not read local credentials for external or disabled OpenCode instances", () =>
@@ -364,7 +365,7 @@ it.effect("does not read local credentials for external or disabled OpenCode ins
           HttpClient.HttpClient,
           HttpClient.make(() => Effect.die("unexpected usage request")),
         ),
-        Effect.provide(NodeServices.layer),
+        Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       );
       NodeAssert.equal(limits.unavailable?.reason, "unsupported");
     }
@@ -397,7 +398,7 @@ it.effect("keeps Go entitlement absence distinct from failed or malformed usage 
             Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({}, { status }))),
           ),
         ),
-        Effect.provide(NodeServices.layer),
+        Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       );
       NodeAssert.equal(limits.unavailable?.reason, reason);
       NodeAssert.equal(limits.credentialFingerprint, undefined);
@@ -529,7 +530,7 @@ beforeEach(() => {
 });
 
 const layerTest = Layer.succeed(OpenCodeRuntime.OpenCodeRuntime, OpenCodeRuntimeTestDouble).pipe(
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 const makeOpenCodeSettings = (overrides?: Partial<OpenCodeSettings>): OpenCodeSettings =>

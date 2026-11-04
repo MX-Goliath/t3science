@@ -12,12 +12,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
-import {
-  DESKTOP_APP_BASE_NAME,
-  DESKTOP_APP_ID,
-  DESKTOP_DEVELOPMENT_LINUX_WM_CLASS,
-  DESKTOP_PRODUCTION_LINUX_WM_CLASS,
-} from "@t3tools/shared/desktopProductIdentity";
+import { DESKTOP_APP_BASE_NAME, DESKTOP_APP_ID } from "@t3tools/shared/desktopProductIdentity";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
@@ -81,7 +76,6 @@ export class DesktopEnvironment extends Context.Service<
     readonly displayName: string;
     readonly appUserModelId: string;
     readonly linuxDesktopEntryName: string;
-    readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
     readonly desktopLauncherPath: Option.Option<string>;
     readonly appImagePath: Option.Option<string>;
@@ -236,9 +230,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
       isDevelopment ? `${DESKTOP_APP_ID}.dev` : DESKTOP_APP_ID,
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
-    linuxWmClass: isDevelopment
-      ? DESKTOP_DEVELOPMENT_LINUX_WM_CLASS
-      : DESKTOP_PRODUCTION_LINUX_WM_CLASS,
     linuxApplicationsDir,
     desktopLauncherPath: config.desktopLauncherPath,
     appImagePath: config.appImagePath,

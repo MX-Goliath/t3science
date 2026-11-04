@@ -10,10 +10,6 @@ import {
   type LinuxPasswordStorePreference,
 } from "../linuxSecretStorage.ts";
 import {
-  DESKTOP_DEVELOPMENT_LINUX_WM_CLASS,
-  DESKTOP_PRODUCTION_LINUX_WM_CLASS,
-} from "@t3tools/shared/desktopProductIdentity";
-import {
   resolveDesktopBaseDir,
   resolveDesktopStateDir,
   type JoinPath,
@@ -30,7 +26,6 @@ type EarlyLinuxElectronOptionsInput = EarlyDesktopSettingsInput;
 
 export interface EarlyLinuxElectronOptions {
   readonly isDevelopment: boolean;
-  readonly linuxWmClass: string;
   readonly linuxDesktopEntryName: string;
   readonly passwordStore: LinuxPasswordStoreSwitch | null;
 }
@@ -150,9 +145,6 @@ export function resolveEarlyLinuxElectronOptions(
   const isDevelopment = isDevelopmentEnvironment(input.env);
   return {
     isDevelopment,
-    linuxWmClass: isDevelopmentEnvironment(input.env)
-      ? DESKTOP_DEVELOPMENT_LINUX_WM_CLASS
-      : DESKTOP_PRODUCTION_LINUX_WM_CLASS,
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,

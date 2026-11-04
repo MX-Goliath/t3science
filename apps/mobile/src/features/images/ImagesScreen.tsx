@@ -157,7 +157,6 @@ function EnabledImagesScreen(props: { workspace?: boolean }) {
     <View className="flex-1 bg-screen">
       <AppBar
         title={image ? image.fileName : copy.mine}
-        sidebar={false}
         options={{ headerBackVisible: !props.workspace }}
         onBack={() => {
           if (conversation) setConversation(null);
