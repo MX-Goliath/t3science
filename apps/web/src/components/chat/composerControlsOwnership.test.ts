@@ -11,13 +11,13 @@ const base = {
 };
 
 describe("resolveComposerControlsOwnership", () => {
-  it("hides the chip at the default and lets the effort menu answer composer.mode", () => {
+  it("keeps the permissions icon at the default with its own composer.mode target", () => {
     const result = resolveComposerControlsOwnership(base);
     expect(result).toMatchObject({
-      accessDisplay: "hidden",
-      showModeBlock: false,
+      accessDisplay: "icon",
+      showModeBlock: true,
       hiddenBlockIds: [],
-      effortOwnsModeShortcut: true,
+      effortOwnsModeShortcut: false,
     });
   });
 
