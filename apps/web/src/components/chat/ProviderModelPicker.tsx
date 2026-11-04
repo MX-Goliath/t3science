@@ -1,3 +1,4 @@
+import { ModelName } from "./ModelName";
 import "./modelPickerTransition.css";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
@@ -392,7 +393,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             </span>
           ) : null}
           {props.isComposerOwned ? (
-            <span {...triggerTextProps}>{triggerText}</span>
+            <span {...triggerTextProps}>
+              <ModelName>{triggerText}</ModelName>
+            </span>
           ) : (
             <Tooltip>
               <TooltipTrigger render={<span {...triggerTextProps} />}>{triggerText}</TooltipTrigger>
