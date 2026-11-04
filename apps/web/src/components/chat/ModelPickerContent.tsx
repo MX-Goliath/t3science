@@ -347,6 +347,7 @@ function WindowKeyDownListener({ onKeyDown }: { onKeyDown: (event: KeyboardEvent
 export const ModelPickerContent = memo(function ModelPickerContent(props: {
   environmentId: EnvironmentId | null;
   activeInstanceId: ProviderInstanceId;
+  isComposerOwned?: boolean;
   model: string;
   selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string }>;
   onToggleModel?: (instanceId: ProviderInstanceId, model: string) => void;
@@ -817,25 +818,29 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     announce(`Model: ${name ?? selectedSlug}`, "model-picker");
   };
 
+  const heightScale = props.isComposerOwned && !props.docked ? 1.3 : 1;
+
   return (
     <TooltipProvider delay={0}>
       <WindowKeyDownListener onKeyDown={onWindowKeyDown} />
       <div
         ref={pickerContentRef}
         className={cn(
-          "relative flex w-screen max-w-90 flex-row overflow-hidden",
-          props.docked ? "max-sm:h-56 max-sm:w-full max-sm:max-w-none" : "max-h-86.5",
+          "relative flex w-screen flex-row overflow-hidden",
+          props.isComposerOwned && !props.docked ? "max-w-72" : "max-w-90",
+          props.docked && "max-sm:h-56 max-sm:w-full max-sm:max-w-none",
         )}
         // Docked, the popup sets the height; a minimum here would overflow short windows.
-        style={
-          props.docked
-            ? undefined
+        style={{
+          maxHeight: props.docked ? undefined : `calc(var(--spacing) * 86.5 * ${heightScale})`,
+          ...(props.docked
+            ? {}
             : isSearching
               ? { height: searchHeight }
               : {
-                  minHeight: `min(calc(var(--spacing) * ${tallestTabUnits + LIST_CHROME_UNITS} + 1px), calc(var(--spacing) * 86.5))`,
-                }
-        }
+                  minHeight: `min(calc((var(--spacing) * ${tallestTabUnits + LIST_CHROME_UNITS} + 1px) * ${heightScale}), calc(var(--spacing) * 86.5 * ${heightScale}))`,
+                }),
+        }}
         data-model-picker-content="true"
       >
         {showSidebar && (

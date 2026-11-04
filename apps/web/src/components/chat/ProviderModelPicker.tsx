@@ -243,7 +243,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const triggerText = props.triggerLabel ?? multipleLabel ?? triggerTitle;
   const triggerTextProps = {
     className: cn(
-      "min-w-0 flex-1 overflow-hidden truncate",
+      "min-w-0 flex-1",
+      props.isComposerOwned ? "py-0! [text-box:normal]!" : "overflow-hidden truncate",
       // Long names such as "Fusion (Claude Opus 5.5 Medium + SWE-2 High)" would push the composer.
       props.isComposerOwned && "max-w-56",
     ),
@@ -255,6 +256,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       key={pickerSession.key}
       searchInputRef={searchInputRef}
       environmentId={props.environmentId}
+      isComposerOwned={props.isComposerOwned === true}
       activeInstanceId={activeInstanceId}
       model={props.model}
       {...(props.selectedModels !== undefined ? { selectedModels: props.selectedModels } : {})}
