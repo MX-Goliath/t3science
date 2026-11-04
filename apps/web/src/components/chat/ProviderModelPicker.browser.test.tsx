@@ -1,3 +1,5 @@
+import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import { __setClientSettingsForTests, getClientSettings } from "../../hooks/useSettings";
 import { ProviderDriverKind, ProviderInstanceId, type ModelSelection } from "@t3tools/contracts";
 import { useState } from "react";
 import { expect, it, vi } from "vite-plus/test";
@@ -70,6 +72,16 @@ it("keeps each registry image when adding a model from another ACP agent", async
     );
   }
 
+  const previousSettings = getClientSettings();
+  using _settings = {
+    [Symbol.dispose]() {
+      __setClientSettingsForTests(previousSettings);
+    },
+  };
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    favorites: [{ provider: entries[1]!.instanceId, model: "second" }],
+  });
   await using screen = await render(<Picker />);
   const imageWidths = () =>
     Array.from(
@@ -78,6 +90,13 @@ it("keeps each registry image when adding a model from another ACP agent", async
     );
   await vi.waitFor(() => expect(imageWidths()).toEqual([11]));
   await screen.getByRole("button", { name: "First model", exact: true }).click();
+  await expect.element(page.getByRole("option", { name: /First model/ })).toBeVisible();
+  await page.getByRole("button", { name: "Favorites", exact: true }).click();
+  await expect.element(page.getByRole("option", { name: /Second model/ })).toBeVisible();
+  await expect.element(page.getByRole("option", { name: /First model/ })).not.toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
+  await screen.getByRole("button", { name: "First model", exact: true }).click();
+  await expect.element(page.getByRole("option", { name: /First model/ })).toBeVisible();
   await page.getByRole("button", { name: "Second agent", exact: true }).click();
   await userEvent.keyboard("{Shift>}");
   try {
