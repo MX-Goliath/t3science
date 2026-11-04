@@ -1,4 +1,3 @@
-import { flushSync } from "react-dom";
 import "./modelPickerTransition.css";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
@@ -73,7 +72,7 @@ function lockBackgroundScroll(popup: HTMLElement | null) {
 }
 
 /** What a docked effort column needs from its picker: the model it serves. */
-export const DockedPickerContext = createContext<{ modelLabel: string }>({ modelLabel: "" });
+const DockedPickerContext = createContext<{ modelLabel: string }>({ modelLabel: "" });
 
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   environmentId: EnvironmentId | null;
@@ -154,22 +153,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
   const setIsMenuOpen = (open: boolean) => {
-    const update = () => {
-      props.onOpenChange?.(open);
-      if (props.open === undefined) setUncontrolledIsMenuOpen(open);
-    };
-    if (
-      !open ||
-      !props.isComposerOwned ||
-      !document.startViewTransition ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      update();
-      return;
-    }
-    void document
-      .startViewTransition({ types: ["composer-model-picker"], update: () => flushSync(update) })
-      .finished.catch(() => {});
+    props.onOpenChange?.(open);
+    if (props.open === undefined) setUncontrolledIsMenuOpen(open);
   };
 
   /**
@@ -423,6 +408,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         </span>
       </PopoverTrigger>
       <PopoverPopup
+        shadow={props.isComposerOwned ? "none" : "default"}
         {...(props.isComposerOwned ? composerFloatingLayerProps : {})}
         ref={(popup) => {
           popupRef.current = popup;

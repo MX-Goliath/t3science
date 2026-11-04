@@ -63,20 +63,12 @@ export function focusRequestedPermission(open: boolean, trigger: HTMLElement | n
 }
 
 /** Focuses the checked permission in the menu this trigger opened. */
-export function focusCheckedPermission(trigger: HTMLElement | null): void {
+function focusCheckedPermission(trigger: HTMLElement | null): void {
   const popupId = trigger?.getAttribute("aria-controls");
   const popup = popupId ? document.getElementById(popupId) : null;
   popup
     ?.querySelector<HTMLElement>("[data-composer-permissions] [aria-checked='true']")
     ?.focus({ preventScroll: true });
-}
-
-/**
- * composer.effort marks the model picker trigger it opens; the picker then moves focus to the
- * selected effort level once its popup is open.
- */
-export function markOpenToEffort(trigger: HTMLElement): void {
-  trigger.dataset.openToEffort = "true";
 }
 
 /** Reads and clears an open-to mark: effort from composer.effort, permissions from composer.mode. */

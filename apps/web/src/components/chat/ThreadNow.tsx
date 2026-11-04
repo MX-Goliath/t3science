@@ -77,7 +77,7 @@ function ThreadSyncLine({ phase }: { readonly phase: ThreadSyncPhase }) {
 }
 
 /**
- * What the thread is doing now, at the end of the timeline: what needs you, background work,
+ * What the thread is doing now, at the end of the timeline: what needs you,
  * the sync status while messages load, then the goal.
  */
 export function ThreadNow({

@@ -112,7 +112,6 @@ import { serializeComposerImages } from "./composerImagePersistence";
 import {
   isInsideCollapsedComposerControls,
   isInsideRestingComposerControlScope,
-  markOpenToEffort,
   markOpenToPermissions,
 } from "./composerEventScope";
 import {
@@ -299,7 +298,7 @@ import {
   usePreparingComposerImages,
 } from "./preparingComposerImages";
 import { ComposerControlsBar } from "./ComposerControlsBar";
-import type { ModelResetAction } from "./useComposerSelection";
+import type { ModelResetAction } from "./ReasoningSettingsCard";
 import { composerCommandKeyHandler } from "./composerCommandKey";
 
 function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
@@ -401,6 +400,9 @@ export interface ChatComposerProps {
   sendDisabledReason: string | null;
   isPreparingWorktree: boolean;
   isCompacting: boolean;
+  queuedRunsControl?: React.ReactNode;
+  tasksControl?: React.ReactNode;
+  backgroundWorkControl?: React.ReactNode;
   bannerItems: readonly ComposerBannerStackItem[];
   resumeCompactionTokens: number | null;
   keepFullHistory: boolean;
@@ -468,6 +470,7 @@ export interface ChatComposerProps {
   pullRequestRepository: string | null;
   threadPullRequests: ReadonlyArray<ThreadPullRequestLink> | undefined;
   onComposerOverlayHeightChange: (height: number) => void;
+  /** The new-thread strip names the permissions, so the controls row hides its chip. */
 
   promptRef: React.RefObject<string>;
   composerImagesRef: React.RefObject<ComposerImageAttachment[]>;
@@ -3161,7 +3164,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         );
         if (!trigger) return;
         trigger.focus({ preventScroll: true });
-        if (command === "composer.effort") markOpenToEffort(trigger);
         if (command === "composer.mode") markOpenToPermissions(trigger);
         trigger.click();
       },
@@ -3440,7 +3442,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       />
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
+          {props.queuedRunsControl}
+          {props.backgroundWorkControl}
           <ComposerBannerStack items={shelfItems} />
+          {!hasBlockingComposerTopDrawer ? props.tasksControl : null}
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>
               <ComposerBanner.Root data-chat-composer-top-drawer="true" variant="info">
@@ -3481,9 +3486,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <div className="relative">
         <ComposerSurface.Main
           ref={composerMainSurfaceRef}
-          data-inline-resting-controls={
-            props.collapseWhenUnfocused && !isMobileViewport ? undefined : "true"
-          }
+          data-inline-resting-controls={isMobileViewport ? "true" : undefined}
           className={composerProviderState.composerFrameClassName}
         >
           <div
@@ -3752,7 +3755,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     ref={attachExpandedComposerControls}
                     data-chat-composer-controls="footer"
                     data-chat-composer-footer-controls="true"
-                    className="relative flex min-w-0 flex-1 items-center justify-end gap-0.5"
+                    className="relative flex min-w-0 flex-1 items-center justify-start gap-0.5"
                   >
                     {composerControls}
                   </div>

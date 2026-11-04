@@ -7,11 +7,12 @@ import {
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { expect, it, vi } from "vite-plus/test";
+import { page } from "vite-plus/test/browser";
 import { render } from "../../../test/render";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { makeThreadFixture } from "../../test-fixtures";
 import { useComposerSelection } from "./useComposerSelection";
-import { ComposerPickerFooter } from "./ComposerModelEffort";
+import { TraitsPicker } from "./TraitsPicker";
 
 it.each([true, false])(
   "resets to the project model with its saved options (%s), replacing remembered options",
@@ -109,25 +110,25 @@ it.each([true, false])(
         scheduleComposerFocus: vi.fn(),
       });
       return (
-        <ComposerPickerFooter
-          traits={{
-            provider: driver,
-            instanceId,
-            threadRef: target,
-            model: selection.model,
-            models: provider.models,
-            modelOptions: selection.options,
-            planModeEnabled: true,
-          }}
+        <TraitsPicker
+          isComposerOwned
+          provider={driver}
+          instanceId={instanceId}
+          threadRef={target}
+          model={selection.model}
+          models={provider.models}
+          modelOptions={selection.options}
+          planModeEnabled
           modelReset={modelReset}
-          runtimeMode="full-access"
-          runtimeModeOptions={[]}
-          onRuntimeModeChange={vi.fn()}
         />
       );
     }
     await using screen = await render(<Composer />);
-    await screen.getByRole("button", { name: "Reset to project default: Project model" }).click();
+    await screen.getByRole("button", { name: /^Effort:/ }).click();
+    await page.getByRole("button", { name: "Reset to project default: Project model" }).click();
+    await expect
+      .element(page.getByRole("slider"))
+      .toHaveAttribute("aria-valuetext", hasOptions ? "Low" : "Medium");
     const state = useComposerDraftStore.getState();
     const expectedSelection = {
       ...projectDefault,

@@ -25,11 +25,7 @@ import {
   getProviderOptionDescriptors,
 } from "@t3tools/shared/model";
 import { withImplicitFastModeDefault } from "./composerProviderState";
-export interface ModelResetAction {
-  readonly label: string;
-  readonly disabledReason: string | null;
-  readonly onReset: () => void;
-}
+import type { ModelResetAction } from "./ReasoningSettingsCard";
 import { resolveNewDraftStartFromOrigin } from "../../lib/chatThreadActions";
 import { type DraftThreadEnvMode, useComposerDraftStore } from "../../composerDraftStore";
 import {

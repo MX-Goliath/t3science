@@ -101,7 +101,7 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
     </Tooltip>
   ) : null;
 
-  // The chip opens the same Permissions toggle used in the model picker and the overflow menu.
+  // The chip opens the same Permissions toggle used in the effort and overflow menus.
   const permissionsTooltip = `Permissions: ${runtimeModeOption.label}. ${runtimeModeOption.description}`;
   const permissionsChip = (
     <Menu
@@ -120,7 +120,7 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
                   ref={permissionsChipRef}
                   data-composer-shortcut="composer.mode"
                   size={size}
-                  // Mirrors the model trigger's trailing pe-1 so the gaps on both sides of the chip match.
+                  // Mirrors the effort chip's trailing pe-1 so both gaps around the bars match.
                   className="ps-1.5"
                   aria-label={`Permissions: ${runtimeModeOption.label}`}
                 />
@@ -151,6 +151,7 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
             "[data-chat-composer-footer-controls], [data-chat-composer-resting-controls]",
           ) ?? permissionsChipRef.current
         }
+        shadow="none"
         {...composerFloatingLayerProps}
       >
         <ComposerPermissionsSection
@@ -173,7 +174,7 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
 /**
  * Permission modes as one horizontal toggle, with the shown mode named below.
  * Each segment is a real menu radio item, so arrow keys reach it from the rest of the menu
- * and a pick closes the menu. Lives inside a Menu: the permissions chip, the model picker,
+ * and a pick closes the menu. Lives inside a Menu: the permissions chip, the effort menu,
  * or the overflow menu.
  */
 export function ComposerPermissionsSection(props: {
@@ -189,7 +190,7 @@ export function ComposerPermissionsSection(props: {
     supervisedRuntimeModeOption;
   const descriptionId = useId();
   return (
-    <div data-composer-permissions className="grid w-72 gap-1.5 px-2 py-1.5">
+    <div data-composer-permissions className="grid min-w-0 w-72 max-w-full gap-1.5 px-2 py-1.5">
       <div className="font-medium text-muted-foreground text-xs">Permissions</div>
       <MenuPrimitive.RadioGroup
         aria-label="Permissions"

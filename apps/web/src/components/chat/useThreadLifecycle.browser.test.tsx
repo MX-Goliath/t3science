@@ -97,7 +97,7 @@ function RestoreBranchHarness(props: {
   });
   return (
     <>
-      {lifecycle.workNow?.actions}
+      {lifecycle.backgroundWorkBanner?.actions}
       <button
         type="button"
         disabled={lifecycle.isRestoringThreadBranch}

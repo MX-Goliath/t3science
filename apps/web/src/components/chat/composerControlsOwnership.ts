@@ -1,30 +1,60 @@
-/** Permissions stay visible; composer.mode has one target across the chip, picker and overflow. */
+/**
+ * Where the permissions control lives, which blocks overflow, and which menu answers the
+ * composer.mode shortcut. Blocks are ordered [traits, mode]; the last block overflows first.
+ * The rule: Permissions have exactly one visible home and composer.mode exactly one target.
+ */
 export function resolveComposerControlsOwnership(input: {
   /** Non-default permissions show their label when there is room. */
   readonly matchesDefault: boolean;
+  /** The model has an effort (traits) menu, which then always holds Permissions. */
+  readonly hasTraits: boolean;
   readonly planModeUiEnabled: boolean;
   readonly collapsed: boolean;
   /** How many trailing blocks the width measurement moved into the overflow menu. */
   readonly measuredHiddenBlockCount: number;
 }) {
-  const accessDisplay = input.matchesDefault
-    ? ("icon" as const)
-    : input.collapsed
+  const accessDisplay = !input.matchesDefault
+    ? input.collapsed
       ? ("icon" as const)
-      : ("label" as const);
+      : ("label" as const)
+    : ("icon" as const);
   const showModeBlock = true;
-  const modeHidden = showModeBlock && input.measuredHiddenBlockCount > 0;
-  const hiddenBlockIds = modeHidden ? (["mode"] as const) : ([] as const);
-  // An overflowed chip needs a home for Permissions only when the Plan toggle is not there to fill
-  // the overflow menu; otherwise Permissions stay in the model picker.
-  const overflowShowsPermissions = modeHidden && !input.planModeUiEnabled;
+  const blockIds = [
+    ...(input.hasTraits ? ["traits" as const] : []),
+    ...(showModeBlock ? ["mode" as const] : []),
+  ];
+  const hiddenFor = (count: number) => blockIds.slice(blockIds.length - count);
+  const overflowShowsPermissionsFor = (hidden: ReadonlyArray<string>) =>
+    hidden.includes(input.hasTraits ? "traits" : "mode");
+  const overflowHasContent = (hidden: ReadonlyArray<string>) =>
+    hidden.includes("traits") ||
+    (input.planModeUiEnabled && hidden.includes("mode")) ||
+    overflowShowsPermissionsFor(hidden);
+
+  let hiddenBlockCount = Math.min(input.measuredHiddenBlockCount, blockIds.length);
+  // An overflow menu with nothing in it must not exist: overflow one more block instead.
+  while (
+    hiddenBlockCount > 0 &&
+    hiddenBlockCount < blockIds.length &&
+    !overflowHasContent(hiddenFor(hiddenBlockCount))
+  ) {
+    hiddenBlockCount += 1;
+  }
+  const hiddenBlockIds = hiddenFor(hiddenBlockCount);
+  const modeHidden = hiddenBlockIds.includes("mode");
+  const traitsHidden = hiddenBlockIds.includes("traits");
   return {
     accessDisplay,
     showModeBlock,
-    hiddenBlockCount: hiddenBlockIds.length,
+    hiddenBlockCount,
     hiddenBlockIds,
-    overflowShowsPermissions,
-    /** Without a visible chip or an overflow menu holding it, the model picker answers composer.mode. */
-    pickerOwnsModeShortcut: !overflowShowsPermissions && modeHidden,
+    traitsHidden,
+    modeHidden,
+    /**
+     * The effort chip answers composer.mode while the permissions chip is overflowed, until the
+     * effort chip overflows too; then the overflow menu (which holds Permissions) answers it.
+     */
+    effortOwnsModeShortcut: input.hasTraits && modeHidden && !traitsHidden,
+    overflowShowsPermissions: overflowShowsPermissionsFor(hiddenBlockIds),
   };
 }

@@ -4,12 +4,15 @@ import type {
   ProviderOptionDescriptor,
 } from "@t3tools/contracts";
 import {
+  applyClaudePromptEffortPrefix,
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionCurrentLabel,
   getProviderOptionCurrentValue,
   isClaudeUltrathinkPrompt,
 } from "@t3tools/shared/model";
 import { REASONING_EFFORT_OPTION_IDS } from "./state/threadExecution.ts";
+
+export const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
 
 const REASONING_DESCRIPTOR_IDS: ReadonlySet<string> = new Set([
   ...REASONING_EFFORT_OPTION_IDS,
@@ -62,13 +65,10 @@ export function getDescriptorStringValue(
   return typeof value === "string" ? value : null;
 }
 
-// Prompt-injected levels such as Ultrathink still work when typed, but pickers do not offer them.
 export function selectableProviderOptionChoices(
   descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
 ) {
-  return descriptor.options.filter(
-    (option) => !descriptor.promptInjectedValues?.includes(option.id),
-  );
+  return descriptor.options;
 }
 
 export function getPromptControlledTraits(
@@ -95,7 +95,15 @@ export function getTraitSelectChange(
   prompt: string,
   value: string,
 ) {
-  if (!value || descriptor.promptInjectedValues?.includes(value)) return null;
+  if (!value) return null;
+  if (descriptor.promptInjectedValues?.includes(value)) {
+    return {
+      prompt:
+        prompt.trim().length === 0
+          ? ULTRATHINK_PROMPT_PREFIX
+          : applyClaudePromptEffortPrefix(prompt, "ultrathink"),
+    };
+  }
   const isPrimary = descriptor.id === selected.primarySelectDescriptor?.id;
   if (isPrimary && selected.ultrathinkInBodyText) return null;
   return {
@@ -120,6 +128,7 @@ export function buildTraitsTriggerDisplay(input: {
   label: string;
   /** "Fast" or "Ultrafast" when a speed option is on. */
   speedLabel: string | null;
+  otherLabels: ReadonlyArray<string>;
 } {
   let fastModeFallbackLabel: string | null = null;
   let speedLabel: string | null = null;
@@ -173,8 +182,9 @@ export function buildTraitsTriggerDisplay(input: {
     }
   }
 
+  const otherLabels = labels.filter((_, index) => index !== reasoningLabelIndex);
   if (labels.length === 0 && fastModeFallbackLabel !== null) {
-    return { label: fastModeFallbackLabel, speedLabel };
+    return { label: fastModeFallbackLabel, speedLabel, otherLabels };
   }
   if (speedLabel) {
     if (reasoningLabelIndex >= 0) {
@@ -183,5 +193,5 @@ export function buildTraitsTriggerDisplay(input: {
       labels.push(speedLabel);
     }
   }
-  return { label: labels.join(" · "), speedLabel };
+  return { label: labels.join(" · "), speedLabel, otherLabels };
 }

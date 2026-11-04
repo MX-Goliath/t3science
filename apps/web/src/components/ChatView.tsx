@@ -138,6 +138,8 @@ import { useActiveThreadRef } from "../hooks/useActiveThreadRef";
 import { composerRequiresModifier } from "../composer-logic";
 import {
   derivePhase,
+  deriveActivePlanState,
+  selectComposerTasksPlan,
   deriveActiveWorkStartedAt,
   deriveCanInterruptRunningThread,
   findLatestProposedPlan,
@@ -370,6 +372,7 @@ import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem } from "./chat/ThreadActivityBanners";
+import { ComposerTasksControl } from "./chat/ComposerTasksControl";
 import { ThreadNow } from "./chat/ThreadNow";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import { useDelayedStatus } from "../hooks/useDelayedStatus";
@@ -1109,6 +1112,14 @@ export default function ChatView(props: ChatViewProps) {
   const [chatCanvasStore] = useState(createChatCanvasStore);
 
   const latestRunSettled = isLatestRunSettled(activeLatestRun, activeRuntime);
+  const activeTasksPlan = deriveActivePlanState(serverProjection, activeActivityRun?.runId);
+  const activeActivityRunSettled = isLatestRunSettled(activeActivityRun, activeRuntime);
+  const composerTasksPlan = selectComposerTasksPlan(
+    serverProjection,
+    activeTasksPlan,
+    activeActivityRun?.runId ?? null,
+    activeActivityRunSettled,
+  );
   const activeThreadEnvironmentId = activeThread?.environmentId;
   const activeThreadProjectId = activeThread?.projectId;
   const activeProjectRef =
@@ -2439,6 +2450,7 @@ export default function ChatView(props: ChatViewProps) {
   const {
     acknowledgeActiveThreadWoke,
     activeBranchMismatchKey,
+    backgroundWorkBanner,
     attentionNow,
     workNow,
     childInputNow,
@@ -3176,27 +3188,15 @@ export default function ChatView(props: ChatViewProps) {
   const hasThreadNow =
     attentionNow !== null || workNow !== null || goalNow !== null || shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
-  // The queue control is mounted for every server thread but joins the footer only while it shows
-  // something, by its own rule: an optimistic message stops counting once the server has it.
-  const hasQueuedTurns =
-    queuedRunCount > 0 ||
-    optimisticUserMessages.some(
-      (message) =>
-        message.inputIntent === "queued_turn" &&
-        !serverProjection?.messages.some((committed) => committed.id === message.id),
-    );
   const scrollToEndSummary =
     [childInputNow?.waitingLabel ?? null, queuedRunCount === 0 ? null : `${queuedRunCount} queued`]
       .filter((part) => part !== null)
       .join(" · ") || null;
-  // The end of the timeline holds the thread's present and next turns: what it is doing now,
-  // its lifecycle status, guest messages awaiting you, then your queued messages.
   const timelineFooter =
     pendingHandoff === null &&
     !hasThreadNow &&
     threadStatusLine === null &&
-    pendingGuestMessageCount === 0 &&
-    !hasQueuedTurns ? null : (
+    pendingGuestMessageCount === 0 ? null : (
       <>
         {pendingHandoff === null ? null : (
           <div className="chat-content-lane">
@@ -3223,7 +3223,6 @@ export default function ChatView(props: ChatViewProps) {
             onFileOpen={openFileAttachmentStable}
           />
         ) : null}
-        {hasQueuedTurns ? queuedRunsControl : null}
       </>
     );
 
@@ -3739,6 +3738,24 @@ export default function ChatView(props: ChatViewProps) {
                                             : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
+                              queuedRunsControl={queuedRunsControl}
+                              backgroundWorkControl={
+                                backgroundWorkBanner !== null ? (
+                                  <ComposerBannerStack items={[backgroundWorkBanner]} />
+                                ) : null
+                              }
+                              tasksControl={
+                                shownThreadSyncPhase === null && composerTasksPlan !== null ? (
+                                  <ComposerTasksControl
+                                    key={routeThreadKey}
+                                    plan={composerTasksPlan}
+                                    live={
+                                      !activeActivityRunSettled &&
+                                      composerTasksPlan.runId === activeActivityRun?.runId
+                                    }
+                                  />
+                                ) : null
+                              }
                               bannerItems={
                                 isDraftHeroState || composerBannerItems.length === 0
                                   ? EMPTY_COMPOSER_BANNER_ITEMS
