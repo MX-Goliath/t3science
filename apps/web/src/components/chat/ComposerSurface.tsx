@@ -4,13 +4,15 @@ import { cn } from "~/lib/utils";
 
 function Shell({
   contextRow = false,
+  attachedContextRow = false,
   className,
   ...props
-}: ComponentProps<"div"> & { contextRow?: boolean }) {
+}: ComponentProps<"div"> & { contextRow?: boolean; attachedContextRow?: boolean }) {
   return (
     <div
       data-slot="composer-shell"
       data-context-row={contextRow || undefined}
+      data-attached-context-row={(contextRow && attachedContextRow) || undefined}
       className={cn(
         "@container/composer-surface group/composer-surface relative isolate mx-auto w-full max-w-(--chat-content-max-width)",
         "[--chat-composer-drawer-inset:1.375rem] [--chat-composer-glass-surface:var(--card)] [--chat-composer-outline:rgb(0_0_0/8%)]",
@@ -68,13 +70,15 @@ function Main({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
-/** A plain row under the card (environment, worktree, branch) with no surface of its own. */
+/** The context row shares the draft composer's surface and stays bare in active threads. */
 function ContextStrip({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="composer-context-strip"
       className={cn(
         "group/composer-context relative flex w-full items-center gap-2 overflow-x-clip px-2 pt-2 text-muted-foreground",
+        "group-data-attached-context-row/composer-surface:mx-3 group-data-attached-context-row/composer-surface:-mt-2 group-data-attached-context-row/composer-surface:w-auto group-data-attached-context-row/composer-surface:rounded-b-2xl group-data-attached-context-row/composer-surface:pb-1.5 group-data-attached-context-row/composer-surface:pt-3.5",
+        "group-data-attached-context-row/composer-surface:[--chat-composer-context-surface:color-mix(in_srgb,var(--chat-composer-glass-surface)_75%,var(--background))] group-data-attached-context-row/composer-surface:bg-(--chat-composer-context-surface)/(--glass-opacity) group-data-attached-context-row/composer-surface:backdrop-blur-(--glass-blur) group-data-attached-context-row/composer-surface:backdrop-saturate-(--glass-saturation)",
         className,
       )}
       {...props}

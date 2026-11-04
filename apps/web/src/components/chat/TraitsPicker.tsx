@@ -317,6 +317,19 @@ export function shouldRenderTraitsControls(input: {
   return getTraitsSectionVisibility(input).hasAnyControls;
 }
 
+export function hasSelectableReasoningLevels(
+  input: Parameters<typeof shouldRenderTraitsControls>[0],
+): boolean {
+  const selected = getTraitsSectionVisibility(input);
+  return (
+    !selected.modelIsUnavailable &&
+    selected.selectDescriptors.some(
+      (descriptor) =>
+        isReasoningSelect(descriptor) && selectableProviderOptionChoices(descriptor).length > 1,
+    )
+  );
+}
+
 interface TraitsMenuContentProps {
   provider: ProviderDriverKind;
   instanceId?: ProviderInstanceId;
@@ -659,15 +672,24 @@ export const TraitsPicker = memo(function TraitsPicker({
   size = "sm",
   hidden = false,
   disabled = false,
+  open,
+  onOpenChange,
   ...persistence
 }: TraitsMenuContentProps &
   TraitsPersistence & {
     size?: ComposerControlSize;
     hidden?: boolean;
     disabled?: boolean;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
   }) {
   const composerFloatingLayerProps = useComposerMenuProps();
-  const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden || disabled);
+  const [localMenuOpen, setLocalMenuOpen] = useComposerMenuState(hidden || disabled);
+  const isMenuOpen = !hidden && !disabled && (open ?? localMenuOpen);
+  const setIsMenuOpen = (next: boolean) => {
+    setLocalMenuOpen(next);
+    onOpenChange?.(next);
+  };
   const triggerRef = useRef<HTMLButtonElement>(null);
   const openingModelPickerRef = useRef(false);
   const { visibleDescriptors, primarySelectDescriptor, ultrathinkPromptControlled } =

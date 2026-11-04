@@ -1,5 +1,6 @@
 import type { ChatComposerProps } from "./ChatComposer";
-import type { PromptUltrathink } from "./TraitsPicker";
+import { hasSelectableReasoningLevels, type PromptUltrathink } from "./TraitsPicker";
+import { useComposerMenuState } from "./useComposerMenuState";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { type AppModelOption } from "../../modelSelection";
 import { CircleAlertIcon } from "lucide-react";
@@ -135,6 +136,19 @@ export function ComposerControlsBar(props: {
     modelPickerIconClassName,
     getModelDisabledReason,
   } = props;
+  const hasReasoningLevels =
+    (routeKind === "server" || !!draftId) &&
+    hasSelectableReasoningLevels({
+      provider: selectedProvider,
+      model: selectedModel,
+      models: selectedProviderModels,
+      modelOptions: composerModelOptions?.[selectedInstanceId],
+      planModeEnabled,
+      ...(selectedProvider === "opencode" ? { descriptorIds: ["variant"] } : {}),
+    });
+  const [effortMenuOpen, setEffortMenuOpen] = useComposerMenuState(
+    composerControlsHidden || !hasReasoningLevels || modelPickerOpen,
+  );
   const providerTraitsMenuContent = renderProviderTraitsMenuContent({
     provider: selectedProvider,
     instanceId: selectedInstanceId,
@@ -194,7 +208,8 @@ export function ComposerControlsBar(props: {
   const restingProviderTraitsPicker = renderProviderTraitsPicker({
     ...providerTraitsPickerInput,
     size: composerControlsCollapsed ? "xs" : "sm",
-    hidden: composerControlsHidden || traitsBlockHidden,
+    hidden: composerControlsHidden || (traitsBlockHidden && !effortMenuOpen),
+    ...(hasReasoningLevels ? { open: effortMenuOpen, onOpenChange: setEffortMenuOpen } : {}),
     extraMenuOwnsModeShortcut: effortOwnsModeShortcut,
   });
   const restingBlockDefs = [
@@ -273,7 +288,13 @@ export function ComposerControlsBar(props: {
       {...(modelPickerIconClassName
         ? { activeProviderIconClassName: modelPickerIconClassName }
         : {})}
-      onOpenChange={onModelPickerOpenChange}
+      onOpenChange={(open) => {
+        if (open && hasReasoningLevels) {
+          setEffortMenuOpen(true);
+        } else {
+          onModelPickerOpenChange(open);
+        }
+      }}
       getModelDisabledReason={getModelDisabledReason}
       onOpenProviderSetup={onOpenProviderSetup}
     />

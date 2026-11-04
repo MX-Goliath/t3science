@@ -71,6 +71,8 @@ type TraitsRenderInput = {
   extraMenuHint?: string;
   onOpenModelPicker?: () => void;
   modelReset?: ModelResetAction;
+  open?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
 };
 
 export function getComposerPromptInjectionState(prompt: string): ComposerPromptInjectionState {
@@ -247,6 +249,8 @@ function renderTraitsControl(
     extraMenuHint,
     onOpenModelPicker,
     modelReset,
+    open,
+    onOpenChange,
   } = input;
   const hasTarget = threadRef !== undefined || draftId !== undefined;
   const { selections: resolvedModelOptions } = resolveComposerOptionSelections(
@@ -294,6 +298,8 @@ function renderTraitsControl(
       {...(extraMenuHint ? { extraMenuHint } : {})}
       {...(onOpenModelPicker ? { onOpenModelPicker } : {})}
       {...(modelReset ? { modelReset } : {})}
+      {...(open !== undefined ? { open } : {})}
+      {...(onOpenChange ? { onOpenChange } : {})}
     />
   );
 }
@@ -305,7 +311,11 @@ export function renderProviderTraitsMenuContent(input: TraitsRenderInput): React
 export function renderProviderTraitsPicker(input: TraitsRenderInput): ReactNode {
   if (input.provider === "opencode") {
     const reasoningEffort = renderTraitsControl(TraitsPicker, input, ["variant"]);
-    const agent = renderTraitsControl(TraitsPicker, input, ["agent"]);
+    const agent = renderTraitsControl(
+      TraitsPicker,
+      { ...input, open: undefined, onOpenChange: undefined },
+      ["agent"],
+    );
     if (reasoningEffort === null && agent === null) return null;
     return (
       <>
