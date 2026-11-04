@@ -432,15 +432,20 @@ export function DraftHeroHeadline({
           {projectSelector}
         </DraftHeroProjectHeading>
       ) : (
-        <h1 className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
-          {isScratchDraft ? (
-            <>What should we work on?</>
-          ) : canChooseProject ? (
-            <>{projectSelector} to start</>
-          ) : (
-            <>Add a project to start</>
-          )}
-        </h1>
+        <div className="flex w-full items-center justify-center gap-3">
+          <span className="flex shrink-0 -translate-y-1 empty:hidden">
+            <DraftHeroPet providerInstanceId={providerInstanceId} />
+          </span>
+          <h1 className="min-w-0 text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
+            {isScratchDraft ? (
+              <>What should we work on?</>
+            ) : canChooseProject ? (
+              <>{projectSelector} to start</>
+            ) : (
+              <>Add a project to start</>
+            )}
+          </h1>
+        </div>
       )}
       {scratchWorkspaceRoot === null ? null : (
         <p className="mt-2 flex h-6 w-full items-center justify-center text-sm">

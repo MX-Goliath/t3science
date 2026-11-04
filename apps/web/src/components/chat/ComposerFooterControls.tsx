@@ -41,7 +41,7 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
   runtimeModeOptions: ReadonlyArray<RuntimeModeOption>;
   size?: "sm" | "xs";
   hidden?: boolean;
-  /** How the permissions chip shows: hidden while the thread matches the user's default. */
+  /** How the permissions chip shows in this control group. */
   accessDisplay?: "label" | "icon" | "hidden";
   /** Draw the icon in the label color, not muted (the mode differs from the user's default). */
   emphasized?: boolean;
@@ -144,7 +144,15 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
         </TooltipTrigger>
         <TooltipPopup side="top">{permissionsTooltip}</TooltipPopup>
       </Tooltip>
-      <MenuPopup align="start" {...composerFloatingLayerProps}>
+      <MenuPopup
+        align="start"
+        anchor={() =>
+          permissionsChipRef.current?.closest<HTMLElement>(
+            "[data-chat-composer-footer-controls], [data-chat-composer-resting-controls]",
+          ) ?? permissionsChipRef.current
+        }
+        {...composerFloatingLayerProps}
+      >
         <ComposerPermissionsSection
           runtimeMode={props.runtimeMode}
           runtimeModeOptions={props.runtimeModeOptions}

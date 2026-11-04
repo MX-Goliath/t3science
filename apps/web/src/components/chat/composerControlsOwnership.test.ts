@@ -10,13 +10,13 @@ const base = {
 };
 
 describe("resolveComposerControlsOwnership", () => {
-  it("hides the chip at the default and lets the model picker answer composer.mode", () => {
+  it("keeps the permissions icon visible at the default with its own shortcut", () => {
     const result = resolveComposerControlsOwnership(base);
     expect(result).toMatchObject({
-      accessDisplay: "hidden",
-      showModeBlock: false,
+      accessDisplay: "icon",
+      showModeBlock: true,
       hiddenBlockIds: [],
-      pickerOwnsModeShortcut: true,
+      pickerOwnsModeShortcut: false,
     });
   });
 

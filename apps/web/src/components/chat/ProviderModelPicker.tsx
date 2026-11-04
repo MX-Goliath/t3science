@@ -1,3 +1,5 @@
+import { flushSync } from "react-dom";
+import "./modelPickerTransition.css";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type ProviderInstanceId,
@@ -152,10 +154,22 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
   const setIsMenuOpen = (open: boolean) => {
-    props.onOpenChange?.(open);
-    if (props.open === undefined) {
-      setUncontrolledIsMenuOpen(open);
+    const update = () => {
+      props.onOpenChange?.(open);
+      if (props.open === undefined) setUncontrolledIsMenuOpen(open);
+    };
+    if (
+      !open ||
+      !props.isComposerOwned ||
+      !document.startViewTransition ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      update();
+      return;
     }
+    void document
+      .startViewTransition({ types: ["composer-model-picker"], update: () => flushSync(update) })
+      .finished.catch(() => {});
   };
 
   /**
@@ -420,6 +434,19 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         }}
         initialFocus={searchInputRef}
         align={props.popupAlign ?? "start"}
+        anchor={
+          props.isComposerOwned
+            ? () =>
+                triggerRef.current?.closest<HTMLElement>(
+                  "[data-chat-composer-footer-controls], [data-chat-composer-resting-controls]",
+                ) ?? triggerRef.current
+            : undefined
+        }
+        data-chat-model-picker-popup
+        style={{
+          viewTransitionName:
+            props.isComposerOwned && isMenuOpen ? "composer-model-picker" : "none",
+        }}
         // Docked, the popup opens above the composer and slides over it when that space is short,
         // so a short window gets its full height (Floating UI sizes to the viewport) instead of a sliver.
         {...(docked
