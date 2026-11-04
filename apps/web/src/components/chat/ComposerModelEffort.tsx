@@ -625,7 +625,7 @@ function PermissionsMenu(props: {
           />
         }
       >
-        <CurrentIcon aria-hidden="true" className="size-3.5" />
+        <CurrentIcon aria-hidden="true" className={cn("size-3.5", current.iconClassName)} />
         {current.label}
         <ChevronUpIcon aria-hidden="true" className="size-3" />
       </MenuTrigger>

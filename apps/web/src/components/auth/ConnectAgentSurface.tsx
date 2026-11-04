@@ -28,7 +28,12 @@ import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 
 export const accessConfig: Record<
   AuthMcpClientAccess,
-  { readonly label: string; readonly description: string; readonly icon: LucideIcon }
+  {
+    readonly label: string;
+    readonly description: string;
+    readonly icon: LucideIcon;
+    readonly iconClassName?: string;
+  }
 > = {
   "read-only": {
     label: "Read only",
@@ -302,7 +307,7 @@ function AccessOption({
   readonly selected: boolean;
   readonly managedReason: string | undefined;
 }) {
-  const { label, description, icon: Icon } = accessConfig[access];
+  const { label, description, icon: Icon, iconClassName } = accessConfig[access];
   return (
     <RadioPrimitive.Root
       value={access}
@@ -319,7 +324,7 @@ function AccessOption({
         aria-hidden
         className={cn(
           "mt-0.5 size-4 shrink-0",
-          selected ? "text-primary" : "text-muted-foreground",
+          iconClassName ?? (selected ? "text-primary" : "text-muted-foreground"),
         )}
       />
       <span className="min-w-0">

@@ -1,3 +1,4 @@
+import { cn } from "~/lib/utils";
 import type { EnvironmentId, ServerProviderUsageLimits } from "@t3tools/contracts";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { ScheduledSendState } from "../../scheduledSend";
@@ -130,8 +131,9 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
           <ComposerControlIcon
             icon={RuntimeModeIcon}
             size={size}
-            // Match the label, not full foreground: the chip's presence already marks the mode.
-            {...(props.emphasized ? { className: "text-current" } : {})}
+            className={
+              runtimeModeOption.iconClassName ?? (props.emphasized ? "text-current" : undefined)
+            }
           />
           <span
             data-composer-control-label
@@ -219,7 +221,7 @@ export function ComposerPermissionsSection(props: {
               onBlur={() => setPreviewMode(null)}
               className="flex h-6 flex-1 cursor-pointer items-center justify-center text-muted-foreground outline-none first:rounded-l-md last:rounded-r-md data-disabled:cursor-not-allowed data-disabled:opacity-40 data-checked:bg-input/72 data-checked:text-foreground data-highlighted:text-foreground not-data-checked:data-highlighted:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             >
-              <OptionIcon aria-hidden="true" className="size-3.5" />
+              <OptionIcon aria-hidden="true" className={cn("size-3.5", option.iconClassName)} />
             </MenuPrimitive.RadioItem>
           );
         })}

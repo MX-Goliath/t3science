@@ -1,3 +1,4 @@
+import { cn } from "~/lib/utils";
 import {
   DEFAULT_SERVER_SETTINGS,
   type ModelSelection,
@@ -370,7 +371,12 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
               >
                 <SelectTrigger size="sm" aria-label="Default permissions">
                   {!mixedPermissions && (
-                    <PermissionIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <PermissionIcon
+                      className={cn(
+                        "size-3.5 shrink-0 text-muted-foreground",
+                        runtimeModeConfig[settings.defaultRuntimeMode].iconClassName,
+                      )}
+                    />
                   )}
                   <SelectValue>
                     {mixedPermissions
@@ -397,7 +403,12 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
                       >
                         <div className="grid gap-0.5">
                           <span className="inline-flex items-center gap-1.5 font-medium">
-                            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                            <Icon
+                              className={cn(
+                                "size-3.5 shrink-0 text-muted-foreground",
+                                option.iconClassName,
+                              )}
+                            />
                             {option.label}
                           </span>
                           <span className="text-xs leading-4 text-muted-foreground">

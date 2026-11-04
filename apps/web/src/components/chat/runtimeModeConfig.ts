@@ -7,7 +7,7 @@ import { type LucideIcon, LockIcon, PenLineIcon, ShieldOffIcon, SparklesIcon } f
 
 export const runtimeModeConfig: Record<
   RuntimeMode,
-  { label: string; description: string; icon: LucideIcon }
+  { label: string; description: string; icon: LucideIcon; iconClassName?: string }
 > = {
   "approval-required": {
     label: "Supervised",
@@ -29,6 +29,7 @@ export const runtimeModeConfig: Record<
     description: "Allow commands and edits without prompts.",
     // An open lock reads like a closed one at small sizes; a crossed shield does not.
     icon: ShieldOffIcon,
+    iconClassName: "text-orange-500",
   },
 };
 

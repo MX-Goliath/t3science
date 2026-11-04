@@ -1,3 +1,4 @@
+import { cn } from "~/lib/utils";
 import type { EnvironmentId, RuntimeMode } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 
@@ -32,7 +33,7 @@ export function ComposerContextPermissions(props: {
   );
   const options = resolveRuntimeModeOptions(modes, useManagedPolicy(props.environmentId));
   const composerMenuProps = useComposerMenuProps();
-  const { icon: Icon, label } = runtimeModeConfig[mode];
+  const { icon: Icon, label, iconClassName } = runtimeModeConfig[mode];
   return (
     <Menu>
       <Tooltip>
@@ -50,7 +51,7 @@ export function ComposerContextPermissions(props: {
             />
           }
         >
-          <Icon aria-hidden="true" className="size-3" />
+          <Icon aria-hidden="true" className={cn("size-3", iconClassName)} />
           <ComposerContextLabel>{label}</ComposerContextLabel>
         </TooltipTrigger>
         <TooltipPopup>Permissions{shortcutLabel ? ` · ${shortcutLabel}` : null}</TooltipPopup>
