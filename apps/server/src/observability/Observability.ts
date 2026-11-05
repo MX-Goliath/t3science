@@ -1,4 +1,3 @@
-import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as HttpObservability from "@t3tools/shared/httpObservability";
 import { makeLocalFileTracer, makeTraceSink } from "@t3tools/shared/observability";
 import * as SharedObservability from "@t3tools/shared/observability";
@@ -8,8 +7,6 @@ import * as Layer from "effect/Layer";
 import * as References from "effect/References";
 import * as Tracer from "effect/Tracer";
 import * as OtlpExporter from "effect/observability/OtlpExporter";
-import * as OtlpMetrics from "effect/observability/OtlpMetrics";
-import * as OtlpTracer from "effect/observability/OtlpTracer";
 import * as Statement from "effect/sql/Statement";
 
 import * as ServerConfig from "../config.ts";
@@ -23,10 +20,8 @@ export const layer = Layer.unwrap(
     const config = yield* ServerConfig.ServerConfig;
 
     const traces = config.otlpTracesExport;
-    const metrics = config.otlpMetricsExport;
-    // Keep serialization in context for the browser trace forwarder's exporter.
+    // Browser trace ingestion still uses the OTLP format for local diagnostics.
     const layerSerialization = SharedObservability.layerOtlpSerialization(traces.protocol);
-    const resource = ServerConfig.otlpResource(config, yield* HostProcess.Hostname);
     const attribution = yield* ResourceAttribution.ResourceAttribution;
 
     const layerTraceReferences = Layer.mergeAll(
@@ -53,23 +48,12 @@ export const layer = Layer.unwrap(
               durationMs: stats.durationMs,
             }),
         });
-        const delegate =
-          config.otlpTracesUrl === undefined
-            ? undefined
-            : yield* OtlpTracer.make({
-                url: config.otlpTracesUrl,
-                exportInterval: `${traces.exportIntervalMs} millis`,
-                headers: traces.headers,
-                resource,
-              });
-
         const tracer = yield* makeLocalFileTracer({
           filePath: config.serverTracePath,
           maxBytes: config.traceMaxBytes,
           maxFiles: config.traceMaxFiles,
           batchWindowMs: config.traceBatchWindowMs,
           sink,
-          ...(delegate ? { delegate } : {}),
         });
 
         const heapAttribution = yield* HeapAttribution.make(tracer);
@@ -82,24 +66,12 @@ export const layer = Layer.unwrap(
       }),
     ).pipe(Layer.provide(OtlpExporter.layerFlusher), Layer.provideMerge(layerSerialization));
 
-    const metricsLayer =
-      config.otlpMetricsUrl === undefined
-        ? Layer.empty
-        : OtlpMetrics.layer({
-            url: config.otlpMetricsUrl,
-            exportInterval: `${metrics.exportIntervalMs} millis`,
-            headers: metrics.headers,
-            resource,
-          }).pipe(Layer.provide(SharedObservability.layerOtlpSerialization(metrics.protocol)));
-
     const layerOtelWarnings = Layer.effectDiscard(
       Effect.forEach(config.otelEnvironment.warnings, (warning) => Effect.logWarning(warning)),
     );
 
     return layerOtelWarnings.pipe(
-      Layer.provideMerge(
-        Layer.mergeAll(ServerLogger.layer, layerTraceReferences, layerTracer, metricsLayer),
-      ),
+      Layer.provideMerge(Layer.mergeAll(ServerLogger.layer, layerTraceReferences, layerTracer)),
       Layer.provide(
         OtelEnvironment.layerResourceAttributes(config.otelEnvironment.resourceAttributes),
       ),

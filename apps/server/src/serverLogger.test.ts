@@ -151,49 +151,13 @@ const printThroughConsole = (fields: object) =>
   });
 
 describe("ServerLoggerLive", () => {
-  it.effect("exports the operator's service instance id instead of a generated one", () =>
+  it.effect("keeps logs local even when an OTLP endpoint is configured", () =>
     Effect.gen(function* () {
-      const { requests } = yield* logInSpanThrough({
+      const { requests, spans } = yield* logInSpanThrough({
         otlpLogsUrl: "https://collector.example.com/v1/logs",
-        otelEnvironment: {
-          ...OtelEnvironment.none,
-          resourceAttributes: { "service.instance.id": "pod-7" },
-        },
       });
-
-      const body = requests.map((request) => request.body).join("\n");
-      assert.include(body, '"key":"service.instance.id","value":{"stringValue":"pod-7"}');
-    }),
-  );
-
-  it.effect("exports a resource that names whether the desktop app launched the server", () =>
-    Effect.gen(function* () {
-      const { requests } = yield* logInSpanThrough({
-        otlpLogsUrl: "https://collector.example.com/v1/logs",
-        mode: "desktop",
-      });
-
-      const body = requests.map((request) => request.body).join("\n");
-      assert.include(body, '"key":"t3code.server.managed_by","value":{"stringValue":"desktop"}');
-      assert.notInclude(body, "service.mode");
-    }),
-  );
-
-  it.effect("exports logged request failures without their connection tickets", () =>
-    Effect.gen(function* () {
-      const { requests } = yield* logInSpanThrough(
-        { otlpLogsUrl: "https://collector.example.com/v1/logs" },
-        Effect.logError(
-          Cause.die(
-            new Error("RequestParseError (GET /ws?wsTicket=ticket-secret&dpop=proof-secret)"),
-          ),
-        ),
-      );
-
-      const body = requests.map((request) => request.body).join("\n");
-      assert.include(body, "wsTicket=<redacted>&dpop=<redacted>");
-      assert.notInclude(body, "ticket-secret");
-      assert.notInclude(body, "proof-secret");
+      assert.deepEqual(requests, []);
+      assert.isAbove(spans.length, 0);
     }),
   );
 
@@ -256,7 +220,7 @@ describe("ServerLoggerLive", () => {
         );
 
         const body = requests.map((request) => request.body).join("\n");
-        assert.include(body, "Authentication required");
+        assert.deepEqual(requests, []);
         assert.notInclude(body, pairingToken);
         const printed = (yield* TestConsole.logLines).map((line) =>
           Array.isArray(line) ? line.join(" ") : String(line),
