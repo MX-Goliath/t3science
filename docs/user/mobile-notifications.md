@@ -4,6 +4,8 @@ On Android, enable **Background notifications** in **Settings → Notifications 
 
 Android keeps a persistent connection notification visible while this mode is enabled. The settings page shows connection counts and errors. For delivery while the phone sleeps, open **Battery settings** and allow unrestricted battery use for T3 Science. Device power management can still delay delivery. Monitoring resumes after a reboot when Android allows it. Reopen the app after a force-stop or if device power management prevents automatic startup. Turn off **Background notifications** to stop the service and remove its saved credentials and notifications. This mode requires an Android build that includes the background service. While it monitors an environment, cloud alerts for that environment are suppressed to avoid duplicates.
 
+On Android 16 and newer, background monitoring can also appear as a status bar Live Update: **Online** when connected, **Working** during a task, **Approve** for approvals and **Answer** for questions. With several agents, requests take priority. Tap it to open the relevant thread. Enable or disable promotion through **Settings → Notifications → Live Update Settings**; availability depends on your Android version and device. Older Android versions show the same status in the persistent notification.
+
 For cloud delivery on Android and iOS, use T3 Connect:
 
 Sign in to T3 Connect, link your environments, and enable **Device Notifications** in **Settings → Notifications** to receive alerts when an agent finishes, fails, needs approval, or asks for input. Tap a notification to open its thread. Your environment must have agent activity publishing enabled.

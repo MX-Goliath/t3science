@@ -35,6 +35,7 @@ class DirectNotificationService : Service() {
   private val connections = mutableMapOf<String, Connection>()
   private var configuration = ""
   private var scheme = "t3science"
+  private var lastPresentation: DirectConnectionPresentation? = null
 
   @Volatile private var destroyed = false
 
@@ -47,7 +48,11 @@ class DirectNotificationService : Service() {
     if (Build.VERSION.SDK_INT >= 26) {
       getSystemService(NotificationManager::class.java).createNotificationChannels(
         listOf(
-          NotificationChannel(CHANNEL, "Background connection", NotificationManager.IMPORTANCE_LOW),
+          NotificationChannel(
+            DIRECT_CONNECTION_CHANNEL,
+            "Background connection",
+            NotificationManager.IMPORTANCE_LOW
+          ),
           NotificationChannel(ALERTS, "Direct agent alerts", NotificationManager.IMPORTANCE_HIGH)
         )
       )
@@ -62,7 +67,16 @@ class DirectNotificationService : Service() {
       stopSelf()
       return START_NOT_STICKY
     }
-    val notification = connectionNotification("Connecting to your environments")
+    val notification = directConnectionNotification(
+      this,
+      DirectConnectionPresentation(
+        "Connect",
+        "Connecting to your environments",
+        "Starting background monitoring",
+        ""
+      )
+    ).setContentIntent(openApp("/", ID)).build()
+    lastPresentation = null
     if (Build.VERSION.SDK_INT >= 34) {
       startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
     } else {
@@ -102,13 +116,6 @@ class DirectNotificationService : Service() {
     super.onDestroy()
   }
 
-  private fun connectionNotification(text: String) = NotificationCompat.Builder(this, CHANNEL)
-    .setSmallIcon(R.drawable.agent_activity_mark)
-    .setContentTitle("T3 Science background notifications")
-    .setContentText(text).setOngoing(true).setSilent(true)
-    .setContentIntent(openApp("/", ID))
-    .build()
-
   private fun publishStatus() {
     if (destroyed) return
     val connected = connections.values.count { it.connected }
@@ -120,15 +127,22 @@ class DirectNotificationService : Service() {
     )
     status = JSONObject().put("enabled", true).put("connected", connected)
       .put("total", connections.size).put("errors", errors).toString()
+    val activities = connections.values.filter { it.connected }.flatMap { connection ->
+      connection.state.activeThreads().map { (id, state) ->
+        DirectActivity(
+          "/threads/${Uri.encode(connection.config.getString("environmentId"))}/${Uri.encode(id)}",
+          state.title,
+          requireNotNull(state.phase)
+        )
+      }
+    }
+    val presentation = directConnectionPresentation(connected, connections.size, activities)
+    if (presentation == lastPresentation) return
+    lastPresentation = presentation
     getSystemService(NotificationManager::class.java).notify(
       ID,
-      connectionNotification(
-        if (connections.isEmpty()) {
-          "No direct connections enabled"
-        } else {
-          "$connected of ${connections.size} environments connected"
-        }
-      )
+      directConnectionNotification(this, presentation)
+        .setContentIntent(openApp(presentation.path, ID)).build()
     )
   }
 
@@ -304,8 +318,8 @@ class DirectNotificationService : Service() {
                     connected = true
                     attempt = 0
                     error = null
-                    publishStatus()
                   }
+                  publishStatus()
                 }
                 "Exit", "Defect" -> failed(current, "Event stream ended; reconnecting")
               }
@@ -351,7 +365,6 @@ class DirectNotificationService : Service() {
   }
 
   companion object {
-    private const val CHANNEL = "direct-connection"
     private const val ALERTS = "direct-agent-alerts"
     private const val ID = 7440
 

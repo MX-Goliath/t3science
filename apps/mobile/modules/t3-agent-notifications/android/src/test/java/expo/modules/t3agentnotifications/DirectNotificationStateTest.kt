@@ -33,10 +33,14 @@ class DirectNotificationStateTest {
       ).isEmpty()
     )
     assertTrue(state.accept(update(thread())).isEmpty())
+    assertEquals("running", state.activeThreads().single().second.phase)
+    state.accept(snapshot().put("resolvedRepositoryIdentityRoots", JSONArray().put("/repo")))
+    assertEquals(1, state.activeThreads().size)
     assertEquals(
       "completed",
       state.accept(update(thread(status = "completed"))).single().second.phase
     )
+    assertTrue(state.activeThreads().isEmpty())
     assertTrue(state.accept(update(thread(status = "completed").put("title", "Renamed"))).isEmpty())
     val pending = thread().put(
       "pendingRuntimeRequest",
@@ -61,7 +65,10 @@ class DirectNotificationStateTest {
     )
     assertEquals(listOf("a", "b"), alerts.map { it.first })
     assertTrue(state.accept(snapshot(thread("a", "completed"), thread("b", "failed"))).isEmpty())
+    state.accept(update(thread("a")))
+    assertEquals(1, state.activeThreads().size)
     state.accept(JSONObject().put("kind", "thread.removed").put("threadId", "a"))
+    assertTrue(state.activeThreads().isEmpty())
     assertTrue(state.accept(snapshot(thread("a", "completed"))).isEmpty())
   }
 

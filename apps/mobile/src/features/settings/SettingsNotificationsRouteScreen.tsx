@@ -28,10 +28,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { supportsAgentAwarenessPush } from "../agent-awareness/capabilities";
-import {
-  openAndroidLiveUpdateSettings,
-  supportsAndroidLiveUpdateSettings,
-} from "../agent-awareness/androidNotifications";
+import { supportsAndroidLiveUpdateSettings } from "../agent-awareness/androidNotifications";
 import { setLiveActivityUpdatesEnabled } from "../agent-awareness/liveActivityPreferences";
 import { requestAgentNotificationPermission } from "../agent-awareness/notificationPermissions";
 import {
@@ -473,20 +470,6 @@ function ConfiguredSettingsNotificationsRouteScreen() {
               icon="bolt.circle"
               label="Turn off Live Activity preference"
               onPress={() => void handleLiveActivitiesChange(false)}
-            />
-          ) : null}
-          {supportsAndroidLiveUpdateSettings() ? (
-            <SettingsRow
-              icon="bolt.circle"
-              label="Live Update Settings"
-              onPress={() => {
-                void openAndroidLiveUpdateSettings().catch(() => {
-                  Dialog.alert(
-                    "Couldn't open Settings",
-                    "Open Android Settings, select T3 Science, then enable Live Updates in Notifications.",
-                  );
-                });
-              }}
             />
           ) : null}
         </SettingsSection>

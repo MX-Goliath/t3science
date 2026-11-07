@@ -6,7 +6,19 @@ internal data class DirectThreadState(val phase: String?, val title: String, val
 
 internal class DirectNotificationState {
   private val threads = mutableMapOf<String, DirectThreadState>()
+  private val active = mutableMapOf<String, DirectThreadState>()
   private var synchronized = false
+
+  fun activeThreads(): List<Pair<String, DirectThreadState>> = active.map { it.key to it.value }
+
+  private fun put(id: String, next: DirectThreadState): DirectThreadState? {
+    if (next.phase in setOf("running", "waiting_for_approval", "waiting_for_input")) {
+      active[id] = next
+    } else {
+      active.remove(id)
+    }
+    return threads.put(id, next)
+  }
 
   fun accept(item: JSONObject): List<Pair<String, DirectThreadState>> = when (
     item.optString(
@@ -16,13 +28,14 @@ internal class DirectNotificationState {
     "snapshot" -> snapshot(item)
     "thread.removed" -> {
       threads.remove(item.getString("threadId"))
+      active.remove(item.getString("threadId"))
       emptyList()
     }
     "thread.updated" -> {
       val thread = item.getJSONObject("thread")
       val id = thread.getString("id")
       val next = project(thread)
-      val previous = threads.put(id, next)
+      val previous = put(id, next)
       if (synchronized && item.optString("location") != "archive" && changed(previous, next)) {
         listOf(id to next)
       } else {
@@ -36,13 +49,14 @@ internal class DirectNotificationState {
     if (item.has("resolvedRepositoryIdentityRoots")) return emptyList()
     val previous = threads.toMap()
     threads.clear()
+    active.clear()
     val alerts = mutableListOf<Pair<String, DirectThreadState>>()
     val snapshot = item.getJSONObject("snapshot").getJSONArray("threads")
     for (i in 0 until snapshot.length()) {
       val thread = snapshot.getJSONObject(i)
       val id = thread.getString("id")
       val next = project(thread)
-      threads[id] = next
+      put(id, next)
       if (synchronized && previous.containsKey(id) &&
         changed(previous[id], next)
       ) {

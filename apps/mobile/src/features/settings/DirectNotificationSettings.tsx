@@ -1,3 +1,7 @@
+import {
+  openAndroidLiveUpdateSettings,
+  supportsAndroidLiveUpdateSettings,
+} from "../agent-awareness/androidNotifications";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useState } from "react";
@@ -109,6 +113,20 @@ export function DirectNotificationSettings() {
             onPress={() => void Linking.openSettings()}
           />
         </>
+      ) : null}
+      {supportsAndroidLiveUpdateSettings() ? (
+        <SettingsRow
+          icon="bolt.circle"
+          label="Live Update Settings"
+          onPress={() => {
+            void openAndroidLiveUpdateSettings().catch(() => {
+              Dialog.alert(
+                "Couldn't open Settings",
+                "Open Android Settings, select T3 Science, then enable Live Updates in Notifications.",
+              );
+            });
+          }}
+        />
       ) : null}
     </SettingsSection>
   );
