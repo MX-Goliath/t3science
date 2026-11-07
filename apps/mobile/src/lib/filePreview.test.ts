@@ -74,6 +74,10 @@ vi.mock("@react-navigation/native", () => ({
   useRoute: () => ({ name: "Thread", params: {} }),
   useFocusEffect: (callback: () => (() => void) | undefined) => useEffect(callback, [callback]),
 }));
+vi.mock("../features/threads/ScheduledMessageActions", () => ({
+  ScheduledMessageActions: () => null,
+}));
+
 vi.mock("react-native", () => ({
   Platform: { OS: "android", select: (values: { android?: unknown }) => values.android },
   StyleSheet: { create: (styles: unknown) => styles },

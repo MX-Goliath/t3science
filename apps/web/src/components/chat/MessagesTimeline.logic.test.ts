@@ -2856,15 +2856,15 @@ describe("v2 run and attempt history", () => {
     expect(rows([user, steer, step, passed, final], "zen")).toEqual(["user", "steer", "final"]);
     expect(rows([user, steer, answer, step], "zen", running)).toEqual([
       "user",
-      "working-indicator-row",
       "steer",
       "answer",
       "live-activity-row",
+      "working-indicator-row",
     ]);
     expect(rows([user, step, passed], "zen", running)).toEqual([
       "user",
-      "working-indicator-row",
       "live-activity-row",
+      "working-indicator-row",
     ]);
     expect(liveAnswerPreview([user, step, passed])).toBe("step");
     expect(rows(turn, "zen", ended)).toEqual(["user", "final"]);
@@ -2892,8 +2892,8 @@ describe("v2 run and attempt history", () => {
       "user",
       "final",
       "wake",
-      "working-indicator-row",
       "live-activity-row",
+      "working-indicator-row",
     ]);
   });
   it("collapses only output from a superseded V2 attempt within the active logical run", () => {
