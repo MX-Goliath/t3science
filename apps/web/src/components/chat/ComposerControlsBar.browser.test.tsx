@@ -104,6 +104,11 @@ it("opens reasoning from both composer controls and opens model selection from r
   const slider = page.getByRole("slider", { name: "Reasoning effort" });
   const search = page.getByPlaceholder("Search models...");
   for (const name of ["Test model", /^Effort:/]) {
+    const trigger = screen.getByRole("button", { name, exact: typeof name === "string" });
+    await trigger.click();
+    await expect.element(slider).toBeVisible();
+    await trigger.click();
+    await expect.element(slider).not.toBeInTheDocument();
     await screen.getByRole("button", { name, exact: typeof name === "string" }).click();
     await expect.element(slider).toBeVisible();
     await expect.element(slider).toHaveFocus();

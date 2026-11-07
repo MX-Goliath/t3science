@@ -765,7 +765,23 @@ export const TraitsPicker = memo(function TraitsPicker({
   return (
     <Menu
       open={isMenuOpen}
-      onOpenChange={(open) => {
+      modal={!isComposerOwned}
+      onOpenChange={(open, details) => {
+        const controls = triggerRef.current?.closest(
+          "[data-chat-composer-footer-controls], [data-chat-composer-resting-controls]",
+        );
+        // The model button toggles this menu too; let its click own the state change.
+        if (
+          !open &&
+          isComposerOwned &&
+          onOpenModelPicker &&
+          (details.reason === "outside-press" || details.reason === "focus-out") &&
+          details.event.target instanceof Element &&
+          controls?.contains(details.event.target.closest("[data-chat-provider-model-picker]"))
+        ) {
+          details.cancel();
+          return;
+        }
         if (open) openingModelPickerRef.current = false;
         setIsMenuOpen(open && !disabled);
       }}

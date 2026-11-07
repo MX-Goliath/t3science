@@ -290,7 +290,7 @@ export function ComposerControlsBar(props: {
         : {})}
       onOpenChange={(open) => {
         if (open && hasReasoningLevels) {
-          setEffortMenuOpen(true);
+          setEffortMenuOpen(!effortMenuOpen);
         } else {
           onModelPickerOpenChange(open);
         }
