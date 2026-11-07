@@ -128,7 +128,10 @@ import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRouteScreen";
 import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNotificationsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
-import { SettingsLabsRouteScreen } from "./features/settings/ThreadSettingsSections";
+import {
+  SettingsLabsRouteScreen,
+  SettingsScienceRouteScreen,
+} from "./features/settings/ThreadSettingsSections";
 import { SettingsEnvironmentFilterProvider } from "./features/settings/settings-environment-filter";
 import { openSettings, settingsOpenIn } from "./features/settings/settings-navigation";
 import { DEFAULT_SETTINGS_PAGE } from "./features/layout/workspace/workspace-tab-navigation";
@@ -207,6 +210,11 @@ const SETTINGS_SCREENS = {
     screen: SettingsWorktreesRouteScreen,
     linking: "settings/worktrees",
     options: settingsPage("Worktrees"),
+  }),
+  SettingsScience: createNativeStackScreen({
+    screen: SettingsScienceRouteScreen,
+    linking: "settings/science",
+    options: settingsPage("Science"),
   }),
   SettingsLabs: createNativeStackScreen({
     screen: SettingsLabsRouteScreen,

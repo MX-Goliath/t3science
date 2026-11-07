@@ -46,8 +46,25 @@ export function SettingsLabsRouteScreen() {
       >
         <ToolCallVisibilitySection />
         <BetaSettingsSection />
-        <ScienceSettingsSection />
         <LegacySettingsSection />
+      </ScrollView>
+    </SettingsScreen>
+  );
+}
+
+export function SettingsScienceRouteScreen() {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SettingsScreen title="Science">
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerClassName="gap-6 px-5 pt-4"
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
+      >
+        <ScienceSettingsSection />
       </ScrollView>
     </SettingsScreen>
   );
@@ -343,30 +360,13 @@ function ScienceSettingsSection() {
   const save = useAtomSet(updateMobilePreferencesAtom);
   return (
     <SettingsSection title="Science">
-      {(
-        [
-          [
-            "scienceComposer",
-            "Science composer",
-            "Show provider usage limits beside the model control.",
-          ],
-          ["scienceQueue", "Science queue", "Use the expanded queue with message reordering."],
-          [
-            "scienceScheduledSend",
-            "Scheduled sends",
-            "Schedule messages from this device. Disabling pauses scheduled messages.",
-          ],
-        ] as const
-      ).map(([key, label, subtitle]) => (
-        <SettingsSwitchRow
-          key={key}
-          label={label}
-          subtitle={subtitle}
-          value={AsyncResult.isSuccess(preferences) && preferences.value[key] === true}
-          disabled={!AsyncResult.isSuccess(preferences) || preferences.waiting}
-          onValueChange={(value) => save({ [key]: value })}
-        />
-      ))}
+      <SettingsSwitchRow
+        label="Science"
+        subtitle="Enable all Science composer controls, queue and scheduled sends on this device. Turning it off restores the standard interface and pauses scheduled messages."
+        value={AsyncResult.isSuccess(preferences) && preferences.value.scienceComposer === true}
+        disabled={!AsyncResult.isSuccess(preferences) || preferences.waiting}
+        onValueChange={(scienceComposer) => save({ scienceComposer })}
+      />
     </SettingsSection>
   );
 }

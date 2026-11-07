@@ -62,6 +62,19 @@ import {
   SpeechPostProcessingPromptSettings,
 } from "./speech.ts";
 
+export const ScienceModelPreset = Schema.Struct({
+  modelSelection: Schema.NullOr(ModelSelection),
+});
+export type ScienceModelPreset = typeof ScienceModelPreset.Type;
+export const ScienceModelPresets = Schema.Array(ScienceModelPreset).check(
+  Schema.isMinLength(6),
+  Schema.isMaxLength(6),
+);
+export const DEFAULT_SCIENCE_MODEL_PRESETS: ReadonlyArray<ScienceModelPreset> = Array.from(
+  { length: 6 },
+  () => ({ modelSelection: null }),
+);
+
 export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"]);
 export type TimestampFormat = typeof TimestampFormat.Type;
 const DEFAULT_TIMESTAMP_FORMAT: TimestampFormat = "locale";
@@ -551,10 +564,12 @@ export const ClientSettingsSchema = Schema.Struct({
   // Project-independent conversations backed by a hidden per-environment workspace.
   generalChatsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   scienceComposer: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  scienceQueue: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  scienceWorkPanels: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  scienceScheduledSend: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  scienceAttachmentPinning: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  scienceModelPresetsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  scienceModelPresets: ScienceModelPresets.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SCIENCE_MODEL_PRESETS)),
+  ),
   imagesEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Desktop-only persistent browser chat. The browser session and its cookies
   // belong to this device, so this remains a client-local setting.
@@ -1959,10 +1974,8 @@ export const ClientSettingsPatch = Schema.Struct({
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   generalChatsEnabled: Schema.optionalKey(Schema.Boolean),
   scienceComposer: Schema.optionalKey(Schema.Boolean),
-  scienceQueue: Schema.optionalKey(Schema.Boolean),
-  scienceWorkPanels: Schema.optionalKey(Schema.Boolean),
-  scienceScheduledSend: Schema.optionalKey(Schema.Boolean),
-  scienceAttachmentPinning: Schema.optionalKey(Schema.Boolean),
+  scienceModelPresetsEnabled: Schema.optionalKey(Schema.Boolean),
+  scienceModelPresets: Schema.optionalKey(ScienceModelPresets),
   imagesEnabled: Schema.optionalKey(Schema.Boolean),
   webChatEnabled: Schema.optionalKey(Schema.Boolean),
   webChatProvider: Schema.optionalKey(WebChatProvider),

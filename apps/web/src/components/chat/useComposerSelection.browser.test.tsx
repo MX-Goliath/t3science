@@ -4,7 +4,10 @@ import {
   type ModelSelection,
   type ServerProvider,
 } from "@t3tools/contracts";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import {
+  DEFAULT_SCIENCE_MODEL_PRESETS,
+  DEFAULT_UNIFIED_SETTINGS,
+} from "@t3tools/contracts/settings";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
@@ -14,9 +17,14 @@ import { makeThreadFixture } from "../../test-fixtures";
 import { useComposerSelection } from "./useComposerSelection";
 import { TraitsPicker } from "./ScienceTraitsPicker";
 
-it.each([true, false])(
+it.each([
+  { hasOptions: true, presets: false },
+  { hasOptions: false, presets: false },
+  { hasOptions: true, presets: true },
+  { hasOptions: false, presets: true },
+])(
   "resets to the project model with its saved options (%s), replacing remembered options",
-  async (hasOptions) => {
+  async ({ hasOptions, presets }) => {
     useComposerDraftStore.setState({
       draftsByThreadKey: {},
       stickyModelSelectionByProvider: {},
@@ -83,7 +91,7 @@ it.each([true, false])(
         (state) =>
           state.draftsByThreadKey[scopedThreadKey(target)]!.modelSelectionByProvider[instanceId]!,
       );
-      const { modelReset } = useComposerSelection({
+      const { modelReset, onProviderModelSelectStable } = useComposerSelection({
         environmentId: activeThread.environmentId,
         composerDraftTarget: target,
         draftThread: null,
@@ -94,6 +102,19 @@ it.each([true, false])(
         },
         settings: {
           ...DEFAULT_UNIFIED_SETTINGS,
+          scienceComposer: presets,
+          scienceModelPresetsEnabled: presets,
+          scienceModelPresets: DEFAULT_SCIENCE_MODEL_PRESETS.map((preset, index) => ({
+            ...preset,
+            modelSelection:
+              index === 0
+                ? {
+                    instanceId,
+                    model: "provider-model",
+                    options: [{ id: "reasoningEffort", value: "low" }],
+                  }
+                : null,
+          })),
           defaultModelSelection: { instanceId, model: "provider-model" },
         },
         providerStatuses: [provider],
@@ -110,26 +131,59 @@ it.each([true, false])(
         scheduleComposerFocus: vi.fn(),
       });
       return (
-        <TraitsPicker
-          isComposerOwned
-          provider={driver}
-          instanceId={instanceId}
-          threadRef={target}
-          model={selection.model}
-          models={provider.models}
-          modelOptions={selection.options}
-          planModeEnabled
-          modelReset={modelReset}
-        />
+        <>
+          <button
+            onClick={() =>
+              onProviderModelSelectStable(instanceId, "provider-model", {
+                sciencePreset: {
+                  instanceId,
+                  model: "provider-model",
+                  options: [{ id: "reasoningEffort", value: "high" }],
+                },
+              })
+            }
+          >
+            Choose preset
+          </button>
+          <button onClick={() => onProviderModelSelectStable(instanceId, "provider-model")}>
+            Choose manually
+          </button>
+          <TraitsPicker
+            isComposerOwned
+            provider={driver}
+            instanceId={instanceId}
+            threadRef={target}
+            model={selection.model}
+            models={provider.models}
+            modelOptions={selection.options}
+            planModeEnabled
+            modelReset={modelReset}
+          />
+        </>
       );
     }
     await using screen = await render(<Composer />);
+    if (presets) {
+      await screen.getByRole("button", { name: "Choose preset" }).click();
+      expect(useComposerDraftStore.getState().getComposerDraft(target)?.sciencePresetsManual).toBe(
+        false,
+      );
+    }
+    await screen.getByRole("button", { name: "Choose manually" }).click();
+    expect(useComposerDraftStore.getState().getComposerDraft(target)?.sciencePresetsManual).toBe(
+      presets ? true : undefined,
+    );
     await screen.getByRole("button", { name: /^Effort:/ }).click();
-    await page.getByRole("button", { name: "Reset to project default: Project model" }).click();
+    await page
+      .getByRole("button", {
+        name: "Reset to project default: Project model",
+      })
+      .click();
     await expect
       .element(page.getByRole("slider"))
       .toHaveAttribute("aria-valuetext", hasOptions ? "Low" : "Medium");
     const state = useComposerDraftStore.getState();
+    expect(state.getComposerDraft(target)?.sciencePresetsManual).not.toBe(true);
     const expectedSelection = {
       ...projectDefault,
       options: projectDefault.options ?? [{ id: "reasoningEffort", value: "medium" }],

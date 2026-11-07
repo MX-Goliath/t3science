@@ -37,6 +37,7 @@ export type SettingsPath =
   | "/settings/access"
   | "/settings/secrets"
   | "/settings/maintenance"
+  | "/settings/science"
   | "/settings/labs"
   | "/settings/about"
   | "/settings/archived";
@@ -108,6 +109,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/access": "Sharing & access",
   "/settings/secrets": "Secrets",
   "/settings/maintenance": "Maintenance",
+  "/settings/science": "Science",
   "/settings/labs": "Labs",
   "/settings/about": "About",
   "/settings/voice": "Voice",
@@ -126,6 +128,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/appearance",
       "/settings/desktop-pets",
       "/settings/chat",
+      "/settings/science",
       "/settings/diffs",
       "/settings/keybindings",
       "/settings/voice",
@@ -512,33 +515,21 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "scienceComposer",
-    title: "Science composer",
-    to: "/settings/labs",
-    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
+    title: "Science",
+    to: "/settings/science",
+    searchTerms: ["science composer queue reasoning speed schedule attachments"],
   },
   {
-    id: "scienceQueue",
-    title: "Science queue",
-    to: "/settings/labs",
-    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
+    id: "science-model-presets",
+    title: "Model presets",
+    to: "/settings/science",
+    searchTerms: ["science six bar model provider reasoning effort presets"],
   },
   {
-    id: "scienceWorkPanels",
-    title: "Science work panels",
-    to: "/settings/labs",
-    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
-  },
-  {
-    id: "scienceScheduledSend",
-    title: "Scheduled sends",
-    to: "/settings/labs",
-    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
-  },
-  {
-    id: "scienceAttachmentPinning",
-    title: "Pinned attachments",
-    to: "/settings/labs",
-    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
+    id: "science-preset-slots",
+    title: "Configure six presets",
+    to: "/settings/science",
+    searchTerms: ["science model provider reasoning effort preset positions"],
   },
   {
     id: "boring-sidebar",
@@ -1418,6 +1409,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/secrets": null,
   "/settings/scheduled-tasks": null,
   "/settings/maintenance": null,
+  "/settings/science": null,
   "/settings/labs": null,
   "/settings/about": null,
   "/settings/archived": "project-defaults",
@@ -1445,6 +1437,8 @@ const MOVED_SECTION_ANCHORS: Readonly<Record<string, SettingsPath>> = {
 
 /** Where an old settings link now lives. Its anchor finds the page its row moved to. */
 export function movedSettingsPath(pathname: string, hash: string): SettingsPath | null {
+  if (pathname === "/settings/labs" && ["science", "scienceComposer"].includes(hash))
+    return "/settings/science";
   if (!SPLIT_SETTINGS_PATHS.has(pathname)) return null;
   const items: readonly SettingsSearchItem[] = SETTINGS_SEARCH_ITEMS;
   const anchored = hash

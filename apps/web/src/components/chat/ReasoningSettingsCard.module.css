@@ -78,7 +78,7 @@
     radial-gradient(circle at 79% 63%, #fff8 0 0.8px, transparent 1.7px),
     radial-gradient(circle at 85% 39%, #fff6 0 0.6px, transparent 1.5px),
     radial-gradient(ellipse at 52% 55%, #e7c3ff35, transparent 65%);
-  animation: reasoning-ultra-stars 650ms ease-out both;
+  animation: reasoning-ultra-stars 1300ms ease-out both;
 }
 
 .sparkles::after {
@@ -86,11 +86,11 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(105deg, transparent 25%, #f2dfff42 50%, transparent 75%);
-  animation: reasoning-ultra-shimmer 700ms ease-out both;
+  animation: reasoning-ultra-shimmer 1400ms ease-out both;
 }
 
 .ultraLabel {
-  animation: reasoning-settings-reveal 160ms ease-out;
+  animation: reasoning-settings-reveal 320ms ease-out;
 }
 
 @keyframes reasoning-ultra-stars {

@@ -254,6 +254,7 @@ const PersistedComposerThreadDraftState = Schema.Struct({
   modelSelectionByProvider: Schema.optionalKey(Schema.Record(ProviderInstanceId, ModelSelection)),
   activeProvider: Schema.optionalKey(Schema.NullOr(ProviderInstanceId)),
   modelSelectionExplicit: Schema.optionalKey(Schema.Boolean),
+  sciencePresetsManual: Schema.optionalKey(Schema.Boolean),
   runtimeMode: Schema.optionalKey(RuntimeMode),
   interactionMode: Schema.optionalKey(ProviderInteractionMode),
   scheduledSend: Schema.optionalKey(
@@ -394,6 +395,7 @@ export interface ComposerThreadDraftState {
   modelSelectionByProvider: Partial<Record<ProviderInstanceId, ModelSelection>>;
   activeProvider: ProviderInstanceId | null;
   modelSelectionExplicit?: boolean;
+  sciencePresetsManual?: boolean;
   runtimeMode: RuntimeMode | null;
   interactionMode: ProviderInteractionMode | null;
   /** One locally armed send. It remains persisted so missed timers are visible after restart. */
@@ -537,6 +539,7 @@ interface ComposerDraftStoreState {
     modelSelection: ModelSelection | null | undefined,
     opts?: {
       explicit?: boolean;
+      sciencePreset?: boolean;
       /** Replace existing options even when the incoming selection has none. */
       replaceOptions?: boolean;
     },
@@ -918,6 +921,7 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
     draft.environmentContexts.length === 0 &&
     Object.keys(draft.modelSelectionByProvider).length === 0 &&
     draft.activeProvider === null &&
+    !draft.sciencePresetsManual &&
     draft.runtimeMode === null &&
     draft.interactionMode === null &&
     draft.scheduledSend === null
@@ -2041,6 +2045,7 @@ function normalizePersistedDraftsByThreadId(
       threadContexts.length === 0 &&
       environmentContexts.length === 0 &&
       !hasModelData &&
+      !draftCandidate.sciencePresetsManual &&
       !runtimeMode &&
       !interactionMode &&
       !scheduledSend
@@ -2084,6 +2089,7 @@ function normalizePersistedDraftsByThreadId(
             ...(modelSelectionExplicit ? { modelSelectionExplicit: true } : {}),
           }
         : {}),
+      ...(draftCandidate.sciencePresetsManual ? { sciencePresetsManual: true } : {}),
       ...(runtimeMode ? { runtimeMode } : {}),
       ...(interactionMode ? { interactionMode } : {}),
       ...(scheduledSend ? { scheduledSend } : {}),
@@ -2184,6 +2190,7 @@ export function partializeComposerDraftStoreState(
       draft.threadContexts.length === 0 &&
       draft.environmentContexts.length === 0 &&
       !hasModelData &&
+      !draft.sciencePresetsManual &&
       draft.runtimeMode === null &&
       draft.interactionMode === null
     ) {
@@ -2253,6 +2260,7 @@ export function partializeComposerDraftStoreState(
             ...(draft.modelSelectionExplicit ? { modelSelectionExplicit: true } : {}),
           }
         : {}),
+      ...(draft.sciencePresetsManual ? { sciencePresetsManual: true } : {}),
       ...(draft.runtimeMode ? { runtimeMode: draft.runtimeMode } : {}),
       ...(draft.interactionMode ? { interactionMode: draft.interactionMode } : {}),
       ...(draft.scheduledSend ? { scheduledSend: { ...draft.scheduledSend } } : {}),
@@ -2526,6 +2534,7 @@ function toHydratedThreadDraft(
     modelSelectionByProvider,
     activeProvider,
     ...(persistedDraft.modelSelectionExplicit ? { modelSelectionExplicit: true } : {}),
+    ...(persistedDraft.sciencePresetsManual ? { sciencePresetsManual: true } : {}),
     runtimeMode: persistedDraft.runtimeMode ?? null,
     interactionMode: persistedDraft.interactionMode ?? null,
     scheduledSend: persistedDraft.scheduledSend ? { ...persistedDraft.scheduledSend } : null,
@@ -3119,7 +3128,9 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             if (
               Equal.equals(base.modelSelectionByProvider, nextMap) &&
               base.activeProvider === nextActiveProvider &&
-              (base.modelSelectionExplicit ?? false) === (opts?.explicit === true)
+              (base.modelSelectionExplicit ?? false) === (opts?.explicit === true) &&
+              (opts?.sciencePreset === undefined ||
+                base.sciencePresetsManual === !opts.sciencePreset)
             ) {
               return state;
             }
@@ -3128,6 +3139,9 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               ...restBase,
               modelSelectionByProvider: nextMap,
               activeProvider: nextActiveProvider,
+              ...(opts?.sciencePreset !== undefined
+                ? { sciencePresetsManual: !opts.sciencePreset }
+                : {}),
               ...(opts?.explicit === true ? { modelSelectionExplicit: true as const } : {}),
             };
             const nextDraftsByThreadKey = { ...state.draftsByThreadKey };

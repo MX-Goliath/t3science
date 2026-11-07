@@ -30,7 +30,6 @@ export function LabsSettingsPanel() {
         <LinkedEnvironmentsRow />
         <SimlockHostsRow />
       </SettingsSection>
-      <ScienceFeaturesSection />
       <LegacyFeaturesSection />
     </SettingsPageContainer>
   );
@@ -246,73 +245,5 @@ function SimlockHostsRow() {
         />
       }
     />
-  );
-}
-
-function ScienceFeaturesSection() {
-  const settings = useScopedSettings();
-  const updateSettings = useUpdateScopedSettings();
-  return (
-    <SettingsSection title="Science" id="science">
-      <SettingsRow
-        {...searchableSetting("scienceComposer")}
-        description="Use Science model, reasoning, speed and permission controls."
-        control={
-          <Switch
-            checked={settings.scienceComposer}
-            onCheckedChange={(checked) => updateSettings({ scienceComposer: Boolean(checked) })}
-            aria-label="Science composer"
-          />
-        }
-      />
-      <SettingsRow
-        {...searchableSetting("scienceQueue")}
-        description="Show the expanded queue above the composer with message reordering."
-        control={
-          <Switch
-            checked={settings.scienceQueue}
-            onCheckedChange={(checked) => updateSettings({ scienceQueue: Boolean(checked) })}
-            aria-label="Science queue"
-          />
-        }
-      />
-      <SettingsRow
-        {...searchableSetting("scienceWorkPanels")}
-        description="Show task progress and background work above the composer."
-        control={
-          <Switch
-            checked={settings.scienceWorkPanels}
-            onCheckedChange={(checked) => updateSettings({ scienceWorkPanels: Boolean(checked) })}
-            aria-label="Science work panels"
-          />
-        }
-      />
-      <SettingsRow
-        {...searchableSetting("scienceScheduledSend")}
-        description="Schedule messages for a time or after an agent finishes."
-        control={
-          <Switch
-            checked={settings.scienceScheduledSend}
-            onCheckedChange={(checked) =>
-              updateSettings({ scienceScheduledSend: Boolean(checked) })
-            }
-            aria-label="Scheduled sends"
-          />
-        }
-      />
-      <SettingsRow
-        {...searchableSetting("scienceAttachmentPinning")}
-        description="Keep selected attachments for repeated messages."
-        control={
-          <Switch
-            checked={settings.scienceAttachmentPinning}
-            onCheckedChange={(checked) =>
-              updateSettings({ scienceAttachmentPinning: Boolean(checked) })
-            }
-            aria-label="Pinned attachments"
-          />
-        }
-      />
-    </SettingsSection>
   );
 }

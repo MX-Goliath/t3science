@@ -49,6 +49,7 @@ import { useComposerMenuState } from "./useComposerMenuState";
 import { EffortGlyph, resolveEffortGlyph } from "./ScienceEffortGlyph";
 import { ReasoningSettingsCard, type ModelResetAction } from "./ReasoningSettingsCard";
 import reasoningStyles from "./ReasoningSettingsCard.module.css";
+import { getReasoningAppearance } from "./reasoningAppearance";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -355,6 +356,8 @@ interface TraitsMenuContentProps {
   extraMenuHint?: string;
   onOpenModelPicker?: () => void;
   modelReset?: ModelResetAction;
+  customReasoningContent?: ReactNode;
+  customTriggerLabel?: string;
 }
 
 export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
@@ -435,6 +438,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     ? (selectDescriptors.find((descriptor) => descriptor.id === "serviceTier") ??
       booleanDescriptors.find((descriptor) => descriptor.id === "fastMode"))
     : undefined;
+  const reasoningAppearance = getReasoningAppearance(descriptors);
   const reasoningValue = reasoningDescriptor
     ? ultrathinkPromptControlled && reasoningDescriptor.id === primarySelectDescriptor?.id
       ? "ultrathink"
@@ -521,6 +525,8 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
         <ReasoningSettingsCard
           effort={reasoningDescriptor}
           value={reasoningValue}
+          ultra={reasoningAppearance.ultra}
+          {...(reasoningAppearance.label ? { valueLabel: reasoningAppearance.label } : {})}
           speed={speedDescriptor ?? null}
           speedValue={getProviderOptionCurrentValue(
             speedDescriptor,
@@ -669,6 +675,8 @@ export const TraitsPicker = memo(function TraitsPicker({
   extraMenuHint,
   onOpenModelPicker,
   modelReset,
+  customReasoningContent,
+  customTriggerLabel,
   size = "sm",
   hidden = false,
   disabled = false,
@@ -680,8 +688,8 @@ export const TraitsPicker = memo(function TraitsPicker({
     size?: ComposerControlSize;
     hidden?: boolean;
     disabled?: boolean;
-    open?: boolean;
-    onOpenChange?: (open: boolean) => void;
+    open?: boolean | undefined;
+    onOpenChange?: ((open: boolean) => void) | undefined;
   }) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const [localMenuOpen, setLocalMenuOpen] = useComposerMenuState(hidden || disabled);
@@ -704,6 +712,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       ...(descriptorIds ? { descriptorIds } : {}),
     });
   if (
+    !customReasoningContent &&
     !shouldRenderTraitsControls({
       provider,
       models,
@@ -719,7 +728,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   }
 
   const {
-    label: triggerLabel,
+    label: traitsLabel,
     speedLabel,
     otherLabels,
   } = buildTraitsTriggerDisplay({
@@ -730,6 +739,7 @@ export const TraitsPicker = memo(function TraitsPicker({
     modelSelection: instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null,
     reportedModelSelection,
   });
+  const triggerLabel = customTriggerLabel ?? traitsLabel;
   const isCodexStyle = provider === "codex";
   const effortValue = ultrathinkPromptControlled
     ? "ultrathink"
@@ -738,16 +748,21 @@ export const TraitsPicker = memo(function TraitsPicker({
         instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null,
         reportedModelSelection,
       );
-  const effortLabelClassName =
-    primarySelectDescriptor && isReasoningSelect(primarySelectDescriptor) && effortValue === "ultra"
-      ? reasoningStyles.ultraLabel
-      : undefined;
+  const effortLabelClassName = getReasoningAppearance(visibleDescriptors).ultra
+    ? reasoningStyles.ultraLabel
+    : undefined;
   // In the composer the glyph has no word, so the tooltip and label name the control.
-  const triggerDescription = isComposerOwned
-    ? [`Effort: ${triggerLabel}`, speedLabel, extraMenuHint].filter(Boolean).join(" · ")
-    : triggerLabel;
+  const triggerDescription =
+    customReasoningContent && !triggerLabel
+      ? "Model settings"
+      : isComposerOwned
+        ? [`Effort: ${triggerLabel}`, speedLabel, extraMenuHint].filter(Boolean).join(" · ")
+        : triggerLabel;
   const effortGlyph =
-    isComposerOwned && primarySelectDescriptor && isReasoningSelect(primarySelectDescriptor)
+    !customReasoningContent &&
+    isComposerOwned &&
+    primarySelectDescriptor &&
+    isReasoningSelect(primarySelectDescriptor)
       ? resolveEffortGlyph(primarySelectDescriptor, effortValue)
       : null;
   // Workflow levels such as Ultracode always show their name; the setting names every level.
@@ -867,7 +882,7 @@ export const TraitsPicker = memo(function TraitsPicker({
                   // A label, so icon-only footers drop it; compacted rows drop it before the model.
                   data-composer-control-label
                   data-composer-secondary-trait
-                  className="max-w-24 truncate text-xs"
+                  className={cn("max-w-24 truncate text-xs", effortLabelClassName)}
                 >
                   {otherLabels.join(" · ")}
                 </span>
@@ -883,6 +898,7 @@ export const TraitsPicker = memo(function TraitsPicker({
                 data-composer-control-compact-icon
                 className="invisible absolute size-3.5"
               />
+              {speedIcon}
             </>
           ) : isCodexStyle ? (
             <span
@@ -930,47 +946,49 @@ export const TraitsPicker = memo(function TraitsPicker({
             }
           : {})}
       >
-        <TraitsMenuContent
-          provider={provider}
-          {...(instanceId ? { instanceId } : {})}
-          models={models}
-          model={model}
-          promptUltrathink={promptUltrathink}
-          {...(onPromptEdit ? { onPromptEdit } : {})}
-          modelOptions={modelOptions}
-          reportedModelSelection={reportedModelSelection}
-          allowPromptInjectedEffort={allowPromptInjectedEffort}
-          planModeEnabled={planModeEnabled}
-          {...(isComposerOwned ? { isComposerOwned } : {})}
-          {...(modelReset ? { modelReset } : {})}
-          {...(onOpenModelPicker
-            ? {
-                onOpenModelPicker: () => {
-                  openingModelPickerRef.current = true;
-                  const openPicker = () => {
-                    setIsMenuOpen(false);
-                    onOpenModelPicker();
-                  };
-                  if (
-                    !isComposerOwned ||
-                    !document.startViewTransition ||
-                    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-                  ) {
-                    openPicker();
-                    return;
-                  }
-                  void document
-                    .startViewTransition({
-                      types: ["composer-model-picker"],
-                      update: () => flushSync(openPicker),
-                    })
-                    .finished.catch(() => {});
-                },
-              }
-            : {})}
-          {...(descriptorIds ? { descriptorIds } : {})}
-          {...persistence}
-        />
+        {customReasoningContent ?? (
+          <TraitsMenuContent
+            provider={provider}
+            {...(instanceId ? { instanceId } : {})}
+            models={models}
+            model={model}
+            promptUltrathink={promptUltrathink}
+            {...(onPromptEdit ? { onPromptEdit } : {})}
+            modelOptions={modelOptions}
+            reportedModelSelection={reportedModelSelection}
+            allowPromptInjectedEffort={allowPromptInjectedEffort}
+            planModeEnabled={planModeEnabled}
+            {...(isComposerOwned ? { isComposerOwned } : {})}
+            {...(modelReset ? { modelReset } : {})}
+            {...(onOpenModelPicker
+              ? {
+                  onOpenModelPicker: () => {
+                    openingModelPickerRef.current = true;
+                    const openPicker = () => {
+                      setIsMenuOpen(false);
+                      onOpenModelPicker();
+                    };
+                    if (
+                      !isComposerOwned ||
+                      !document.startViewTransition ||
+                      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                    ) {
+                      openPicker();
+                      return;
+                    }
+                    void document
+                      .startViewTransition({
+                        types: ["composer-model-picker"],
+                        update: () => flushSync(openPicker),
+                      })
+                      .finished.catch(() => {});
+                  },
+                }
+              : {})}
+            {...(descriptorIds ? { descriptorIds } : {})}
+            {...persistence}
+          />
+        )}
         {extraMenuContent ? (
           <>
             <MenuDivider />

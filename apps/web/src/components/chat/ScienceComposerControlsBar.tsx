@@ -1,3 +1,7 @@
+import { useComposerDraftStore } from "../../composerDraftStore";
+import { scienceModelEffortLabel } from "./scienceModelPresets";
+import { TraitsPicker } from "./ScienceTraitsPicker";
+import { ScienceModelPresetsCard, ScienceManualModelCard } from "./ScienceModelPresetsCard";
 import type { ChatComposerProps } from "./ChatComposer";
 import { hasSelectableReasoningLevels, type PromptUltrathink } from "./ScienceTraitsPicker";
 import { useComposerMenuState } from "./useComposerMenuState";
@@ -21,7 +25,7 @@ import {
   type RuntimeMode,
   type ServerProvider,
 } from "@t3tools/contracts";
-import type { EffortDisplay } from "@t3tools/contracts/settings";
+import type { ScienceModelPreset, EffortDisplay } from "@t3tools/contracts/settings";
 import { cn } from "~/lib/utils";
 import {
   renderProviderTraitsMenuContent,
@@ -40,6 +44,8 @@ const TEXT_CONTROL_STATES =
 
 export function ComposerControlsBar(props: {
   environmentId: EnvironmentId;
+  scienceModelPresets?: readonly ScienceModelPreset[];
+  sciencePresetsManual?: boolean;
   routeKind: ChatComposerProps["routeKind"];
   routeThreadRef: ChatComposerProps["routeThreadRef"];
   draftId: ChatComposerProps["draftId"];
@@ -136,19 +142,11 @@ export function ComposerControlsBar(props: {
     modelPickerIconClassName,
     getModelDisabledReason,
   } = props;
-  const hasReasoningLevels =
-    (routeKind === "server" || !!draftId) &&
-    hasSelectableReasoningLevels({
-      provider: selectedProvider,
-      model: selectedModel,
-      models: selectedProviderModels,
-      modelOptions: composerModelOptions?.[selectedInstanceId],
-      planModeEnabled,
-      ...(selectedProvider === "opencode" ? { descriptorIds: ["variant"] } : {}),
-    });
-  const [effortMenuOpen, setEffortMenuOpen] = useComposerMenuState(
-    composerControlsHidden || !hasReasoningLevels || modelPickerOpen,
-  );
+  const presets = props.scienceModelPresets ?? [];
+  const presetsEnabled = presets.length === 6;
+  const presetsActive = presetsEnabled && !props.sciencePresetsManual && !multipleModelSelections;
+  const modelLabel =
+    selectedProviderModels.find((model) => model.slug === selectedModel)?.name ?? selectedModel;
   const providerTraitsMenuContent = renderProviderTraitsMenuContent({
     provider: selectedProvider,
     instanceId: selectedInstanceId,
@@ -162,6 +160,81 @@ export function ComposerControlsBar(props: {
     onPromptEdit,
     planModeEnabled,
   });
+  const customReasoningContent = presetsActive ? (
+    <ScienceModelPresetsCard
+      presets={presets}
+      selection={selectedModelSelection}
+      entries={providerInstanceEntries}
+      models={modelOptionsByInstance}
+      modelLabel={modelLabel}
+      disabled={providerCatalogPending || isSendBusy}
+      disabledReason={getModelDisabledReason}
+      onSelect={(selection) => {
+        onPromptEdit((prompt) => prompt.replace(/^Ultrathink:\s*/i, ""));
+        onMultipleModelSelectionsChange(null);
+        onProviderModelSelect(selection.instanceId, selection.model, {
+          sciencePreset: selection,
+          focusComposer: false,
+        });
+      }}
+      onOpenModelPicker={() => onModelPickerOpenChange(true)}
+      modelReset={props.modelReset}
+      onModelOptionsChange={(options) => {
+        useComposerDraftStore
+          .getState()
+          .setProviderModelOptions(
+            routeKind === "draft" && draftId ? draftId : routeThreadRef,
+            selectedProvider,
+            options,
+            { instanceId: selectedInstanceId, model: selectedModel, persistSticky: true },
+          );
+      }}
+    />
+  ) : presetsEnabled &&
+    !hasSelectableReasoningLevels({
+      provider: selectedProvider,
+      models: selectedProviderModels,
+      model: selectedModel,
+      modelOptions: composerModelOptions?.[selectedInstanceId],
+      planModeEnabled,
+    }) ? (
+    <>
+      <ScienceManualModelCard
+        modelLabel={modelLabel}
+        modelReset={props.modelReset}
+        onOpenModelPicker={() => onModelPickerOpenChange(true)}
+      />
+      {providerTraitsMenuContent}
+    </>
+  ) : undefined;
+  const renderTraitsPicker = (input: Parameters<typeof renderProviderTraitsPicker>[0]) =>
+    customReasoningContent ? (
+      <TraitsPicker
+        {...input}
+        customReasoningContent={customReasoningContent}
+        customTriggerLabel={
+          presetsActive
+            ? (scienceModelEffortLabel(selectedModelSelection, providerInstanceEntries) ?? "")
+            : "Model"
+        }
+      />
+    ) : (
+      renderProviderTraitsPicker(input)
+    );
+  const hasReasoningLevels =
+    Boolean(customReasoningContent) ||
+    ((routeKind === "server" || !!draftId) &&
+      hasSelectableReasoningLevels({
+        provider: selectedProvider,
+        model: selectedModel,
+        models: selectedProviderModels,
+        modelOptions: composerModelOptions?.[selectedInstanceId],
+        planModeEnabled,
+        ...(selectedProvider === "opencode" ? { descriptorIds: ["variant"] } : {}),
+      }));
+  const [effortMenuOpen, setEffortMenuOpen] = useComposerMenuState(
+    composerControlsHidden || !hasReasoningLevels || modelPickerOpen,
+  );
   const accessMatchesDefault = compatibleRuntimeMode === defaultRuntimeMode;
   const providerTraitsPickerInput = {
     provider: selectedProvider,
@@ -189,7 +262,7 @@ export function ComposerControlsBar(props: {
       />
     ),
   } satisfies Parameters<typeof renderProviderTraitsPicker>[0];
-  const providerTraitsPicker = renderProviderTraitsPicker(providerTraitsPickerInput);
+  const providerTraitsPicker = renderTraitsPicker(providerTraitsPickerInput);
   const {
     accessDisplay,
     showModeBlock,
@@ -205,7 +278,7 @@ export function ComposerControlsBar(props: {
     collapsed: composerControlsCollapsed,
     measuredHiddenBlockCount,
   });
-  const restingProviderTraitsPicker = renderProviderTraitsPicker({
+  const restingProviderTraitsPicker = renderTraitsPicker({
     ...providerTraitsPickerInput,
     size: composerControlsCollapsed ? "xs" : "sm",
     hidden: composerControlsHidden || (traitsBlockHidden && !effortMenuOpen),
@@ -358,7 +431,9 @@ export function ComposerControlsBar(props: {
             hidden={composerControlsHidden || hiddenRestingBlockIds.length === 0}
             showInteractionModeToggle={planModeUiEnabled && hiddenRestingBlockIds.includes("mode")}
             traitsMenuContent={
-              hiddenRestingBlockIds.includes("traits") ? providerTraitsMenuContent : undefined
+              hiddenRestingBlockIds.includes("traits")
+                ? (customReasoningContent ?? providerTraitsMenuContent)
+                : undefined
             }
             // Permissions join the overflow only when their normal home is in it.
             showPermissions={overflowShowsPermissions}

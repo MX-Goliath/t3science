@@ -135,7 +135,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
       });
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget, {
-        preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+        preservePinnedAttachments: getClientSettings().scienceComposer,
       });
       composerRef.current?.resetCursorState();
       clearedDraft = true;

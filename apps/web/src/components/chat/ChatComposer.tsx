@@ -1,3 +1,4 @@
+import { stepScienceModelPreset } from "./scienceModelPresets";
 import * as scienceProviderState from "./ScienceComposerProviderState";
 import { ComposerControlsBar as ScienceComposerControlsBar } from "./ScienceComposerControlsBar";
 import { ComposerFooterPrimaryActions as ScienceComposerFooterPrimaryActions } from "./ScienceComposerFooterControls";
@@ -525,7 +526,7 @@ export interface ChatComposerProps {
   onProviderModelSelect: (
     instanceId: ProviderInstanceId,
     model: string,
-    options?: { focusComposer?: boolean },
+    options?: { focusComposer?: boolean; sciencePreset?: ModelSelection },
   ) => void;
   onOpenProviderSetup: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null;
@@ -693,7 +694,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const attachmentDraftTarget = questionAttachmentTarget ?? composerDraftTarget;
   const attachmentDraft = useComposerThreadDraft(attachmentDraftTarget);
   const attachmentPinning: ComposerAttachmentPinning | undefined =
-    settings.scienceAttachmentPinning &&
+    settings.scienceComposer &&
     questionAttachmentTarget === null &&
     !isEditingQueuedMessage &&
     canOperateThread
@@ -760,15 +761,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     environmentId,
     new Set(
       [...inlineFileIdSet].filter(
-        (id) =>
-          !settings.scienceAttachmentPinning || !attachmentDraft.pinnedAttachmentIds?.includes(id),
+        (id) => !settings.scienceComposer || !attachmentDraft.pinnedAttachmentIds?.includes(id),
       ),
     ),
   );
   const composerTerminalContexts = composerDraft.terminalContexts;
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
   const composerReviewComments = composerDraft.reviewComments;
-  const scheduledSend = settings.scienceScheduledSend ? composerDraft.scheduledSend : null;
+  const scheduledSend = settings.scienceComposer ? composerDraft.scheduledSend : null;
   const composerThreadContexts = attachmentDraft.threadContexts;
   const composerEnvironmentContexts = composerDraft.environmentContexts;
   const {
@@ -2670,16 +2670,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     : composerControlsCollapsed
       ? 0
       : expandedControlsIconOnlyBlockCount;
-  const ComposerFooterPrimaryActions =
-    settings.scienceComposer || settings.scienceScheduledSend
-      ? ScienceComposerFooterPrimaryActions
-      : UpstreamComposerFooterPrimaryActions;
+  const ComposerFooterPrimaryActions = settings.scienceComposer
+    ? ScienceComposerFooterPrimaryActions
+    : UpstreamComposerFooterPrimaryActions;
   const ComposerControlsBar = settings.scienceComposer
     ? ScienceComposerControlsBar
     : UpstreamComposerControlsBar;
   const composerControls = (
     <ComposerControlsBar
       environmentId={environmentId}
+      {...(settings.scienceComposer && settings.scienceModelPresetsEnabled
+        ? {
+            scienceModelPresets: settings.scienceModelPresets,
+            sciencePresetsManual: composerDraft.sciencePresetsManual === true,
+          }
+        : {})}
       routeKind={routeKind}
       routeThreadRef={routeThreadRef}
       draftId={draftId}
@@ -3243,6 +3248,29 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         if (noProviderAvailable || pendingUserInputs.length > 0 || isEditingQueuedMessage) {
           return;
         }
+        if (
+          settings.scienceComposer &&
+          settings.scienceModelPresetsEnabled &&
+          !composerDraft.sciencePresetsManual &&
+          !multipleModelSelections
+        ) {
+          const selection = stepScienceModelPreset({
+            presets: settings.scienceModelPresets,
+            selection: selectedModelSelection,
+            entries: providerInstanceEntries,
+            models: modelOptionsByInstance,
+            getModelDisabledReason,
+            direction,
+          });
+          if (selection) {
+            editPromptFromTraitsStable((prompt) => prompt.replace(/^Ultrathink:\s*/i, ""));
+            onProviderModelSelect(selection.instanceId, selection.model, {
+              sciencePreset: selection,
+              focusComposer: false,
+            });
+          }
+          return;
+        }
         const change = (
           settings.scienceComposer
             ? scienceProviderState.getComposerReasoningStep
@@ -3572,7 +3600,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       {...threadContextDropTargetProps()}
     >
       <ScheduleSendDialog
-        open={settings.scienceScheduledSend && scheduleDialogOpen}
+        open={settings.scienceComposer && scheduleDialogOpen}
         onOpenChange={setScheduleDialogOpen}
         onSchedule={(scheduledAt) => scheduleCurrentMessage({ scheduledAt, source: "custom" })}
       />
@@ -3860,7 +3888,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       scheduledSendLabel={scheduledSendLabel}
                       onScheduledSendClick={handleScheduledSendClick}
                       onSendContextMenu={
-                        settings.scienceScheduledSend ? handleSendContextMenu : undefined
+                        settings.scienceComposer ? handleSendContextMenu : undefined
                       }
                     />
                   </div>
@@ -3974,9 +4002,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     scheduledSend={scheduledSend}
                     scheduledSendLabel={scheduledSendLabel}
                     onScheduledSendClick={handleScheduledSendClick}
-                    onSendContextMenu={
-                      settings.scienceScheduledSend ? handleSendContextMenu : undefined
-                    }
+                    onSendContextMenu={settings.scienceComposer ? handleSendContextMenu : undefined}
                     compactBeforeSendTokens={props.resumeCompactionTokens}
                     keepFullHistory={props.keepFullHistory}
                     onToggleKeepFullHistory={props.onToggleKeepFullHistory}

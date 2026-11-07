@@ -92,8 +92,6 @@ const isThreadProject = Schema.is(ThreadProject);
 
 export interface Preferences {
   readonly scienceComposer?: boolean;
-  readonly scienceQueue?: boolean;
-  readonly scienceScheduledSend?: boolean;
   readonly imagesEnabled?: boolean;
   readonly webChatProvider?: WebChatProvider;
   readonly navigationTabOrder?: readonly string[];
@@ -184,8 +182,6 @@ const isToolCallVisibility = Schema.is(ToolCallVisibility);
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
     scienceComposer?: boolean;
-    scienceQueue?: boolean;
-    scienceScheduledSend?: boolean;
     imagesEnabled?: boolean;
     webChatProvider?: WebChatProvider;
     navigationTabOrder?: readonly string[];
@@ -227,8 +223,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     workspaceSelections?: WorkspaceSelections;
   } = {};
 
-  for (const key of ["scienceComposer", "scienceQueue", "scienceScheduledSend"] as const) {
-    if (typeof parsed[key] === "boolean") preferences[key] = parsed[key];
+  if (typeof parsed.scienceComposer === "boolean") {
+    preferences.scienceComposer = parsed.scienceComposer;
   }
   if (typeof parsed.imagesEnabled === "boolean") {
     preferences.imagesEnabled = parsed.imagesEnabled;

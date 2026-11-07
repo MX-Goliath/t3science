@@ -543,10 +543,7 @@ it.each([
   "generalChatsEnabled",
   "imagesEnabled",
   "scienceComposer",
-  "scienceQueue",
-  "scienceWorkPanels",
-  "scienceScheduledSend",
-  "scienceAttachmentPinning",
+  "scienceModelPresetsEnabled",
 ] as const)("defaults %s off and preserves an explicit opt-in", (key) => {
   expect(decodeClientSettings({})[key]).toBe(false);
   expect(decodeClientSettings({ [key]: true })[key]).toBe(true);
@@ -585,5 +582,46 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
       model: "gpt-6-luna",
       options: [{ id: "reasoningEffort", value: "low" }],
     });
+  });
+});
+
+describe("Science model presets", () => {
+  it("defaults to six unconfigured slots and round-trips different providers and options", () => {
+    const defaults = decodeClientSettings({});
+    expect(defaults.scienceModelPresets).toHaveLength(6);
+    expect(defaults.scienceModelPresets.every((preset) => preset.modelSelection === null)).toBe(
+      true,
+    );
+    const scienceModelPresets = defaults.scienceModelPresets.map((preset, index) => ({
+      ...preset,
+      modelSelection: {
+        instanceId: ProviderInstanceId.make(index % 2 === 0 ? "codex" : "claudeCode"),
+        model: index % 2 === 0 ? "test-codex-model" : "test-claude-model",
+        options: [
+          { id: index % 2 === 0 ? "reasoningEffort" : "effort", value: index < 3 ? "low" : "high" },
+        ],
+      },
+    }));
+    expect(
+      decodeClientSettings({
+        scienceModelPresets: scienceModelPresets.map((preset) => ({
+          ...preset,
+          label: "Balanced",
+        })),
+      }).scienceModelPresets,
+    ).toEqual(scienceModelPresets);
+    const patch = { scienceModelPresetsEnabled: true, scienceModelPresets };
+    expect(decodeClientSettingsPatch(patch)).toEqual(patch);
+    expect(
+      decodeClientSettings(encodeClientSettings({ ...defaults, ...patch })).scienceModelPresets,
+    ).toEqual(scienceModelPresets);
+    expect(() =>
+      decodeClientSettingsPatch({ scienceModelPresets: scienceModelPresets.slice(1) }),
+    ).toThrow();
+    expect(() =>
+      decodeClientSettingsPatch({
+        scienceModelPresets: [...scienceModelPresets, scienceModelPresets[0]],
+      }),
+    ).toThrow();
   });
 });

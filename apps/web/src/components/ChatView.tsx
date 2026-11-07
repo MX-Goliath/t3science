@@ -2639,7 +2639,7 @@ export default function ChatView(props: ChatViewProps) {
         })
       : null;
   const queuedAgentMessageBannerItem = ((): ComposerBannerStackItem | null => {
-    if (!settings.scienceScheduledSend || scheduledSend?.source !== "agent-completion") {
+    if (!settings.scienceComposer || scheduledSend?.source !== "agent-completion") {
       return null;
     }
     const waitingForAgent = scheduledSend.waitingForAgent;
@@ -3148,7 +3148,7 @@ export default function ChatView(props: ChatViewProps) {
       .some((id) => id !== "" && !previousIds.has(id));
     if (hasNewMessage && timelineLiveFollowEnabled) scrollToEnd(true);
   }, [routeThreadKey, pendingGuestMessageKey, timelineLiveFollowEnabled, scrollToEnd]);
-  const QueuedRuns = settings.scienceQueue ? ScienceQueuedRunsControl : QueuedRunsControl;
+  const QueuedRuns = settings.scienceComposer ? ScienceQueuedRunsControl : QueuedRunsControl;
   const queuedRunsControl =
     isServerThread && activeThread ? (
       <>
@@ -3224,7 +3224,7 @@ export default function ChatView(props: ChatViewProps) {
   const hasThreadNow =
     attentionNow !== null ||
     workNow !== null ||
-    (!settings.scienceWorkPanels && backgroundWorkNow !== null) ||
+    (!settings.scienceComposer && backgroundWorkNow !== null) ||
     goalNow !== null ||
     shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
@@ -3244,7 +3244,7 @@ export default function ChatView(props: ChatViewProps) {
     !hasThreadNow &&
     threadStatusLine === null &&
     pendingGuestMessageCount === 0 &&
-    (settings.scienceQueue || !hasQueuedTurns) ? null : (
+    (settings.scienceComposer || !hasQueuedTurns) ? null : (
       <>
         {pendingHandoff === null ? null : (
           <div className="chat-content-lane">
@@ -3259,7 +3259,7 @@ export default function ChatView(props: ChatViewProps) {
         <ThreadNow
           key={routeThreadKey}
           attention={attentionNow}
-          work={workNow ?? (!settings.scienceWorkPanels ? backgroundWorkNow : null)}
+          work={workNow ?? (!settings.scienceComposer ? backgroundWorkNow : null)}
           syncPhase={shownThreadSyncPhase}
           goal={goalNow}
         />
@@ -3271,7 +3271,7 @@ export default function ChatView(props: ChatViewProps) {
             onFileOpen={openFileAttachmentStable}
           />
         ) : null}
-        {!settings.scienceQueue && hasQueuedTurns ? queuedRunsControl : null}
+        {!settings.scienceComposer && hasQueuedTurns ? queuedRunsControl : null}
       </>
     );
 
@@ -3795,14 +3795,16 @@ export default function ChatView(props: ChatViewProps) {
                                 permissionsShownInStrip={
                                   showComposerContextStrip && !isServerThread
                                 }
-                                queuedRunsControl={settings.scienceQueue ? queuedRunsControl : null}
+                                queuedRunsControl={
+                                  settings.scienceComposer ? queuedRunsControl : null
+                                }
                                 backgroundWorkControl={
-                                  settings.scienceWorkPanels && backgroundWorkBanner !== null ? (
+                                  settings.scienceComposer && backgroundWorkBanner !== null ? (
                                     <ComposerBannerStack items={[backgroundWorkBanner]} />
                                   ) : null
                                 }
                                 tasksControl={
-                                  settings.scienceWorkPanels &&
+                                  settings.scienceComposer &&
                                   shownThreadSyncPhase === null &&
                                   composerTasksPlan !== null ? (
                                     <ComposerTasksControl

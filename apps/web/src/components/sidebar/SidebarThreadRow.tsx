@@ -659,7 +659,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
-  const scheduledSendEnabled = useClientSettings((settings) => settings.scienceScheduledSend);
+  const scheduledSendEnabled = useClientSettings((settings) => settings.scienceComposer);
   const savedScheduledSend = useComposerDraftStore(
     (store) => store.getComposerDraft(threadRef)?.scheduledSend ?? null,
   );

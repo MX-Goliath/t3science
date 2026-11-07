@@ -699,7 +699,7 @@ export function useComposerSend(input: ComposerSendInput) {
         clearDraft: () => {
           promptRef.current = "";
           clearComposerDraftContent(composerDraftTarget, {
-            preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+            preservePinnedAttachments: getClientSettings().scienceComposer,
           });
           composerRef.current?.resetCursorState();
         },
@@ -774,7 +774,7 @@ export function useComposerSend(input: ComposerSendInput) {
       const followUpEnvironmentContexts = [...composerEnvironmentContexts];
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget, {
-        preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+        preservePinnedAttachments: getClientSettings().scienceComposer,
       });
       composerRef.current?.resetCursorState();
       const followUpSent = await submitPlanFollowUp({
@@ -835,7 +835,7 @@ export function useComposerSend(input: ComposerSendInput) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget, {
-        preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+        preservePinnedAttachments: getClientSettings().scienceComposer,
       });
       composerRef.current?.resetCursorState();
       return;
@@ -1150,7 +1150,7 @@ export function useComposerSend(input: ComposerSendInput) {
         ) {
           promptRef.current = "";
           clearComposerDraftContent(composerDraftTarget, {
-            preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+            preservePinnedAttachments: getClientSettings().scienceComposer,
           });
           composerRef.current?.resetCursorState();
         }
@@ -1292,7 +1292,7 @@ export function useComposerSend(input: ComposerSendInput) {
     if (sentDraftThreadRef) markPromotedDraftThreadByRef(sentDraftThreadRef);
     promptRef.current = "";
     clearComposerDraftContent(composerDraftTarget, {
-      preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+      preservePinnedAttachments: getClientSettings().scienceComposer,
     });
     composerRef.current?.resetCursorState();
 

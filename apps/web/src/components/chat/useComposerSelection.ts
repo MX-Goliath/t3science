@@ -153,7 +153,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
   const onProviderModelSelect = (
     instanceId: ProviderInstanceId,
     model: string,
-    options?: { focusComposer?: boolean },
+    options?: { focusComposer?: boolean; sciencePreset?: ModelSelection },
   ) => {
     if (!activeThread) return;
     const entry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
@@ -197,9 +197,12 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     const rememberedOptions =
       useComposerDraftStore.getState().stickyOptionsByModelByProvider[instanceId]?.[resolvedModel];
     const nextModelSelection: ModelSelection =
-      rememberedOptions !== undefined && rememberedOptions.length > 0
+      (options?.sciencePreset
+        ? { ...options.sciencePreset, options: options.sciencePreset.options ?? [] }
+        : undefined) ??
+      (rememberedOptions !== undefined && rememberedOptions.length > 0
         ? { instanceId, model: resolvedModel, options: [...rememberedOptions] }
-        : { instanceId, model: resolvedModel };
+        : { instanceId, model: resolvedModel });
     const modelChangeBlockReason = getStartedThreadModelChangeBlockReason({
       hasStartedSession: activeRuntime !== null,
       supportsProviderSwitchingViaHandoff,
@@ -219,13 +222,21 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     setComposerDraftModelSelection(
       scopeThreadRef(activeThread.environmentId, activeThread.id),
       nextModelSelection,
-      { explicit: true, replaceOptions: true },
+      {
+        explicit: true,
+        replaceOptions: true,
+        ...((settings.scienceComposer && settings.scienceModelPresetsEnabled) ||
+        options?.sciencePreset
+          ? { sciencePreset: Boolean(options?.sciencePreset) }
+          : {}),
+      },
     );
     setStickyComposerModelSelection(nextModelSelection);
     if (options?.focusComposer !== false) scheduleComposerFocus();
     return true;
   };
   const onProviderModelSelectStable = useStableCallback(onProviderModelSelect);
+  const presetsEnabled = settings.scienceComposer && settings.scienceModelPresetsEnabled;
   const defaultSelection =
     activeProjectSettings.settings.defaultModelSelection ??
     resolveProjectDefaultProviderModelSelection(
@@ -252,6 +263,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     if (!defaultSelection || !defaultModel || resetDisabledReason) return;
     const applied = onProviderModelSelect(defaultSelection.instanceId, defaultModel, {
       focusComposer: false,
+      ...(presetsEnabled ? { sciencePreset: { ...defaultSelection, model: defaultModel } } : {}),
     });
     if (!applied || !defaultProvider) return;
     const caps = getProviderModelCapabilities(

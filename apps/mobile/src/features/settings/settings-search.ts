@@ -107,6 +107,7 @@ const SETTINGS_SEARCH_TERMS = {
     "submodules",
     "start from remote",
   ],
+  SettingsScience: ["science", "composer", "queue", "scheduled sends"],
   SettingsLabs: [
     "legacy",
     "plan mode",

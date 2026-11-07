@@ -579,8 +579,7 @@ async function preserveUploadedAttachmentsForEditor(
 const deliveryInputsAtom = Atom.make((get) => {
   const sciencePreferences = get(mobilePreferencesAtom);
   const scheduledSendEnabled =
-    AsyncResult.isSuccess(sciencePreferences) &&
-    sciencePreferences.value.scienceScheduledSend === true;
+    AsyncResult.isSuccess(sciencePreferences) && sciencePreferences.value.scienceComposer === true;
   const connectedEnvironments = get(workspaceConnections.environmentsAtom);
   const operableEnvironments = new Set<EnvironmentId>();
   for (const { environmentId } of connectedEnvironments) {

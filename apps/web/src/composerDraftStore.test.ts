@@ -1663,6 +1663,33 @@ describe("composerDraftStore modelSelection", () => {
     expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toBeUndefined();
   });
 
+  it("keeps manual Science mode after a model echo, sending and reload, isolated by chat", () => {
+    const h = modelReconciliationHarness(TEST_ENVIRONMENT_ID, threadId, "cached");
+    const store = useComposerDraftStore.getState();
+    const pick = h.model();
+    store.setModelSelection(threadRef, pick, { explicit: true, sciencePreset: false });
+    h.flush();
+    h.setStatus("live");
+    expect(store.getComposerDraft(threadRef)?.sciencePresetsManual).toBe(true);
+    expect(store.getComposerDraft(threadRef)?.activeProvider).toBeNull();
+    store.clearComposerContent(threadRef);
+    const merge = useComposerDraftStore.persist.getOptions().merge!;
+    const hydrated = merge(
+      JSON.parse(
+        JSON.stringify(partializeComposerDraftStoreState(useComposerDraftStore.getState())),
+      ),
+      useComposerDraftStore.getInitialState(),
+    );
+    useComposerDraftStore.setState(hydrated);
+    expect(store.getComposerDraft(threadRef)?.sciencePresetsManual).toBe(true);
+    expect(
+      store.getComposerDraft(scopeThreadRef(OTHER_TEST_ENVIRONMENT_ID, threadId))
+        ?.sciencePresetsManual,
+    ).toBeUndefined();
+    store.setModelSelection(threadRef, pick, { explicit: true, sciencePreset: true });
+    expect(store.getComposerDraft(threadRef)?.sciencePresetsManual).not.toBe(true);
+  });
+
   it("releases an inactive thread pick only after its queued model becomes durable", () => {
     const store = useComposerDraftStore.getState();
     const pick = modelSelection(CODEX_DRIVER, "gpt-5.5", { fastMode: false });

@@ -1,5 +1,5 @@
 import { ThreadQueueSheet as ScienceThreadQueueSheet } from "./ScienceThreadQueueControl";
-import { useScienceFeature } from "../../state/scienceFeatures";
+import { useScienceEnabled } from "../../state/scienceFeatures";
 import { type StaticScreenProps, useNavigation } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -468,6 +468,6 @@ function QueueAttachmentThumbnail(props: {
 }
 
 export function ThreadQueueSheet(props: Parameters<typeof UpstreamThreadQueueSheet>[0]) {
-  const enabled = useScienceFeature("scienceQueue");
+  const enabled = useScienceEnabled();
   return enabled ? <ScienceThreadQueueSheet {...props} /> : <UpstreamThreadQueueSheet {...props} />;
 }

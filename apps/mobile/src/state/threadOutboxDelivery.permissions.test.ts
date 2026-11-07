@@ -14,7 +14,7 @@ import type { QueuedThreadMessage } from "./thread-outbox-model";
 
 const state = vi.hoisted(() => ({
   preferences: null as unknown as Atom.Writable<
-    AsyncResult.AsyncResult<{ scienceScheduledSend: boolean }>
+    AsyncResult.AsyncResult<{ scienceComposer: boolean }>
   >,
   draftText: "Keep this draft separate",
   cleanups: [] as Array<() => void>,
@@ -50,8 +50,8 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("./preferences", async () => {
   const { Atom, AsyncResult } = await import("effect/reactivity");
-  state.preferences = Atom.make<AsyncResult.AsyncResult<{ scienceScheduledSend: boolean }>>(
-    AsyncResult.success({ scienceScheduledSend: true }),
+  state.preferences = Atom.make<AsyncResult.AsyncResult<{ scienceComposer: boolean }>>(
+    AsyncResult.success({ scienceComposer: true }),
   ).pipe(Atom.keepAlive);
   return { mobilePreferencesAtom: state.preferences };
 });
@@ -353,11 +353,11 @@ describe("queued task operation access", () => {
       await runDrain();
       expect(state.start).toHaveBeenCalledOnce();
       expect(remaining()).toEqual([scheduled]);
-      appAtomRegistry.set(state.preferences, AsyncResult.success({ scienceScheduledSend: false }));
+      appAtomRegistry.set(state.preferences, AsyncResult.success({ scienceComposer: false }));
       await vi.advanceTimersByTimeAsync(60_000);
       expect(state.start).toHaveBeenCalledOnce();
       expect(remaining()).toEqual([scheduled]);
-      appAtomRegistry.set(state.preferences, AsyncResult.success({ scienceScheduledSend: true }));
+      appAtomRegistry.set(state.preferences, AsyncResult.success({ scienceComposer: true }));
       expect(state.start).toHaveBeenCalledOnce();
       const delivered = Promise.withResolvers<void>();
       const release = appAtomRegistry.subscribe(dispatchingQueuedMessageIdAtom, (id) => {

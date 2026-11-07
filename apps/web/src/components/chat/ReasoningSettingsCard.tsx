@@ -17,10 +17,15 @@ export interface ModelResetAction {
 export function ReasoningSettingsCard(props: {
   effort: SelectDescriptor;
   value: string | null;
+  valueLabel?: string;
+  hasSelection?: boolean;
+  ultra?: boolean;
   speed: ProviderOptionDescriptor | null;
   speedValue: string | boolean | undefined;
   modelLabel: string;
   effortDisabled: boolean;
+  selectionDisabled?: boolean;
+  optionDisabledReasons?: readonly (string | null)[];
   onEffortChange: (value: string) => void;
   onSpeedChange: (value: string | boolean) => void;
   onReset: () => void;
@@ -34,8 +39,9 @@ export function ReasoningSettingsCard(props: {
     selectedIndex < 0 ? choices.findIndex((option) => option.isDefault) : selectedIndex,
   );
   const progress = choices.length > 1 ? index / (choices.length - 1) : 0;
-  const label = selectedIndex < 0 ? (props.value ?? "Default") : choices[index]!.label;
-  const ultra = props.value === "ultra";
+  const optionLabel = selectedIndex < 0 ? (props.value ?? "Default") : choices[index]!.label;
+  const label = props.valueLabel ?? optionLabel;
+  const ultra = props.ultra ?? props.value === "ultra";
   const speedChoices =
     props.speed?.type === "select"
       ? props.speed.options.map((option) => ({ value: option.id, label: option.label }))
@@ -88,17 +94,19 @@ export function ReasoningSettingsCard(props: {
           <span />
         )}
         <div className="grid min-w-0 justify-items-center gap-0.5 pb-3 pt-0.5">
-          <span
-            key={label}
-            className={cn(
-              styles.label,
-              styles.effort,
-              "max-w-full truncate text-base font-medium leading-5",
-            )}
-            aria-live="polite"
-          >
-            {label}
-          </span>
+          {label ? (
+            <span
+              key={label}
+              className={cn(
+                styles.label,
+                styles.effort,
+                "max-w-full truncate text-base font-medium leading-5",
+              )}
+              aria-live="polite"
+            >
+              {label}
+            </span>
+          ) : null}
           {props.onOpenModelPicker ? (
             <button
               type="button"
@@ -143,7 +151,12 @@ export function ReasoningSettingsCard(props: {
           props.effortDisabled && "opacity-50",
         )}
       >
-        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 overflow-hidden rounded-full",
+            props.hasSelection === false && "invisible",
+          )}
+        >
           <div
             className={cn(styles.fill, "h-full")}
             style={{ width: `calc(${progress * 100}% + ${12 - 24 * progress}px)` }}
@@ -161,12 +174,17 @@ export function ReasoningSettingsCard(props: {
               key={option.id}
               className={cn(
                 "size-1 rounded-full transition-colors duration-150 motion-reduce:transition-none",
-                tick <= index ? "bg-white/45" : "bg-foreground/25",
+                props.hasSelection !== false && tick <= index ? "bg-white/45" : "bg-foreground/25",
               )}
             />
           ))}
         </div>
-        <div className="pointer-events-none absolute inset-y-0 inset-x-3">
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-y-0 inset-x-3",
+            props.hasSelection === false && "invisible",
+          )}
+        >
           <span
             className={cn(
               styles.thumb,
@@ -182,14 +200,34 @@ export function ReasoningSettingsCard(props: {
             "absolute inset-0 m-0 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed",
           )}
           aria-label={props.effort.label}
-          aria-valuetext={label}
+          aria-valuetext={optionLabel}
           min={0}
           max={Math.max(0, choices.length - 1)}
           step={1}
           value={index}
-          disabled={props.effortDisabled || choices.length < 2}
+          disabled={props.effortDisabled || props.selectionDisabled || choices.length < 2}
           onKeyDown={(event) => {
             // Let the range handle its arrow keys instead of the surrounding menu.
+            if (
+              props.optionDisabledReasons &&
+              ["ArrowLeft", "ArrowDown", "ArrowRight", "ArrowUp", "Home", "End"].includes(event.key)
+            ) {
+              event.preventDefault();
+              const direction = ["ArrowLeft", "ArrowDown", "End"].includes(event.key) ? -1 : 1;
+              let next =
+                event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? choices.length - 1
+                    : index + direction;
+              while (next >= 0 && next < choices.length) {
+                if (!props.optionDisabledReasons[next]) {
+                  props.onEffortChange(choices[next]!.id);
+                  break;
+                }
+                next += direction;
+              }
+            }
             if (event.key !== "Escape" && event.key !== "Tab") event.stopPropagation();
           }}
           onChange={(event) => {

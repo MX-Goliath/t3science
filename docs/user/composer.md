@@ -51,7 +51,7 @@ Uploads begin when you add an attachment. All uploads must finish before the
 message can send. Retry or remove a failed upload. On web and desktop, reloading
 before an upload finishes requires you to attach that file again.
 
-Enable **Settings → Labs → Science → Pinned attachments** first.
+Enable **Settings → Science → Science** first.
 On web and desktop, right-click an attachment thumbnail beside the composer and
 choose **Pin attachment** to include it with every message in that chat. It stays
 in the composer after sending and across restarts. Choose **Unpin attachment**
@@ -68,9 +68,10 @@ See [images and videos](#images-and-videos-in-messages) for previewing and savin
 
 ## Science controls
 
-Science composer, Science queue, and the web/desktop work panels are optional in
-**Settings → Labs → Science**. They start off, keeping the standard composer and
-queue. Enable them separately on each client to use the Science controls.
+Enable **Settings → Science → Science** to turn on all Science composer controls,
+the expanded queue, scheduled sends, pinned attachments and work panels available
+on that client. This single switch is off by default. Turning it off restores the
+standard interface and pauses scheduled messages. The setting is saved per client.
 
 ## Send while the agent is working
 
@@ -302,7 +303,7 @@ earlier messages, and the thread marks where it began with **New session**.
 Earlier messages and diffs stay in the thread. Dismiss the notice above the
 composer to keep the current session instead.
 
-On web and desktop, turn on **Settings → Labs → Legacy → Context
+On web and desktop, turn on **Settings → Science → Legacy → Context
 window indicator (legacy)** to see context usage. The meter is off by default
 and appears once the provider reports usage. Open it for usage details and
 **Compact context** when the provider supports compaction.
@@ -428,9 +429,15 @@ including filenames or folders containing `#` or `?`.
 On mobile, select a PDF attachment or link to open it. iOS uses the native viewer;
 Android opens a compatible installed file viewer.
 
+## Science model presets
+
+On web and desktop, in **Settings → Science**, enable Science and **Model presets**, then configure the six positions. Each preset saves a model, its provider, and its reasoning level where supported. Different positions can use different providers.
+
+The model menu opens the preset bar by default. Choosing a model manually switches that chat to its usual model controls. Press Reset in the top-right corner of the menu to return to presets and restore the project’s default model and reasoning level. Other chats keep their own mode. Models must be available in the connected environment, and existing thread restrictions still apply.
+
 ## Schedule a message
 
-Enable **Settings → Labs → Science → Scheduled sends** on the client that will
+Enable **Settings → Science → Science** on the client that will
 send the message. It is off by default; disabling it pauses saved scheduled messages.
 
 On web and desktop, right-click Send to schedule a message at a chosen time,
