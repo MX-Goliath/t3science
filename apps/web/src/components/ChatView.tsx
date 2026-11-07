@@ -3665,7 +3665,7 @@ export default function ChatView(props: ChatViewProps) {
                     <ChildThreadApprovals threadRef={activeThreadRef} />
                     <ComposerSurface.Shell
                       contextRow={showComposerContextStrip}
-                      attachedContextRow={settings.scienceComposer && isDraftHeroState}
+                      attachedContextRow={settings.scienceComposer}
                     >
                       <ComposerSurface.Host
                         inert={queuedRunEdit.isSaving}
@@ -3932,7 +3932,7 @@ export default function ChatView(props: ChatViewProps) {
                                     : undefined
                                 }
                                 availableEnvironments={logicalProjectEnvironments}
-                                {...(isServerThread
+                                {...(isServerThread && !settings.scienceComposer
                                   ? {}
                                   : {
                                       trailing: (

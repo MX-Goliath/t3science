@@ -70,7 +70,7 @@ function Main({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
-/** The context row shares the draft composer's surface and stays bare in active threads. */
+/** The Science context row attaches to the composer; the standard row stays bare. */
 function ContextStrip({ className, ...props }: ComponentProps<"div">) {
   return (
     <div

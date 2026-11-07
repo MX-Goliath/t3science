@@ -1,3 +1,6 @@
+import { useClientSettings } from "../hooks/useSettings";
+import { runtimeModeConfig as scienceRuntimeModeConfig } from "./chat/ScienceRuntimeModeConfig";
+import { ComposerPermissionsSection as ScienceComposerPermissionsSection } from "./chat/ScienceComposerFooterControls";
 import { cn } from "~/lib/utils";
 import type { EnvironmentId, RuntimeMode } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
@@ -23,6 +26,10 @@ export function ComposerContextPermissions(props: {
   supportedRuntimeModes: ReadonlyArray<RuntimeMode> | undefined;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
+  const scienceComposer = useClientSettings((settings) => settings.scienceComposer);
+  const PermissionsSection = scienceComposer
+    ? ScienceComposerPermissionsSection
+    : ComposerPermissionsSection;
   const shortcutLabel = shortcutLabelForCommand(
     useAtomValue(primaryServerKeybindingsAtom),
     "composer.mode",
@@ -33,7 +40,11 @@ export function ComposerContextPermissions(props: {
   );
   const options = resolveRuntimeModeOptions(modes, useManagedPolicy(props.environmentId));
   const composerMenuProps = useComposerMenuProps();
-  const { icon: Icon, label, iconClassName } = runtimeModeConfig[mode];
+  const {
+    icon: Icon,
+    label,
+    iconClassName,
+  } = (scienceComposer ? scienceRuntimeModeConfig : runtimeModeConfig)[mode];
   return (
     <Menu>
       <Tooltip>
@@ -57,7 +68,7 @@ export function ComposerContextPermissions(props: {
         <TooltipPopup>Permissions{shortcutLabel ? ` · ${shortcutLabel}` : null}</TooltipPopup>
       </Tooltip>
       <MenuPopup side="top" align="end" {...composerMenuProps}>
-        <ComposerPermissionsSection
+        <PermissionsSection
           runtimeMode={mode}
           runtimeModeOptions={options}
           onRuntimeModeChange={props.onRuntimeModeChange}
