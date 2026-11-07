@@ -200,11 +200,18 @@ const makeStrictNdJsonRpcParser = () => {
       );
     },
     // A truncated final line is left to the exit status, which explains a crash better.
-    end: (): ReadonlyArray<unknown> => {
+    end: (): ReadonlyArray<AcpDecodedWireMessage> => {
       const line = buffer + decoder.decode();
       buffer = "";
       try {
-        return line.trim() === "" ? [] : codec.decode(line);
+        return line.trim() === ""
+          ? []
+          : codec.decode(line).map((message) => ({
+              message: normalizeAcpJsonRpcError(
+                message as RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded,
+              ),
+              lineLength: line.length,
+            }));
       } catch {
         return [];
       }
@@ -807,17 +814,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       ),
     ),
     Effect.andThen(
-      Effect.suspend(() =>
-        Effect.forEach(
-          (
-            parser.end() as ReadonlyArray<
-              RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded
-            >
-          ).map(normalizeAcpJsonRpcError),
-          routeDecodedMessage,
-          { discard: true },
-        ),
-      ),
+      Effect.suspend(() => Effect.forEach(parser.end(), routeDecodedMessage, { discard: true })),
     ),
     // Anything that ends the reader, including a defect in a callback it runs,
     // terminates the connection so pending requests fail instead of hanging.
