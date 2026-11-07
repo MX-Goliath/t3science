@@ -132,7 +132,9 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
             icon={RuntimeModeIcon}
             size={size}
             className={
-              runtimeModeOption.iconClassName ?? (props.emphasized ? "text-current" : undefined)
+              runtimeModeOption.iconClassName ??
+              runtimeModeConfig[runtimeModeOption.mode].iconClassName ??
+              (props.emphasized ? "text-current" : undefined)
             }
           />
           <span
@@ -230,7 +232,13 @@ export function ComposerPermissionsSection(props: {
               onBlur={() => setPreviewMode(null)}
               className="flex h-6 flex-1 cursor-pointer items-center justify-center text-muted-foreground outline-none first:rounded-l-md last:rounded-r-md data-disabled:cursor-not-allowed data-disabled:opacity-40 data-checked:bg-input/72 data-checked:text-foreground data-highlighted:text-foreground not-data-checked:data-highlighted:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             >
-              <OptionIcon aria-hidden="true" className={cn("size-3.5", option.iconClassName)} />
+              <OptionIcon
+                aria-hidden="true"
+                className={cn(
+                  "size-3.5",
+                  option.iconClassName ?? runtimeModeConfig[option.mode].iconClassName,
+                )}
+              />
             </MenuPrimitive.RadioItem>
           );
         })}
