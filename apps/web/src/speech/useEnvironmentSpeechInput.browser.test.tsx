@@ -18,6 +18,11 @@ import {
 } from "@t3tools/contracts";
 
 import { act, render, stubGlobal } from "../../test/render";
+import { ComposerFooterPrimaryActions } from "../components/chat/ScienceComposerFooterControls";
+import {
+  ComposerSpeechButton,
+  ComposerSpeechRecordingPill,
+} from "../components/chat/ComposerSpeechButton";
 import { VoiceInputSetup } from "../components/chat/VoiceInputSetup";
 import type { createBrowserVoiceInputPlatform } from "./browserVoiceInput";
 import { useEnvironmentSpeechInput } from "./useEnvironmentSpeechInput";
@@ -60,6 +65,24 @@ const mocks = vi.hoisted(() => ({
   draft: "",
 }));
 
+vi.mock("../components/chat/ProviderUsageLimitsMeter", () => ({
+  ProviderUsageLimitsMeter: () => null,
+}));
+vi.mock("../components/chat/ContextWindowMeter", () => ({
+  ContextWindowMeter: () => null,
+  ContextWindowMeterPlaceholder: () => null,
+}));
+vi.mock("../components/chat/ScienceProviderModelPicker", () => ({
+  ProviderModelPicker: () => null,
+}));
+vi.mock("../components/chat/ScienceModelPickerContent", () => ({
+  resolveModelPickerSelectedModel: () => null,
+}));
+
+vi.mock("../components/SidebarStageBackdrop", () => ({
+  StageBackdropButtonArt: () => null,
+  useSidebarStageBackdropVariant: () => null,
+}));
 vi.mock("../state/session", () => ({
   useEnvironmentScope: (id: string) => mocks.canDictate.has(id),
   usePreparedConnection: (environmentId: string | null) => {
@@ -91,6 +114,7 @@ vi.mock("../state/environments", () => ({
 }));
 vi.mock("../hooks/useSettings", () => ({
   updateClientSettings: vi.fn(),
+  useEnvironmentIdentificationMode: () => "off",
   useClientSettingsHydrated: () => true,
   useClientSettings: (selector?: (settings: Record<string, unknown>) => unknown) => {
     const settings = { ...DEFAULT_CLIENT_SETTINGS, ...mocks.settings };
@@ -246,6 +270,7 @@ function Probe(props: {
   readonly projectName?: string;
   readonly cleanup?: boolean;
   readonly showWizard?: boolean;
+  readonly scienceControls?: boolean;
 }) {
   const value = useEnvironmentSpeechInput({
     environmentId: THREAD_ENV as EnvironmentId,
@@ -263,6 +288,72 @@ function Probe(props: {
   useLayoutEffect(() => {
     mocks.voice = value;
   });
+  if (props.scienceControls) {
+    return (
+      <ComposerFooterPrimaryActions
+        compact={false}
+        providerUsageLimits={null}
+        providerLabel="Test"
+        environmentId={EnvironmentId.make(THREAD_ENV)}
+        providerInstanceId={null}
+        canOperateThread
+        activeContextWindow={null}
+        reserveContextWindowMeter={false}
+        activeThreadModelDisplayName={null}
+        isPreparingWorktree={false}
+        pendingAction={{
+          questionIndex: 0,
+          isLastQuestion: true,
+          canAdvance: false,
+          isResponding: false,
+          isComplete: false,
+        }}
+        isRunning={false}
+        canInterrupt={false}
+        followUpBehavior="queue"
+        canSteer={false}
+        alternateShortcutLabel={null}
+        showPlanFollowUpPrompt={false}
+        promptHasText={value.blocksSubmission}
+        voiceInputActive={value.blocksSubmission}
+        isSendBusy={false}
+        sendDisabledReason={null}
+        isEnvironmentUnavailable={false}
+        hasSendableContent={value.blocksSubmission}
+        canResume={false}
+        isEditingQueuedMessage={false}
+        onSubmitMessage={() => {}}
+        onResume={() => {}}
+        onPreviousPendingQuestion={() => {}}
+        onInterrupt={() => {}}
+        onImplementPlanInNewThread={() => {}}
+        scheduledSend={null}
+        scheduledSendLabel={null}
+        onScheduledSendClick={() => {}}
+        compactDisabled={false}
+        compactDisabledReason={null}
+        compactBeforeSendTokens={null}
+        keepFullHistory={false}
+        onToggleKeepFullHistory={() => {}}
+      >
+        <ComposerSpeechButton
+          state={value.state}
+          progress={null}
+          onStart={() => void value.start()}
+          onCancel={value.cancel}
+        />
+        <ComposerSpeechRecordingPill
+          state={value.state}
+          progress={null}
+          level={value.level}
+          onStart={() => void value.start()}
+          onStop={() => void value.stop()}
+          onCancel={value.cancel}
+          onSkipPostProcessing={value.skipPostProcessing}
+        />
+      </ComposerFooterPrimaryActions>
+    );
+  }
   return props.showWizard ? (
     <VoiceInputSetup
       {...value.setup}
@@ -306,16 +397,28 @@ it.each([
   expect(localStorage.getItem("t3code:voice-audio-grant:v1")).toBeNull();
 });
 
-it.each([true, false])(
-  "sends audio with silence filtering %s only to the chosen environment",
-  async (speechSilenceFiltering) => {
+it.each([
+  { speechSilenceFiltering: true, scienceControls: false },
+  { speechSilenceFiltering: false, scienceControls: false },
+  { speechSilenceFiltering: true, scienceControls: true },
+  { speechSilenceFiltering: false, scienceControls: true },
+])(
+  "sends audio with silence filtering $speechSilenceFiltering and Science controls $scienceControls only to the chosen environment",
+  async ({ speechSilenceFiltering, scienceControls }) => {
     setup({ destination: "env-a" });
     mocks.settings = { speechSilenceFiltering };
-    await using _screen = await render(<Probe />);
+    await using screen = await render(<Probe scienceControls={scienceControls} />);
     expect(mocks.voice.transcriptionEnvironmentId).toBe("env-a");
-    await act(() => mocks.voice.start());
+    if (scienceControls)
+      await screen.getByRole("button", { name: "Start voice input", exact: true }).click();
+    else await act(() => mocks.voice.start());
     expect(mocks.voice.state.phase).toBe("recording");
-    await act(() => mocks.voice.stop());
+    if (scienceControls) {
+      await expect
+        .element(screen.getByRole("button", { name: "Submit answer", exact: true }))
+        .toBeEnabled();
+      await screen.getByRole("button", { name: "Finish voice input", exact: true }).click();
+    } else await act(() => mocks.voice.stop());
     expect(
       new Set([...mocks.platforms, ...mocks.microphoneRequests, ...mocks.transcribeCalls]),
     ).toEqual(new Set(["env-a"]));
