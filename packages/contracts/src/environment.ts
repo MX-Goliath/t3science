@@ -37,6 +37,7 @@ export const ENVIRONMENT_MACHINE_KINDS = [
   "linux",
   "desktop",
   "laptop",
+  "steam-deck",
   "mac-mini",
   "mac-studio",
 ] as const;

@@ -137,6 +137,7 @@ import IconWorld from "@tabler/icons-react-native/IconWorld";
 import IconX from "@tabler/icons-react-native/IconX";
 import type { AndroidSymbol, SFSymbol, SymbolViewProps } from "expo-symbols";
 import { withUniwind } from "uniwind";
+import { SteamDeckIcon } from "../SteamDeckIcon";
 
 const ANDROID_ICON_BY_SF_SYMBOL = {
   plusminus: IconPlusMinus,
@@ -227,6 +228,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   "line.3.horizontal.decrease.circle": IconFilter,
   "line.3.horizontal.decrease.circle.fill": IconFilterFilled,
   macmini: IconServer,
+  gamecontroller: SteamDeckIcon,
   macstudio: IconDeviceDesktop,
   magnifyingglass: IconSearch,
   mic: IconMicrophone,

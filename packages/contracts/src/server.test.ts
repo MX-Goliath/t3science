@@ -101,14 +101,17 @@ describe("resolveEnvironmentMachineKind", () => {
       capabilities: {},
     });
 
-  it("prefers the user's pick over what the server detected", () => {
-    expect(
-      resolveEnvironmentMachineKind({
-        environment: descriptor({ machine: "mac-mini" }),
-        settings: decodeSettings({ environmentIcon: "laptop" }),
-      }),
-    ).toBe("laptop");
-  });
+  it.each(["laptop", "steam-deck"])(
+    "prefers the user's pick %s over what the server detected",
+    (kind) => {
+      expect(
+        resolveEnvironmentMachineKind({
+          environment: descriptor({ machine: "mac-mini" }),
+          settings: decodeSettings({ environmentIcon: kind }),
+        }),
+      ).toBe(kind);
+    },
+  );
 
   it("drops a machine kind this build does not know instead of failing the descriptor", () => {
     const parsed = descriptor({ machine: "toaster" });

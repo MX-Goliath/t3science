@@ -7,6 +7,7 @@ export const ENVIRONMENT_MACHINE_SYMBOLS = {
   linux: "terminal",
   desktop: "desktopcomputer",
   laptop: "laptopcomputer",
+  "steam-deck": "gamecontroller",
   "mac-mini": "macmini",
   "mac-studio": "macstudio",
 } as const satisfies Record<EnvironmentMachineKind, AppSymbolName>;
@@ -17,6 +18,7 @@ const ENVIRONMENT_MACHINE_KIND_LABELS: Record<EnvironmentMachineKind, string> = 
   linux: "Linux/WSL",
   desktop: "Desktop",
   laptop: "Laptop",
+  "steam-deck": "Steam Deck",
   "mac-mini": "Mini PC",
   "mac-studio": "Workstation",
 };

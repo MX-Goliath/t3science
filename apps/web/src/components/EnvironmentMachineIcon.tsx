@@ -20,6 +20,18 @@ function LucideLike(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+function SteamDeckIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <LucideLike viewBox="0 0 32 24" strokeWidth="1.8" {...props}>
+      <path d="M5 6h22c3 0 4 1.5 4 4v3c0 3.5-1.5 5-5 5H6c-3.5 0-5-1.5-5-5v-3c0-2.5 1-4 4-4Z" />
+      <rect x="8" y="8" width="16" height="8" rx=".5" strokeWidth="1.4" />
+      <circle cx="4.5" cy="9.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="27.5" cy="9.5" r="1" fill="currentColor" stroke="none" />
+      <path d="M3.5 12.5h2v2h-2zM26.5 12.5h2v2h-2z" strokeWidth="1" />
+    </LucideLike>
+  );
+}
+
 function MacMiniIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <LucideLike {...props}>
@@ -44,6 +56,7 @@ const ICON_BY_KIND: Record<EnvironmentMachineKind, FunctionComponent<LucideProps
   linux: LinuxIcon,
   desktop: MonitorIcon,
   laptop: LaptopIcon,
+  "steam-deck": SteamDeckIcon,
   "mac-mini": MacMiniIcon,
   "mac-studio": MacStudioIcon,
 };
@@ -54,6 +67,7 @@ export const ENVIRONMENT_MACHINE_KIND_LABELS: Record<EnvironmentMachineKind, str
   linux: "Linux/WSL",
   desktop: "Desktop",
   laptop: "Laptop",
+  "steam-deck": "Steam Deck",
   "mac-mini": "Mini PC",
   "mac-studio": "Workstation",
 };
