@@ -61,6 +61,11 @@ const harness = vi.hoisted(() => ({
   })(),
 }));
 
+vi.mock("./preferences", async () => {
+  const { Atom, AsyncResult } = await import("effect/reactivity");
+  return { mobilePreferencesAtom: Atom.make(AsyncResult.success({})) };
+});
+
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 
 vi.mock("expo-file-system", () => ({

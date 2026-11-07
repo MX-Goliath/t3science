@@ -12,7 +12,7 @@ import { page, userEvent } from "vite-plus/test/browser";
 
 import { render } from "../../../test/render";
 import { DraftId } from "../../composerDraftStore";
-import { ComposerControlsBar } from "./ComposerControlsBar";
+import { ComposerControlsBar } from "./ScienceComposerControlsBar";
 
 function Controls({
   descriptors,

@@ -54,7 +54,7 @@ interface ComposerPrimaryActionsProps {
   scheduledSend?: boolean;
   scheduledSendLabel?: string | null;
   onScheduledSendClick?: (event: MouseEvent<HTMLButtonElement>) => void;
-  onSendContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void;
+  onSendContextMenu?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
   /** Tokens a stale session would re-read. When set, a Compact chip shows the count and Enter compacts first. */
   compactBeforeSendTokens?: number | null;
   keepFullHistory?: boolean;

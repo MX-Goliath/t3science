@@ -1,3 +1,4 @@
+import { useScienceFeature } from "../../state/scienceFeatures";
 import { ProviderUsageLimitsInline } from "./ProviderUsageLimitsInline";
 import { useSidebarWorkspaceTabs } from "../workspace/useSystemWorkspaceTabBar";
 import { Button } from "../../components/ui/Button";
@@ -428,6 +429,8 @@ function ComposerSurface(props: {
 export const THREAD_COMPOSER_BOTTOM_GUTTER = 6;
 
 export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps) {
+  const scienceComposer = useScienceFeature("scienceComposer");
+  const scheduledSendEnabled = useScienceFeature("scienceScheduledSend");
   const project = useProject(scopeProjectRef(props.environmentId, props.selectedThread.projectId));
   const { themeVariables: materialTheme } = useAppearancePreferences();
   const composerPanel = materialTheme["--color-composer-panel"];
@@ -1106,7 +1109,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 }
               >
                 {modelControl}
-                {selectedProviderStatus?.usageLimits ? (
+                {scienceComposer && selectedProviderStatus?.usageLimits ? (
                   <ProviderUsageLimitsInline
                     limits={selectedProviderStatus.usageLimits}
                     providerLabel={selectedProviderStatus.displayName?.trim() || "Provider"}
@@ -1144,7 +1147,11 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     presentation={sendPresentation}
                     disabled={!canSend}
                     onSend={handleSend}
-                    onSchedule={props.allowSchedule ? () => setScheduling(true) : undefined}
+                    onSchedule={
+                      scheduledSendEnabled && props.allowSchedule
+                        ? () => setScheduling(true)
+                        : undefined
+                    }
                   />
                 )}
               </View>
@@ -1213,7 +1220,11 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                       presentation={sendPresentation}
                       disabled={!canSend}
                       onSend={handleSend}
-                      onSchedule={props.allowSchedule ? () => setScheduling(true) : undefined}
+                      onSchedule={
+                        scheduledSendEnabled && props.allowSchedule
+                          ? () => setScheduling(true)
+                          : undefined
+                      }
                     />
                   ) : null}
                 </View>
@@ -1230,7 +1241,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       </Animated.View>
 
       <VideoPreviewModal source={previewVideo} onRequestClose={closePreview} />
-      {scheduling ? (
+      {scheduledSendEnabled && scheduling ? (
         <CustomSnoozeSheet
           title="Schedule send"
           description="Sends from this phone when T3 Science is running and connected. If the app is closed, it sends after you reopen it."

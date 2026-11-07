@@ -4,7 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   resolveThreadQueueRowControls,
   resolveQueueDropBeforeRunId,
-} from "./threadQueueControlPresentation";
+} from "./scienceThreadQueueControlPresentation";
 
 describe("threadQueueControlPresentation", () => {
   it.each([

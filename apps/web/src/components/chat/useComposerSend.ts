@@ -1,3 +1,4 @@
+import { getClientSettings } from "../../hooks/useSettings";
 import {
   mergeDirectPreviewAnnotation,
   resolveBackgroundDraftWorkspaceOptions,
@@ -693,7 +694,9 @@ export function useComposerSend(input: ComposerSendInput) {
         },
         clearDraft: () => {
           promptRef.current = "";
-          clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
+          clearComposerDraftContent(composerDraftTarget, {
+            preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+          });
           composerRef.current?.resetCursorState();
         },
         onUpdate: (submission) => {
@@ -748,7 +751,9 @@ export function useComposerSend(input: ComposerSendInput) {
       const followUpThreadContexts = [...composerThreadContexts];
       const followUpEnvironmentContexts = [...composerEnvironmentContexts];
       promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
+      clearComposerDraftContent(composerDraftTarget, {
+        preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+      });
       composerRef.current?.resetCursorState();
       const followUpSent = await submitPlanFollowUp({
         text: followUp.text,
@@ -814,7 +819,9 @@ export function useComposerSend(input: ComposerSendInput) {
     if (standaloneSlashCommand && multipleModelSelections === null) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
+      clearComposerDraftContent(composerDraftTarget, {
+        preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+      });
       composerRef.current?.resetCursorState();
       return;
     }
@@ -1126,7 +1133,9 @@ export function useComposerSend(input: ComposerSendInput) {
             draftBeforeDecline
         ) {
           promptRef.current = "";
-          clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
+          clearComposerDraftContent(composerDraftTarget, {
+            preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+          });
           composerRef.current?.resetCursorState();
         }
         return;
@@ -1266,7 +1275,9 @@ export function useComposerSend(input: ComposerSendInput) {
     // Keep new-thread flows from reusing this draft while attachments and worktree setup settle.
     if (sentDraftThreadRef) markPromotedDraftThreadByRef(sentDraftThreadRef);
     promptRef.current = "";
-    clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
+    clearComposerDraftContent(composerDraftTarget, {
+      preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+    });
     composerRef.current?.resetCursorState();
 
     const title = deriveThreadTitleSeed({

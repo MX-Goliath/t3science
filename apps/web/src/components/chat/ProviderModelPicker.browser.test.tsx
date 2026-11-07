@@ -9,7 +9,7 @@ import "~/index.css";
 
 import { render } from "../../../test/render";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
-import { ProviderModelPicker } from "./ProviderModelPicker";
+import { ProviderModelPicker } from "./ScienceProviderModelPicker";
 
 it("keeps each registry image when adding a model from another ACP agent", async () => {
   const icons = [

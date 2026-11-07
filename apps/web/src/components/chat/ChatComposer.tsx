@@ -1,3 +1,7 @@
+import * as scienceProviderState from "./ScienceComposerProviderState";
+import { ComposerControlsBar as ScienceComposerControlsBar } from "./ScienceComposerControlsBar";
+import { ComposerFooterPrimaryActions as ScienceComposerFooterPrimaryActions } from "./ScienceComposerFooterControls";
+import { ComposerFooterPrimaryActions as UpstreamComposerFooterPrimaryActions } from "./ComposerFooterControls";
 import { environmentThreadShells as scheduleThreadShells } from "~/state/threads";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { MouseEvent as ReactMouseEvent } from "react";
@@ -112,6 +116,7 @@ import { serializeComposerImages } from "./composerImagePersistence";
 import {
   isInsideCollapsedComposerControls,
   isInsideRestingComposerControlScope,
+  markOpenToEffort,
   markOpenToPermissions,
 } from "./composerEventScope";
 import {
@@ -223,7 +228,6 @@ import {
   ComposerRestingImagePreviews,
 } from "./ComposerAttachmentStrip";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
-import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
@@ -297,7 +301,7 @@ import {
   countPreparingComposerImages,
   usePreparingComposerImages,
 } from "./preparingComposerImages";
-import { ComposerControlsBar } from "./ComposerControlsBar";
+import { ComposerControlsBar as UpstreamComposerControlsBar } from "./ComposerControlsBar";
 import type { ModelResetAction } from "./ReasoningSettingsCard";
 import { composerCommandKeyHandler } from "./composerCommandKey";
 
@@ -450,6 +454,7 @@ export interface ChatComposerProps {
   providerCatalogKnown: boolean;
   activeProjectDefaultModelSelection: ModelSelection | null | undefined;
   modelReset: ModelResetAction;
+  permissionsShownInStrip?: boolean;
   activeThreadModelSelection: ModelSelection | null | undefined;
   reportedModelSelection?: ModelSelection | null;
   activeProjectId: ProjectId | null;
@@ -678,7 +683,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const attachmentDraftTarget = questionAttachmentTarget ?? composerDraftTarget;
   const attachmentDraft = useComposerThreadDraft(attachmentDraftTarget);
   const attachmentPinning: ComposerAttachmentPinning | undefined =
-    questionAttachmentTarget === null && !isEditingQueuedMessage && canOperateThread
+    settings.scienceAttachmentPinning &&
+    questionAttachmentTarget === null &&
+    !isEditingQueuedMessage &&
+    canOperateThread
       ? {
           pinnedIds: attachmentDraft.pinnedAttachmentIds ?? [],
           onContextMenu: (id, event) => {
@@ -741,13 +749,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerFiles,
     environmentId,
     new Set(
-      [...inlineFileIdSet].filter((id) => !attachmentDraft.pinnedAttachmentIds?.includes(id)),
+      [...inlineFileIdSet].filter(
+        (id) =>
+          !settings.scienceAttachmentPinning || !attachmentDraft.pinnedAttachmentIds?.includes(id),
+      ),
     ),
   );
   const composerTerminalContexts = composerDraft.terminalContexts;
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
   const composerReviewComments = composerDraft.reviewComments;
-  const scheduledSend = composerDraft.scheduledSend;
+  const scheduledSend = settings.scienceScheduledSend ? composerDraft.scheduledSend : null;
   const composerThreadContexts = attachmentDraft.threadContexts;
   const composerEnvironmentContexts = composerDraft.environmentContexts;
   const {
@@ -928,7 +939,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     threadRef: composerDraftTarget,
     threadModelSelection: activeThreadModelSelection,
     projectModelSelection: activeProjectDefaultModelSelection,
-    promptInjectionState: getComposerPromptInjectionState(prompt),
+    promptInjectionState: (settings.scienceComposer
+      ? scienceProviderState.getComposerPromptInjectionState
+      : getComposerPromptInjectionState)(prompt),
     candidateInstanceIds: [
       composerDraft.activeProvider ?? null,
       activeThread?.runtime?.providerInstanceId,
@@ -2547,6 +2560,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     : composerControlsCollapsed
       ? 0
       : expandedControlsIconOnlyBlockCount;
+  const ComposerFooterPrimaryActions =
+    settings.scienceComposer || settings.scienceScheduledSend
+      ? ScienceComposerFooterPrimaryActions
+      : UpstreamComposerFooterPrimaryActions;
+  const ComposerControlsBar = settings.scienceComposer
+    ? ScienceComposerControlsBar
+    : UpstreamComposerControlsBar;
   const composerControls = (
     <ComposerControlsBar
       environmentId={environmentId}
@@ -2556,6 +2576,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedProvider={selectedProvider}
       selectedInstanceId={selectedInstanceId}
       selectedModel={selectedModel}
+      permissionsShownInStrip={props.permissionsShownInStrip ?? false}
       modelReset={{
         ...props.modelReset,
         onReset: () => {
@@ -3112,7 +3133,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         if (noProviderAvailable || pendingUserInputs.length > 0 || isEditingQueuedMessage) {
           return;
         }
-        const change = getComposerReasoningStep({
+        const change = (
+          settings.scienceComposer
+            ? scienceProviderState.getComposerReasoningStep
+            : getComposerReasoningStep
+        )({
           provider: selectedProvider,
           instanceId: selectedInstanceId,
           model: selectedModel,
@@ -3165,6 +3190,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         if (!trigger) return;
         trigger.focus({ preventScroll: true });
         if (command === "composer.mode") markOpenToPermissions(trigger);
+        if (command === "composer.effort" && !settings.scienceComposer) markOpenToEffort(trigger);
         trigger.click();
       },
       compactContext: compactThreadContextStable,
@@ -3436,7 +3462,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       {...threadContextDropTargetProps()}
     >
       <ScheduleSendDialog
-        open={scheduleDialogOpen}
+        open={settings.scienceScheduledSend && scheduleDialogOpen}
         onOpenChange={setScheduleDialogOpen}
         onSchedule={(scheduledAt) => scheduleCurrentMessage({ scheduledAt, source: "custom" })}
       />
@@ -3722,7 +3748,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       scheduledSend={scheduledSend !== null}
                       scheduledSendLabel={scheduledSendLabel}
                       onScheduledSendClick={handleScheduledSendClick}
-                      onSendContextMenu={handleSendContextMenu}
+                      onSendContextMenu={
+                        settings.scienceScheduledSend ? handleSendContextMenu : undefined
+                      }
                     />
                   </div>
                 ) : null}
@@ -3755,12 +3783,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     ref={attachExpandedComposerControls}
                     data-chat-composer-controls="footer"
                     data-chat-composer-footer-controls="true"
-                    className="relative flex min-w-0 flex-1 items-center justify-start gap-0.5"
+                    className={cn(
+                      "relative flex min-w-0 flex-1 items-center gap-0.5",
+                      settings.scienceComposer ? "justify-start" : "justify-end",
+                    )}
                   >
                     {composerControls}
                   </div>
                   <ComposerFooterPrimaryActions
-                    providerUsageLimits={selectedProviderStatus?.usageLimits ?? null}
+                    providerUsageLimits={
+                      settings.scienceComposer
+                        ? (selectedProviderStatus?.usageLimits ?? null)
+                        : null
+                    }
                     providerLabel={selectedProviderStatus?.displayName?.trim() || "Provider"}
                     environmentId={routeThreadRef.environmentId}
                     providerInstanceId={selectedProviderStatus?.instanceId ?? null}
@@ -3815,7 +3850,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     scheduledSend={scheduledSend}
                     scheduledSendLabel={scheduledSendLabel}
                     onScheduledSendClick={handleScheduledSendClick}
-                    onSendContextMenu={handleSendContextMenu}
+                    onSendContextMenu={
+                      settings.scienceScheduledSend ? handleSendContextMenu : undefined
+                    }
                     compactBeforeSendTokens={props.resumeCompactionTokens}
                     keepFullHistory={props.keepFullHistory}
                     onToggleKeepFullHistory={props.onToggleKeepFullHistory}

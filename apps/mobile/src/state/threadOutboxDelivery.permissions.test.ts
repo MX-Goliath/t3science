@@ -13,6 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import type { QueuedThreadMessage } from "./thread-outbox-model";
 
 const state = vi.hoisted(() => ({
+  preferences: null as unknown as Atom.Writable<
+    AsyncResult.AsyncResult<{ scienceScheduledSend: boolean }>
+  >,
   draftText: "Keep this draft separate",
   cleanups: [] as Array<() => void>,
   delivery: null as {
@@ -45,6 +48,13 @@ const state = vi.hoisted(() => ({
     environment: { capabilities: {} },
   },
 }));
+vi.mock("./preferences", async () => {
+  const { Atom, AsyncResult } = await import("effect/reactivity");
+  state.preferences = Atom.make<AsyncResult.AsyncResult<{ scienceScheduledSend: boolean }>>(
+    AsyncResult.success({ scienceScheduledSend: true }),
+  ).pipe(Atom.keepAlive);
+  return { mobilePreferencesAtom: state.preferences };
+});
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 vi.mock("@t3tools/client-runtime/state/runtime", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@t3tools/client-runtime/state/runtime")>()),
@@ -342,14 +352,18 @@ describe("queued task operation access", () => {
       await runDrain();
       expect(state.start).toHaveBeenCalledOnce();
       expect(remaining()).toEqual([scheduled]);
-      await vi.advanceTimersByTimeAsync(59_999);
+      appAtomRegistry.set(state.preferences, AsyncResult.success({ scienceScheduledSend: false }));
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(state.start).toHaveBeenCalledOnce();
+      expect(remaining()).toEqual([scheduled]);
+      appAtomRegistry.set(state.preferences, AsyncResult.success({ scienceScheduledSend: true }));
       expect(state.start).toHaveBeenCalledOnce();
       const delivered = Promise.withResolvers<void>();
       const release = appAtomRegistry.subscribe(dispatchingQueuedMessageIdAtom, (id) => {
         if (id === null) delivered.resolve();
       });
       try {
-        await vi.advanceTimersByTimeAsync(1);
+        await vi.advanceTimersByTimeAsync(0);
         await delivered.promise;
       } finally {
         release();

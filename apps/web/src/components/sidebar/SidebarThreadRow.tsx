@@ -1,3 +1,4 @@
+import { useClientSettings } from "../../hooks/useSettings";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { isScheduledSendOverdue } from "../../scheduledSend";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
@@ -659,9 +660,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
-  const scheduledSend = useComposerDraftStore(
+  const scheduledSendEnabled = useClientSettings((settings) => settings.scienceScheduledSend);
+  const savedScheduledSend = useComposerDraftStore(
     (store) => store.getComposerDraft(threadRef)?.scheduledSend ?? null,
   );
+  const scheduledSend = scheduledSendEnabled ? savedScheduledSend : null;
   const scheduledSendOverdue = isScheduledSendOverdue(scheduledSend);
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   const { leaseLiveStatus, rowRef: leaseRowRef } = useSidebarRowSubscriptionLease(props.isActive);

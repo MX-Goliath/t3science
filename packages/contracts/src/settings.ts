@@ -511,6 +511,11 @@ export const ClientSettingsSchema = Schema.Struct({
   legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Project-independent conversations backed by a hidden per-environment workspace.
   generalChatsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  scienceComposer: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  scienceQueue: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  scienceWorkPanels: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  scienceScheduledSend: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  scienceAttachmentPinning: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   imagesEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Desktop-only persistent browser chat. The browser session and its cookies
   // belong to this device, so this remains a client-local setting.
@@ -1853,6 +1858,11 @@ export const ClientSettingsPatch = Schema.Struct({
   threadDetailsItems: Schema.optionalKey(Schema.Record(Schema.String, Schema.Boolean)),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   generalChatsEnabled: Schema.optionalKey(Schema.Boolean),
+  scienceComposer: Schema.optionalKey(Schema.Boolean),
+  scienceQueue: Schema.optionalKey(Schema.Boolean),
+  scienceWorkPanels: Schema.optionalKey(Schema.Boolean),
+  scienceScheduledSend: Schema.optionalKey(Schema.Boolean),
+  scienceAttachmentPinning: Schema.optionalKey(Schema.Boolean),
   imagesEnabled: Schema.optionalKey(Schema.Boolean),
   webChatEnabled: Schema.optionalKey(Schema.Boolean),
   webChatProvider: Schema.optionalKey(WebChatProvider),

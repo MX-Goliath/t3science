@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveComposerControlsOwnership } from "./composerControlsOwnership";
+import { resolveComposerControlsOwnership } from "./ScienceComposerControlsOwnership";
 
 const base = {
   matchesDefault: true,

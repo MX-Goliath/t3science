@@ -11,7 +11,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import { act, render } from "../../../test/render";
-import { readPromptUltrathink, TraitsPicker } from "./TraitsPicker";
+import { readPromptUltrathink, TraitsPicker } from "./ScienceTraitsPicker";
 
 function settings(input: {
   provider: string;

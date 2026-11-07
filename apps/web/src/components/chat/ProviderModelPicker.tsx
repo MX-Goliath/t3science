@@ -1,5 +1,3 @@
-import { ModelName } from "./ModelName";
-import "./modelPickerTransition.css";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type ProviderInstanceId,
@@ -73,7 +71,7 @@ function lockBackgroundScroll(popup: HTMLElement | null) {
 }
 
 /** What a docked effort column needs from its picker: the model it serves. */
-const DockedPickerContext = createContext<{ modelLabel: string }>({ modelLabel: "" });
+export const DockedPickerContext = createContext<{ modelLabel: string }>({ modelLabel: "" });
 
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   environmentId: EnvironmentId | null;
@@ -118,10 +116,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const composerFloatingLayerProps = useComposerMenuProps();
   const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useState(false);
   const isMenuOpen = props.open ?? uncontrolledIsMenuOpen;
-  const [pickerSession, setPickerSession] = useState({ open: isMenuOpen, key: 0 });
-  if (pickerSession.open !== isMenuOpen) {
-    setPickerSession({ open: isMenuOpen, key: pickerSession.key + Number(isMenuOpen) });
-  }
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
@@ -155,7 +149,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
   const setIsMenuOpen = (open: boolean) => {
     props.onOpenChange?.(open);
-    if (props.open === undefined) setUncontrolledIsMenuOpen(open);
+    if (props.open === undefined) {
+      setUncontrolledIsMenuOpen(open);
+    }
   };
 
   /**
@@ -243,8 +239,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const triggerText = props.triggerLabel ?? multipleLabel ?? triggerTitle;
   const triggerTextProps = {
     className: cn(
-      "min-w-0 flex-1",
-      props.isComposerOwned ? "py-0! [text-box:normal]!" : "overflow-hidden truncate",
+      "min-w-0 flex-1 overflow-hidden truncate",
       // Long names such as "Fusion (Claude Opus 5.5 Medium + SWE-2 High)" would push the composer.
       props.isComposerOwned && "max-w-56",
     ),
@@ -253,10 +248,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
   const picker = (
     <ModelPickerContent
-      key={pickerSession.key}
       searchInputRef={searchInputRef}
       environmentId={props.environmentId}
-      isComposerOwned={props.isComposerOwned === true}
       activeInstanceId={activeInstanceId}
       model={props.model}
       {...(props.selectedModels !== undefined ? { selectedModels: props.selectedModels } : {})}
@@ -395,9 +388,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             </span>
           ) : null}
           {props.isComposerOwned ? (
-            <span {...triggerTextProps}>
-              <ModelName>{triggerText}</ModelName>
-            </span>
+            <span {...triggerTextProps}>{triggerText}</span>
           ) : (
             <Tooltip>
               <TooltipTrigger render={<span {...triggerTextProps} />}>{triggerText}</TooltipTrigger>
@@ -413,7 +404,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         </span>
       </PopoverTrigger>
       <PopoverPopup
-        shadow={props.isComposerOwned ? "none" : "default"}
         {...(props.isComposerOwned ? composerFloatingLayerProps : {})}
         ref={(popup) => {
           popupRef.current = popup;
@@ -425,19 +415,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         }}
         initialFocus={searchInputRef}
         align={props.popupAlign ?? "start"}
-        anchor={
-          props.isComposerOwned
-            ? () =>
-                triggerRef.current?.closest<HTMLElement>(
-                  "[data-chat-composer-footer-controls], [data-chat-composer-resting-controls]",
-                ) ?? triggerRef.current
-            : undefined
-        }
-        data-chat-model-picker-popup
-        style={{
-          viewTransitionName:
-            props.isComposerOwned && isMenuOpen ? "composer-model-picker" : "none",
-        }}
         // Docked, the popup opens above the composer and slides over it when that space is short,
         // so a short window gets its full height (Floating UI sizes to the viewport) instead of a sliver.
         {...(docked

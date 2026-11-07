@@ -44,6 +44,7 @@ Uploads begin when you add an attachment. All uploads must finish before the
 message can send. Retry or remove a failed upload. On web and desktop, reloading
 before an upload finishes requires you to attach that file again.
 
+Enable **Settings → Labs → Science → Pinned attachments** first.
 On web and desktop, right-click an attachment thumbnail beside the composer and
 choose **Pin attachment** to include it with every message in that chat. It stays
 in the composer after sending and across restarts. Choose **Unpin attachment**
@@ -57,6 +58,12 @@ On Android, you can also drag images from another app into the message input
 in split screen.
 
 See [images and videos](#images-and-videos-in-messages) for previewing and saving media.
+
+## Science controls
+
+Science composer, Science queue, and the web/desktop work panels are optional in
+**Settings → Labs → Science**. They start off, keeping the standard composer and
+queue. Enable them separately on each client to use the Science controls.
 
 ## Send while the agent is working
 
@@ -396,6 +403,9 @@ On mobile, select a PDF attachment or link to open it. iOS uses the native viewe
 Android opens a compatible installed file viewer.
 
 ## Schedule a message
+
+Enable **Settings → Labs → Science → Scheduled sends** on the client that will
+send the message. It is off by default; disabling it pauses saved scheduled messages.
 
 On web and desktop, right-click Send to schedule a message at a chosen time,
 after the current agent finishes, or after another thread's agent finishes. Reset-time

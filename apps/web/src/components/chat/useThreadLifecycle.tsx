@@ -66,6 +66,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import {
   backgroundWorkBannerItem,
+  backgroundWorkNowItem,
   childInputNowItem,
   goalNowItem,
   runStopNowItem,
@@ -602,6 +603,17 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
         onOpenThread: onOpenRelatedThreadStable,
       })
     : null;
+  const backgroundWorkNow = activeThread
+    ? backgroundWorkNowItem({
+        threadId: activeThread.id,
+        tasks: activeBackgroundTasks,
+        turnItems,
+        stopDisabled: !canOperateThread || isStoppingBackgroundWork,
+        stopping: isStoppingBackgroundWork,
+        onStop: handleStopBackgroundWorkStable,
+        onOpenThread: onOpenRelatedThreadStable,
+      })
+    : null;
   // The relative times read the clock; nowMinute re-renders them on the minute.
   const snoozedUntil = activeThreadShell?.snoozedUntil ?? null;
   const settledAt = activeThreadShell?.settledAt ?? null;
@@ -682,6 +694,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     acknowledgeActiveThreadWoke,
     activeBranchMismatchKey,
     backgroundWorkBanner,
+    backgroundWorkNow,
     // A Stop that went unanswered needs the user; one in progress is the thread's work.
     attentionNow: runStop?.state === "unresponsive" ? runStopNow : childInputNow,
     workNow: runStop?.state === "stopping" ? runStopNow : null,

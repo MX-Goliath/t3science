@@ -1,3 +1,4 @@
+import { getClientSettings } from "../../hooks/useSettings";
 import {
   type EnvironmentId,
   type ModelSelection,
@@ -133,7 +134,9 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
         attachments: attachmentsSnapshot,
       });
       promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget, { preservePinnedAttachments: true });
+      clearComposerDraftContent(composerDraftTarget, {
+        preservePinnedAttachments: getClientSettings().scienceAttachmentPinning,
+      });
       composerRef.current?.resetCursorState();
       clearedDraft = true;
       const clearedDraftSnapshot = useComposerDraftStore

@@ -1,3 +1,4 @@
+import { mobilePreferencesAtom } from "./preferences";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import * as Dialog from "../components/ui/Dialog";
 import {
@@ -575,6 +576,10 @@ async function preserveUploadedAttachmentsForEditor(
 // Everything a drain pass decides from. Each queued environment's session is
 // read here so a granted or revoked operate scope re-runs the drain.
 const deliveryInputsAtom = Atom.make((get) => {
+  const sciencePreferences = get(mobilePreferencesAtom);
+  const scheduledSendEnabled =
+    AsyncResult.isSuccess(sciencePreferences) &&
+    sciencePreferences.value.scienceScheduledSend === true;
   const connectedEnvironments = get(workspaceConnections.environmentsAtom);
   const operableEnvironments = new Set<EnvironmentId>();
   for (const { environmentId } of connectedEnvironments) {
@@ -588,6 +593,7 @@ const deliveryInputsAtom = Atom.make((get) => {
     }
   }
   return {
+    scheduledSendEnabled,
     dispatchingQueuedMessageId: get(dispatchingQueuedMessageIdAtom),
     editingQueuedMessageIds: get(editingQueuedMessageIdsAtom),
     queuedMessagesByThreadKey: get(threadOutboxManager.queuedMessagesByThreadKeyAtom),
@@ -1125,6 +1131,7 @@ export function createThreadOutboxDelivery(): {
 
   function drainPass(): void {
     const {
+      scheduledSendEnabled,
       dispatchingQueuedMessageId,
       editingQueuedMessageIds,
       queuedMessagesByThreadKey,
@@ -1145,12 +1152,13 @@ export function createThreadOutboxDelivery(): {
         .map((message) => message.messageId),
     );
     for (const [id, schedule] of schedules) {
-      if (!queuedMessageIds.has(id)) {
+      if (!scheduledSendEnabled || !queuedMessageIds.has(id)) {
         clearTimeout(schedule.timer);
         schedules.delete(id);
       }
     }
     for (const message of Object.values(queuedMessagesByThreadKey).flat()) {
+      if (!scheduledSendEnabled) continue;
       const at = message.scheduledAt;
       const previous = schedules.get(message.messageId);
       if (previous?.at === at) continue;
@@ -1185,7 +1193,8 @@ export function createThreadOutboxDelivery(): {
     for (const [threadKey, queuedMessages] of Object.entries(queuedMessagesByThreadKey)) {
       const nextQueuedMessage = queuedMessages.find(
         (message) =>
-          message.scheduledAt === undefined || Date.parse(message.scheduledAt) <= Date.now(),
+          message.scheduledAt === undefined ||
+          (scheduledSendEnabled && Date.parse(message.scheduledAt) <= Date.now()),
       );
       if (!nextQueuedMessage) {
         continue;

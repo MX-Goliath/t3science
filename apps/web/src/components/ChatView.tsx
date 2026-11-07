@@ -1,3 +1,4 @@
+import { QueuedRunsControl as ScienceQueuedRunsControl } from "./chat/ScienceQueuedRunsControl";
 import { Button } from "./ui/button";
 import { getCustomModelOptionsByInstance } from "../modelSelection";
 import { isGeneralChatsProjectId } from "@t3tools/contracts";
@@ -2451,6 +2452,7 @@ export default function ChatView(props: ChatViewProps) {
     acknowledgeActiveThreadWoke,
     activeBranchMismatchKey,
     backgroundWorkBanner,
+    backgroundWorkNow,
     attentionNow,
     workNow,
     childInputNow,
@@ -2618,7 +2620,7 @@ export default function ChatView(props: ChatViewProps) {
         })
       : null;
   const queuedAgentMessageBannerItem = ((): ComposerBannerStackItem | null => {
-    if (scheduledSend?.source !== "agent-completion") {
+    if (!settings.scienceScheduledSend || scheduledSend?.source !== "agent-completion") {
       return null;
     }
     const waitingForAgent = scheduledSend.waitingForAgent;
@@ -3113,10 +3115,11 @@ export default function ChatView(props: ChatViewProps) {
       .some((id) => id !== "" && !previousIds.has(id));
     if (hasNewMessage && timelineLiveFollowEnabled) scrollToEnd(true);
   }, [routeThreadKey, pendingGuestMessageKey, timelineLiveFollowEnabled, scrollToEnd]);
+  const QueuedRuns = settings.scienceQueue ? ScienceQueuedRunsControl : QueuedRunsControl;
   const queuedRunsControl =
     isServerThread && activeThread ? (
       <>
-        <QueuedRunsControl
+        <QueuedRuns
           ref={queuedRunsControlRef}
           steerShortcutLabel={shortcutLabelForCommand(keybindings, "thread.steerQueuedMessage", {
             context: { terminalFocus: false },
@@ -3186,17 +3189,29 @@ export default function ChatView(props: ChatViewProps) {
   const onExpandTimelineImageStable = useStableCallback(onExpandTimelineImage);
   const shownThreadSyncPhase = activeEnvironmentUnavailable ? null : delayedThreadSyncPhase;
   const hasThreadNow =
-    attentionNow !== null || workNow !== null || goalNow !== null || shownThreadSyncPhase !== null;
+    attentionNow !== null ||
+    workNow !== null ||
+    (!settings.scienceWorkPanels && backgroundWorkNow !== null) ||
+    goalNow !== null ||
+    shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
   const scrollToEndSummary =
     [childInputNow?.waitingLabel ?? null, queuedRunCount === 0 ? null : `${queuedRunCount} queued`]
       .filter((part) => part !== null)
       .join(" · ") || null;
+  const hasQueuedTurns =
+    queuedRunCount > 0 ||
+    optimisticUserMessages.some(
+      (message) =>
+        message.inputIntent === "queued_turn" &&
+        !serverProjection?.messages.some((committed) => committed.id === message.id),
+    );
   const timelineFooter =
     pendingHandoff === null &&
     !hasThreadNow &&
     threadStatusLine === null &&
-    pendingGuestMessageCount === 0 ? null : (
+    pendingGuestMessageCount === 0 &&
+    (settings.scienceQueue || !hasQueuedTurns) ? null : (
       <>
         {pendingHandoff === null ? null : (
           <div className="chat-content-lane">
@@ -3211,7 +3226,7 @@ export default function ChatView(props: ChatViewProps) {
         <ThreadNow
           key={routeThreadKey}
           attention={attentionNow}
-          work={workNow}
+          work={workNow ?? (!settings.scienceWorkPanels ? backgroundWorkNow : null)}
           syncPhase={shownThreadSyncPhase}
           goal={goalNow}
         />
@@ -3223,6 +3238,7 @@ export default function ChatView(props: ChatViewProps) {
             onFileOpen={openFileAttachmentStable}
           />
         ) : null}
+        {!settings.scienceQueue && hasQueuedTurns ? queuedRunsControl : null}
       </>
     );
 
@@ -3649,7 +3665,7 @@ export default function ChatView(props: ChatViewProps) {
                     <ChildThreadApprovals threadRef={activeThreadRef} />
                     <ComposerSurface.Shell
                       contextRow={showComposerContextStrip}
-                      attachedContextRow={isDraftHeroState}
+                      attachedContextRow={settings.scienceComposer && isDraftHeroState}
                     >
                       <ComposerSurface.Host
                         inert={queuedRunEdit.isSaving}
@@ -3741,14 +3757,17 @@ export default function ChatView(props: ChatViewProps) {
                                             : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
-                              queuedRunsControl={queuedRunsControl}
+                              permissionsShownInStrip={showComposerContextStrip && !isServerThread}
+                              queuedRunsControl={settings.scienceQueue ? queuedRunsControl : null}
                               backgroundWorkControl={
-                                backgroundWorkBanner !== null ? (
+                                settings.scienceWorkPanels && backgroundWorkBanner !== null ? (
                                   <ComposerBannerStack items={[backgroundWorkBanner]} />
                                 ) : null
                               }
                               tasksControl={
-                                shownThreadSyncPhase === null && composerTasksPlan !== null ? (
+                                settings.scienceWorkPanels &&
+                                shownThreadSyncPhase === null &&
+                                composerTasksPlan !== null ? (
                                   <ComposerTasksControl
                                     key={routeThreadKey}
                                     plan={composerTasksPlan}

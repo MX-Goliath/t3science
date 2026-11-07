@@ -12,7 +12,7 @@ import { render } from "../../../test/render";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { makeThreadFixture } from "../../test-fixtures";
 import { useComposerSelection } from "./useComposerSelection";
-import { TraitsPicker } from "./TraitsPicker";
+import { TraitsPicker } from "./ScienceTraitsPicker";
 
 it.each([true, false])(
   "resets to the project model with its saved options (%s), replacing remembered options",

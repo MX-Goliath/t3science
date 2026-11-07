@@ -347,7 +347,6 @@ function WindowKeyDownListener({ onKeyDown }: { onKeyDown: (event: KeyboardEvent
 export const ModelPickerContent = memo(function ModelPickerContent(props: {
   environmentId: EnvironmentId | null;
   activeInstanceId: ProviderInstanceId;
-  isComposerOwned?: boolean;
   model: string;
   selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string }>;
   onToggleModel?: (instanceId: ProviderInstanceId, model: string) => void;
@@ -424,8 +423,24 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       }),
     ) &&
     !isProviderInstancePickerReady(activeEntry);
+  const activeInstanceNeedsSetup =
+    onOpenProviderSetup !== undefined &&
+    activeEntry !== undefined &&
+    shouldOfferModelPickerSetup(
+      activeEntry,
+      modelOptionsByInstance.get(props.activeInstanceId) ?? [],
+    );
   const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | "favorites">(
-    props.activeInstanceId,
+    () => {
+      if (
+        props.lockedProvider !== null ||
+        activeInstanceHasSelectableUnavailableModel ||
+        activeInstanceNeedsSetup
+      ) {
+        return props.activeInstanceId;
+      }
+      return favorites.length > 0 ? "favorites" : props.activeInstanceId;
+    },
   );
   const favoritesSet = new Set(favorites.map((fav) => providerModelKey(fav.provider, fav.model)));
   const [expandedLegacyInstances, setExpandedLegacyInstances] = useState(
@@ -818,29 +833,25 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     announce(`Model: ${name ?? selectedSlug}`, "model-picker");
   };
 
-  const heightScale = props.isComposerOwned && !props.docked ? 1.3 : 1;
-
   return (
     <TooltipProvider delay={0}>
       <WindowKeyDownListener onKeyDown={onWindowKeyDown} />
       <div
         ref={pickerContentRef}
         className={cn(
-          "relative flex w-screen flex-row overflow-hidden",
-          props.isComposerOwned && !props.docked ? "max-w-72" : "max-w-90",
-          props.docked && "max-sm:h-56 max-sm:w-full max-sm:max-w-none",
+          "relative flex w-screen max-w-90 flex-row overflow-hidden",
+          props.docked ? "max-sm:h-56 max-sm:w-full max-sm:max-w-none" : "max-h-86.5",
         )}
         // Docked, the popup sets the height; a minimum here would overflow short windows.
-        style={{
-          maxHeight: props.docked ? undefined : `calc(var(--spacing) * 86.5 * ${heightScale})`,
-          ...(props.docked
-            ? {}
+        style={
+          props.docked
+            ? undefined
             : isSearching
               ? { height: searchHeight }
               : {
-                  minHeight: `min(calc((var(--spacing) * ${tallestTabUnits + LIST_CHROME_UNITS} + 1px) * ${heightScale}), calc(var(--spacing) * 86.5 * ${heightScale}))`,
-                }),
-        }}
+                  minHeight: `min(calc(var(--spacing) * ${tallestTabUnits + LIST_CHROME_UNITS} + 1px), calc(var(--spacing) * 86.5))`,
+                }
+        }
         data-model-picker-content="true"
       >
         {showSidebar && (
@@ -905,7 +916,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         >
           <div
             className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/40",
+              "flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/40",
               showSidebar && "border-l border-border/70",
             )}
           >

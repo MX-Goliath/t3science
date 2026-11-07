@@ -72,6 +72,7 @@ it("pins and unpins an attachment from the composer thumbnail menu", async () =>
   using _environment = installFakeEnvironment([]);
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
+    scienceAttachmentPinning: true,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const draftId = DraftId.make("draft-pinned-attachment");

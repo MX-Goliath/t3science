@@ -508,6 +508,36 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["hide fold running monitoring threads inbox sidebar shelf"],
   },
   {
+    id: "scienceComposer",
+    title: "Science composer",
+    to: "/settings/labs",
+    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
+  },
+  {
+    id: "scienceQueue",
+    title: "Science queue",
+    to: "/settings/labs",
+    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
+  },
+  {
+    id: "scienceWorkPanels",
+    title: "Science work panels",
+    to: "/settings/labs",
+    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
+  },
+  {
+    id: "scienceScheduledSend",
+    title: "Scheduled sends",
+    to: "/settings/labs",
+    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
+  },
+  {
+    id: "scienceAttachmentPinning",
+    title: "Pinned attachments",
+    to: "/settings/labs",
+    searchTerms: ["science composer queue reasoning speed schedule attachments labs"],
+  },
+  {
     id: "boring-sidebar",
     title: "Boring sidebar (group by project)",
     to: "/settings/labs",

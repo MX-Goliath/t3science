@@ -289,3 +289,95 @@ export function branchMismatchBannerItem(input: {
     onDismiss: input.onDismiss,
   };
 }
+
+export function backgroundWorkNowItem(input: {
+  readonly threadId: ThreadId;
+  readonly tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>;
+  readonly turnItems: ThreadStructure["turnItems"];
+  readonly stopDisabled: boolean;
+  readonly stopping: boolean;
+  readonly onStop: () => Promise<void>;
+  readonly onOpenThread: (threadId: ThreadId) => void;
+}): ThreadNowItem | null {
+  const { onOpenThread } = input;
+  const presentation = presentPendingBackgroundWork(input.tasks);
+  if (presentation === null) return null;
+  const rows = presentation.items.map((task) => {
+    // Same key derivePendingBackgroundWork gives turn-item tasks; subagent items carry progress.
+    const item = input.turnItems.findLast(
+      (candidate) => (candidate.nativeItemRef?.nativeId || candidate.id) === task.taskId,
+    );
+    const subagent = item?.type === "subagent" ? item : undefined;
+    return {
+      task,
+      label:
+        item?.type === "command_execution" && commandDisplayText(item.input) === task.label ? (
+          <span className="font-mono in-data-[slot=popover-popup]:whitespace-pre-wrap">
+            {task.label}
+          </span>
+        ) : task.label.includes("\n") ? (
+          <span className="in-data-[slot=popover-popup]:whitespace-pre-wrap">{task.label}</span>
+        ) : (
+          task.label
+        ),
+      activity: subagent?.progress?.replace(/\s+/gu, " ").trim() || null,
+      startedAtMs: item?.startedAt ? DateTime.toEpochMillis(item.startedAt) : null,
+      updatedAtMs: subagent ? DateTime.toEpochMillis(subagent.updatedAt) : 0,
+      childThreadId: task.childThreadId ?? subagent?.childThreadId ?? undefined,
+    };
+  });
+  const [only] = rows.length === 1 ? rows : [];
+  const newest = rows
+    .filter((row) => row.activity)
+    .toSorted((left, right) => right.updatedAtMs - left.updatedAtMs)[0];
+  const isCommand = (row: (typeof rows)[number]) => row.task.kind !== "subagent";
+  const onlyThreadId = only?.childThreadId;
+  const startedAtMs = only?.startedAtMs ?? null;
+  return {
+    id: `background-work:${input.threadId}`,
+    icon: rows.every(isCommand) ? <TerminalIcon /> : <CircleDashedIcon />,
+    title:
+      only && typeof only.label !== "string" && only.task.label !== only.task.kind ? (
+        <>
+          {presentation.waiting ? "Waiting" : "Running"} · {only.label}
+        </>
+      ) : (
+        presentation.title
+      ),
+    description: only ? (
+      only.activity
+    ) : newest ? (
+      <>
+        {newest.label}: {newest.activity}
+      </>
+    ) : (
+      rows.map((row, index) => (
+        <Fragment key={row.task.taskId}>
+          {index > 0 ? ", " : null}
+          {row.label}
+        </Fragment>
+      ))
+    ),
+    actions: (
+      <>
+        {startedAtMs === null ? null : (
+          <span
+            ref={tickTextContent(
+              (nowMs) => formatDuration(Math.max(1_000, nowMs - startedAtMs)),
+              true,
+            )}
+            className="tabular-nums"
+          />
+        )}
+        {onlyThreadId === undefined ? null : (
+          <InlineButton tone="muted" onClick={() => onOpenThread(onlyThreadId)}>
+            Open
+          </InlineButton>
+        )}
+        <InlineButton disabled={input.stopDisabled} onClick={() => void input.onStop()}>
+          {input.stopping ? "Stopping..." : "Stop"}
+        </InlineButton>
+      </>
+    ),
+  };
+}

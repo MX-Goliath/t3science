@@ -43,6 +43,7 @@ export function SettingsLabsRouteScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
         <BetaSettingsSection />
+        <ScienceSettingsSection />
         <LegacySettingsSection />
       </ScrollView>
     </SettingsScreen>
@@ -292,5 +293,38 @@ function LegacySettingsSection() {
         control; otherwise every task runs in Build mode.
       </Text>
     </View>
+  );
+}
+
+function ScienceSettingsSection() {
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const save = useAtomSet(updateMobilePreferencesAtom);
+  return (
+    <SettingsSection title="Science">
+      {(
+        [
+          [
+            "scienceComposer",
+            "Science composer",
+            "Show provider usage limits beside the model control.",
+          ],
+          ["scienceQueue", "Science queue", "Use the expanded queue with message reordering."],
+          [
+            "scienceScheduledSend",
+            "Scheduled sends",
+            "Schedule messages from this device. Disabling pauses scheduled messages.",
+          ],
+        ] as const
+      ).map(([key, label, subtitle]) => (
+        <SettingsSwitchRow
+          key={key}
+          label={label}
+          subtitle={subtitle}
+          value={AsyncResult.isSuccess(preferences) && preferences.value[key] === true}
+          disabled={!AsyncResult.isSuccess(preferences) || preferences.waiting}
+          onValueChange={(value) => save({ [key]: value })}
+        />
+      ))}
+    </SettingsSection>
   );
 }

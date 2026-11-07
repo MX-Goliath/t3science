@@ -10,8 +10,8 @@ import {
   getComposerProviderState,
   getComposerReasoningStep,
   withImplicitFastModeDefault,
-} from "./composerProviderState";
-import { readPromptUltrathink } from "./TraitsPicker";
+} from "./ScienceComposerProviderState";
+import { readPromptUltrathink } from "./ScienceTraitsPicker";
 
 const PROVIDER: ProviderDriverKind = ProviderDriverKind.make("codex");
 const MODEL = "test-model";

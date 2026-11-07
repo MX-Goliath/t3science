@@ -42,7 +42,7 @@ vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
 
 import "~/index.css";
 import { render as renderUi } from "../../../test/render";
-import { QueuedRunsControl } from "./QueuedRunsControl";
+import { QueuedRunsControl } from "./ScienceQueuedRunsControl";
 
 function setup() {
   state.projection = null;
