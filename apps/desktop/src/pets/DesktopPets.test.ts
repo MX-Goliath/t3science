@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - Persistence tests create isolated local userdata.
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
+import * as NodeOS from "node:os";
 
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -25,9 +26,7 @@ type DesktopPetsTestError =
 describe("DesktopPets", () => {
   it.effect("installs defaults, persists mutations, and protects bundled pets", () =>
     Effect.acquireUseRelease(
-      Effect.promise(() =>
-        NodeFS.mkdtemp(NodePath.join(process.env.TEMP ?? process.cwd(), "t3-desktop-pets-")),
-      ),
+      Effect.promise(() => NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-desktop-pets-"))),
       (stateDir) =>
         Effect.gen(function* () {
           const first = yield* runPets(stateDir, (pets) =>

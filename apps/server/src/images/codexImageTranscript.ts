@@ -11,6 +11,11 @@ import {
 } from "../project/AgentSessionJson.ts";
 import { findCodexImageTranscript, type DiscoveredCodexImage } from "./codexImageFiles.ts";
 
+class ImageTranscriptParseError extends Schema.TaggedError<ImageTranscriptParseError>()(
+  "ImageTranscriptParseError",
+  { cause: Schema.Defect() },
+) {}
+
 const TranscriptMessage = Schema.Struct({
   type: Schema.String,
   timestamp: Schema.optional(Schema.String),
@@ -49,7 +54,9 @@ export const readCodexImageTranscript = Effect.fn("ImageLibrary.readCodexImageTr
       const reserve = (bytes: number) => {
         recordBytes += bytes;
         if (recordBytes > 4 * 1024 * 1024)
-          throw new TranscriptJsonLimitError("Conversation record exceeds the text limit");
+          throw new TranscriptJsonLimitError({
+            message: "Conversation record exceeds the text limit",
+          });
       };
       let reader = createTranscriptJsonReader(reserve, selectMessage);
       const consume = () => {
@@ -83,19 +90,25 @@ export const readCodexImageTranscript = Effect.fn("ImageLibrary.readCodexImageTr
       yield* fs.stream(transcript, { bytesToRead: 4 * 1024 * 1024 * 1024 }).pipe(
         Stream.decodeText(),
         Stream.runForEach((chunk) =>
-          Effect.try(() => {
-            let start = 0;
-            while (start < chunk.length) {
-              const newline = chunk.indexOf("\n", start);
-              reader.write(chunk.slice(start, newline === -1 ? chunk.length : newline));
-              if (newline === -1) break;
-              consume();
-              start = newline + 1;
-            }
+          Effect.try({
+            try: () => {
+              let start = 0;
+              while (start < chunk.length) {
+                const newline = chunk.indexOf("\n", start);
+                reader.write(chunk.slice(start, newline === -1 ? chunk.length : newline));
+                if (newline === -1) break;
+                consume();
+                start = newline + 1;
+              }
+            },
+            catch: (cause) => new ImageTranscriptParseError({ cause }),
           }),
         ),
       );
-      yield* Effect.try(consume);
+      yield* Effect.try({
+        try: consume,
+        catch: (cause) => new ImageTranscriptParseError({ cause }),
+      });
     }
     let imageMessageIndex: number | null = null;
     let nearest = Infinity;

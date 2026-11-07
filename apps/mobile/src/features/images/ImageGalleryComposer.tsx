@@ -42,7 +42,7 @@ import {
   compatibleRuntimeModeForChoices,
 } from "../threads/thread-settings-options";
 import { buildModelOptions } from "../../lib/modelOptions";
-import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { draftThreadShell } from "../threads/draft-thread-shell";
 import { ThreadComposer } from "../threads/ThreadComposer";
 import { AppText as Text } from "../../components/ui/AppText";

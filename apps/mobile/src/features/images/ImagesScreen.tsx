@@ -20,9 +20,9 @@ import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
 import { imageLibraryConversation } from "../../state/imageLibrary";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { requestThreadMessageJump } from "../threads/threadMessageJump";
-import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { AppText as Text } from "../../components/ui/AppText";
-import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
+import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
 import { AppBar } from "../../components/ui/AppBar";
 import { Button } from "../../components/ui/Button";
 import { Menu } from "../../components/ui/Menu";
@@ -157,13 +157,16 @@ function EnabledImagesScreen(props: { workspace?: boolean }) {
     <View className="flex-1 bg-screen">
       <AppBar
         title={image ? image.fileName : copy.mine}
-        options={{ headerBackVisible: !props.workspace }}
-        onBack={() => {
-          if (conversation) setConversation(null);
-          else if (image) setSelection(null);
-          else if (navigation.canGoBack()) navigation.goBack();
-          else navigation.navigate("Home");
-        }}
+        onBack={
+          props.workspace && !image
+            ? undefined
+            : () => {
+                if (conversation) setConversation(null);
+                else if (image) setSelection(null);
+                else if (navigation.canGoBack()) navigation.goBack();
+                else navigation.navigate("Home");
+              }
+        }
         actions={
           image
             ? [
