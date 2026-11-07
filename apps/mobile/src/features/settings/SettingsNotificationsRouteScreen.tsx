@@ -1,3 +1,4 @@
+import { DirectNotificationSettings } from "./DirectNotificationSettings";
 import * as Dialog from "../../components/ui/Dialog";
 import {
   AuthRelayWriteScope,
@@ -114,11 +115,15 @@ export function SettingsNotificationsRouteScreen() {
       <SettingsScreen title="Notifications">
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
-          contentContainerClassName="px-5 pt-4"
+          contentContainerClassName="gap-6 px-5 pt-4"
         >
-          <Text className="text-base text-foreground-muted">
-            Notifications require T3 Connect in this app build.
-          </Text>
+          {Platform.OS === "android" ? (
+            <DirectNotificationSettings />
+          ) : (
+            <Text className="text-base text-foreground-muted">
+              Notifications require T3 Connect in this app build.
+            </Text>
+          )}
         </ScrollView>
       </SettingsScreen>
     );
@@ -422,6 +427,7 @@ function ConfiguredSettingsNotificationsRouteScreen() {
           paddingBottom: Math.max(insets.bottom, 18) + 18,
         }}
       >
+        {Platform.OS === "android" ? <DirectNotificationSettings /> : null}
         <SettingsSection title="Agent activity">
           <SettingsSwitchRow
             icon="bell.badge"

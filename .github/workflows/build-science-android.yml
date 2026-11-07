@@ -73,7 +73,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -87,7 +87,7 @@ jobs:
         run: vp exec expo prebuild --clean --platform android --no-install
       - name: Test Android APK validation
         working-directory: apps/mobile/android
-        run: ./gradlew :t3tools-mobile-app-updates:testReleaseUnitTest
+        run: ./gradlew :t3tools-mobile-app-updates:testReleaseUnitTest :t3-agent-notifications:testDebugUnitTest
       - name: Build signed ARM64 APK
         run: vp run dist:mobile:android --abi arm64-v8a --output "release/T3-Science-$RELEASE_VERSION-android.apk"
       - name: Verify APK signature, version and architecture

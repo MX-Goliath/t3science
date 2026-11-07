@@ -1,6 +1,8 @@
 # Android notifications
 
-The Android app receives Firebase Cloud Messaging (FCM) data messages. The relay sends them directly through FCM HTTP v1; an Expo Push account is not required.
+The Android app supports direct background notifications over the existing authenticated shell stream. Enable them in Settings → Notifications; no relay or Firebase configuration is needed. The foreground service uses the paired server's bearer credential to mint fresh RPC tickets on reconnect. It cannot use cloud-only DPoP routes. Credentials are encrypted with Android Keystore and stored outside Android backups. A new native APK is required; see the [user guide](../user/mobile-notifications.md) for activation and power-management limits.
+
+For cloud delivery, the Android app receives Firebase Cloud Messaging (FCM) data messages. The relay sends them directly through FCM HTTP v1; an Expo Push account is not required. The remaining Firebase and relay setup below applies to cloud delivery.
 
 ## Android compatibility and automated checks
 

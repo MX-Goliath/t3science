@@ -97,6 +97,8 @@ object AgentNotifications {
     threadOnScreen = path
   }
 
+  fun isThreadOnScreen(path: String): Boolean = threadOnScreen == path
+
   @Synchronized
   fun dismiss(context: Context) {
     context.getSharedPreferences(
@@ -149,8 +151,9 @@ object AgentNotifications {
         Lifecycle.State.RESUMED
       )
       val visibleThread = threadOnScreen
-      val onScreen = resumed && visibleThread != null && data["alert_path"] == visibleThread
-      if (!onScreen) {
+      val suppressed = (resumed && visibleThread != null && data["alert_path"] == visibleThread) ||
+        DirectNotificationService.handles(data["alert_path"])
+      if (!suppressed) {
         postAlert(context, scheme, data, alertId)
       }
       prefs.edit().remove("seenAlerts").putString(
@@ -158,7 +161,7 @@ object AgentNotifications {
         (seen.takeLast(63) + alertId).joinToString("\n")
       ).apply()
       // Android drops posts to a blocked channel, so that alert shows nothing.
-      return !onScreen && (
+      return !suppressed && (
         Build.VERSION.SDK_INT < 26 ||
           manager(context).getNotificationChannel(ALERT_CHANNEL)?.importance !=
           NotificationManager.IMPORTANCE_NONE

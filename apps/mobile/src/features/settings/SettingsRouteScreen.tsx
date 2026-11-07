@@ -242,6 +242,9 @@ function useSettingsIndexSections(): SettingsListSection[] {
       rows: [
         page("SettingsOrganization", "gearshape", "General"),
         page("SettingsAppearance", "paintbrush", "Appearance"),
+        ...(Platform.OS === "android"
+          ? [page("SettingsNotifications", "bell.badge", "Notifications")]
+          : []),
         page("SettingsFollowUp", "bubble.left.and.bubble.right", "Chat"),
         page("SettingsWebChat", "globe", "Web chat"),
         ...(navigationCustomizationAvailable()
