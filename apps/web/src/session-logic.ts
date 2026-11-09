@@ -334,42 +334,6 @@ function planItemTime(
   );
 }
 
-function toLatestProposedPlanState(
-  projection: ThreadStructure,
-  plan: Extract<OrchestrationV2PlanArtifact, { readonly kind: "proposed_plan" }>,
-): LatestProposedPlanState {
-  const updatedAt = planItemTime(projection, plan);
-  return {
-    id: plan.id,
-    createdAt: updatedAt,
-    updatedAt,
-    runId: plan.runId,
-    planMarkdown: plan.markdown,
-    status: plan.status,
-  };
-}
-
-export function findLatestProposedPlan(
-  projection: ThreadStructure | null,
-  latestRunId: RunId | string | null | undefined,
-): LatestProposedPlanState | null {
-  if (projection === null) return null;
-  const plans = projection.plans.filter((plan) => plan.kind === "proposed_plan");
-  const candidates = latestRunId ? plans.filter((plan) => plan.runId === latestRunId) : plans;
-  const plan = [...(candidates.length > 0 ? candidates : plans)]
-    .toSorted(
-      (left, right) =>
-        planItemTime(projection, left).localeCompare(planItemTime(projection, right)) ||
-        left.id.localeCompare(right.id),
-    )
-    .at(-1);
-  return plan === undefined ? null : toLatestProposedPlanState(projection, plan);
-}
-
-export function hasActionableProposedPlan(plan: LatestProposedPlanState | null): boolean {
-  return plan?.status === "active";
-}
-
 const STANDALONE_V2_ITEM_TYPES = new Set<OrchestrationV2ProjectedTurnItem["item"]["type"]>([
   "fork",
   "handoff",
