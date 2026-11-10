@@ -182,17 +182,12 @@ export const MuseSubscriptionUsage = Schema.Struct({
   }),
 });
 export type MuseSubscriptionUsage = typeof MuseSubscriptionUsage.Type;
-/** `turn/retryScheduled` carries `reason`; `turn/modelRetryScheduled` carries the HTTP failure. */
-export const MuseRetryScheduled = Schema.Struct({
+export const MuseTurnRetryScheduled = Schema.Struct({
   turnId: NonEmptyString,
-  attempt: Schema.Int.check(Schema.isGreaterThan(0)),
   nextAttempt: Schema.Int.check(Schema.isGreaterThan(0)),
   maxAttempts: Schema.Int.check(Schema.isGreaterThan(0)),
-  reason: Schema.optional(NonEmptyString),
-  errorKind: Schema.optional(Schema.String),
-  httpStatus: Schema.optional(Schema.Int),
+  reason: NonEmptyString,
   retryDelayMs: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
-  sourceRange: Schema.Struct({ first: Schema.Struct({ id: NonEmptyString }) }),
 });
 export const MuseCompactResult = Schema.Struct({
   status: Schema.String,

@@ -31,15 +31,6 @@ const settings = Schema.decodeSync(ServerSettings)({
   easDeviceHosts: [
     { kind: "eas", id: "eas", label: "EAS Simulator", accessToken: personal("op://expo") },
   ],
-  simlockDeviceHosts: [
-    {
-      kind: "simlock",
-      id: "pool",
-      label: "Simlock Pool",
-      gatewayUrl: "https://simlock.test",
-      agentToken: personal("op://simlock"),
-    },
-  ],
   cloudSpeechCredentials: { openai: personal("op://voice"), xai: "" },
 });
 
@@ -52,7 +43,6 @@ it.each([
       "GitHub · github.com",
       "https://hub.test · Management Key",
       "EAS Simulator · Access Token",
-      "Simlock Pool · Agent Token",
       "Voice · OpenAI",
     ],
   ],

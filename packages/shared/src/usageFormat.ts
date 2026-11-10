@@ -26,10 +26,11 @@ export function usageSourceMessages(sources: readonly UsageSource[]): readonly s
   const malformedBySource = new Map<string, number>();
   for (const source of sources) {
     if (
-      source.status !== "partial" &&
-      source.status !== "failed" &&
-      source.fingerprint.provider !== "cursor" &&
-      !(source.status === "missing" && source.malformedRecords > 0)
+      source.action ||
+      (source.status !== "partial" &&
+        source.status !== "failed" &&
+        source.fingerprint.provider !== "cursor" &&
+        !(source.status === "missing" && source.malformedRecords > 0))
     ) {
       continue;
     }

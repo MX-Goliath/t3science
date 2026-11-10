@@ -248,12 +248,12 @@ describe("ProviderContinuationService", () => {
   });
 
   it.effect(
-    "a project-disabled instance refuses a delegated-completion wake exactly once, disposes it, and never retries",
+    "a project-disabled instance refuses a delegated-completion wake exactly once, acknowledges it, and never retries",
     () => {
       return Effect.gen(function* () {
         const attempts = yield* Ref.make(0);
         const cleared = yield* Ref.make(false);
-        const disposed = yield* Queue.unbounded<unknown>();
+        const acknowledged = yield* Queue.unbounded<unknown>();
         const layerThreads = Layer.mock(ThreadManagementService.ThreadManagementService)({
           getThreadRecords: () => Effect.succeed(delegatedProjection()),
           dispatch: (command) => {
@@ -271,7 +271,7 @@ describe("ProviderContinuationService", () => {
                 ),
               );
             }
-            return Queue.offer(disposed, command).pipe(Effect.as({} as never));
+            return Queue.offer(acknowledged, command).pipe(Effect.as({} as never));
           },
         });
         const layerWorker = ProviderContinuationService.layer.pipe(
@@ -299,22 +299,24 @@ describe("ProviderContinuationService", () => {
           assert.equal(yield* Ref.get(attempts), 1);
           assert.isTrue(yield* Ref.get(cleared));
 
-          const dispositions = (yield* Queue.takeAll(disposed)) as ReadonlyArray<{
+          const acknowledgements = (yield* Queue.takeAll(acknowledged)) as ReadonlyArray<{
             type: string;
             taskId: string;
+            observedByRunId: string | null;
           }>;
           assert.deepEqual(
-            dispositions.map((command) => command.taskId),
+            acknowledgements.map((command) => command.taskId),
             ["node-provider-continuation-first", "node-provider-continuation-second"],
           );
-          for (const command of dispositions) {
-            assert.equal(command.type, "delegated_task.completion-delivery.dispose");
+          for (const command of acknowledgements) {
+            assert.equal(command.type, "delegated_task.completion-delivery.acknowledge");
+            assert.isNull(command.observedByRunId);
           }
 
           yield* TestClock.adjust("1 hour");
           yield* Effect.yieldNow;
           assert.equal(yield* Ref.get(attempts), 1);
-          assert.equal(yield* Queue.size(disposed), 0);
+          assert.equal(yield* Queue.size(acknowledged), 0);
         }).pipe(
           Effect.provide(Layer.merge(ProviderContinuationRequests.layer, layerWorker)),
           Effect.scoped,

@@ -9,7 +9,6 @@ import {
   type ThreadPullRequestLink,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
@@ -83,41 +82,14 @@ function withoutDeferredPullRequests(value: DeferredShellSnapshot): Orchestratio
 
 const SHELL_SYNCHRONIZATION_ERROR_MESSAGE = "Could not synchronize environment data.";
 
-/**
- * Replay does not refresh the older-settled cut, rows that left the newest window, or
- * projections the server rebuilt, so drift grows with the age of the last server snapshot.
- */
-const CACHE_RESUME_MAX_AGE_MILLIS = 12 * 60 * 60 * 1000;
-
-type ShellOriginIdentity = Omit<Persistence.ShellCacheOrigin, "snapshotAt">;
-
-interface ShellSubscription {
-  readonly session: RpcSession;
-  /** What a snapshot from this subscription descends from; null when the server did not say. */
-  readonly identity: ShellOriginIdentity | null;
-}
-
-function canResumeFrom(
-  origin: Persistence.ShellCacheOrigin | undefined,
-  identity: ShellOriginIdentity | null,
-  now: number,
-): boolean {
-  if (origin === undefined || identity === null) return false;
-  const age = now - origin.snapshotAt;
-  return (
-    origin.serverVersion === identity.serverVersion &&
-    origin.databaseMigration === identity.databaseMigration &&
-    origin.omitIdleSubagents === identity.omitIdleSubagents &&
-    origin.omitOlderSettled === identity.omitOlderSettled &&
-    age >= 0 &&
-    age < CACHE_RESUME_MAX_AGE_MILLIS
-  );
-}
-
-interface LiveShell {
-  readonly snapshot: OrchestrationV2ShellSnapshot;
-  // Read together with the rows, so a save never pairs them with another snapshot's origin.
-  readonly origin: Persistence.ShellCacheOrigin | undefined;
+function groupBySession<A>(entries: ReadonlyArray<readonly [RpcSession, A]>) {
+  const groups: Array<[RpcSession, Array<A>]> = [];
+  for (const [session, value] of entries) {
+    const last = groups.at(-1);
+    if (last?.[0] === session) last[1].push(value);
+    else groups.push([session, [value]]);
+  }
+  return groups;
 }
 
 export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")(function* () {
@@ -133,30 +105,29 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
           environmentId,
           ...safeErrorLogAttributes(error),
         }),
-        Effect.as(Option.none<Persistence.CachedShellSnapshot>()),
+        Effect.as(Option.none<DeferredShellSnapshot>()),
       ),
     ),
   );
-  const cachedOrigin = Option.isSome(cached) ? cached.value.origin : undefined;
-  const cachedSnapshot = Option.map(cached, ({ origin: _origin, ...rows }) =>
-    withoutDeferredPullRequests(rows),
-  );
+  const cachedSnapshot = Option.map(cached, withoutDeferredPullRequests);
   const state = yield* SubscriptionRef.make<EnvironmentShellState>({
     ...EMPTY_SHELL_STATE,
     snapshot: cachedSnapshot,
     status: shellStatusForSnapshot(cachedSnapshot),
   });
   const awaitingCompletion = yield* Ref.make(false);
-  const activeSubscription = yield* Ref.make<ShellSubscription | null>(null);
-  // The server snapshot the in-memory rows descend from, directly or through the cache.
-  // Only a server snapshot renews it; `snapshot-required` drops it.
-  const origin = yield* Ref.make(cachedOrigin);
-  const reloadRequests = yield* Queue.unbounded<void>();
-  const latestLive = yield* Ref.make<Option.Option<LiveShell>>(Option.none());
+  // The omissions and server build of the subscription whose snapshot the
+  // in-memory shell last came from; null while it holds only cached data.
+  const authoritativeOmission = yield* Ref.make<string | null>(null);
+  // Items buffered from a previous session keep that session's key.
+  const sessionOmissions = new WeakMap<RpcSession, string | null>();
+  const latestLiveSnapshot = yield* Ref.make<Option.Option<OrchestrationV2ShellSnapshot>>(
+    Option.none(),
+  );
   const persistence = yield* Queue.sliding<OrchestrationV2ShellSnapshot>(1);
 
   const persistenceLock = yield* Semaphore.make(1);
-  let lastPersisted: LiveShell | undefined;
+  let lastPersisted: OrchestrationV2ShellSnapshot | undefined;
   // Rows still waiting for their deferred pull request links, which must not be saved:
   // the cache would keep them without links until the next server refresh.
   let pendingLinkRows: ReadonlySet<OrchestrationV2ThreadShell> = new Set();
@@ -164,25 +135,24 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
     flush: boolean,
   ) {
     while (true) {
-      const latest = yield* Ref.get(latestLive);
+      const latest = yield* Ref.get(latestLiveSnapshot);
       if (Option.isNone(latest) || latest.value === lastPersisted) return;
-      const { snapshot, origin } = latest.value;
-      if (snapshot.threads.some((thread) => pendingLinkRows.has(thread))) return;
+      if (latest.value.threads.some((thread) => pendingLinkRows.has(thread))) return;
+      const snapshot = latest.value;
       if (
         lastPersisted !== undefined &&
-        origin === lastPersisted.origin &&
-        snapshot.snapshotSequence >= lastPersisted.snapshot.snapshotSequence &&
-        snapshot.schemaVersion === lastPersisted.snapshot.schemaVersion &&
-        snapshot.projects === lastPersisted.snapshot.projects &&
-        snapshot.threads === lastPersisted.snapshot.threads &&
-        snapshot.archivedThreads === lastPersisted.snapshot.archivedThreads
+        snapshot.snapshotSequence >= lastPersisted.snapshotSequence &&
+        snapshot.schemaVersion === lastPersisted.schemaVersion &&
+        snapshot.projects === lastPersisted.projects &&
+        snapshot.threads === lastPersisted.threads &&
+        snapshot.archivedThreads === lastPersisted.archivedThreads
       ) {
         // Keep the live cursor without rewriting the rows. Remember it here too so a
         // later authoritative reset to a lower sequence still reaches the cache.
-        lastPersisted = latest.value;
+        lastPersisted = snapshot;
         return;
       }
-      const saved = yield* cache.saveShell(environmentId, snapshot, origin).pipe(
+      const saved = yield* cache.saveShell(environmentId, snapshot).pipe(
         Effect.as(true),
         Effect.catch((error) =>
           Effect.logWarning("Could not persist environment shell cache.").pipe(
@@ -192,7 +162,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         ),
       );
       if (!saved) return;
-      lastPersisted = latest.value;
+      lastPersisted = snapshot;
       if (!flush) return;
     }
   }, persistenceLock.withPermit);
@@ -250,20 +220,14 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
   const snapshotWriteLock = yield* Semaphore.make(1);
 
   const applyItems = Effect.fn("EnvironmentShellState.applyItems")(function* (
-    entries: ReadonlyArray<readonly [RpcSession, OrchestrationV2ShellStreamItem]>,
+    items: ReadonlyArray<OrchestrationV2ShellStreamItem>,
+    omission: string | null,
     pendingLinkIds?: ReadonlySet<ThreadId>,
   ) {
-    // Read under the lock: items buffered across a session change must not land on the
-    // rows the next session loaded.
-    const subscription = yield* Ref.get(activeSubscription);
-    const items = entries.flatMap(([session, item]) =>
-      session === subscription?.session ? [item] : [],
-    );
     const initial = yield* SubscriptionRef.get(state);
     let waiting = yield* Ref.get(awaitingCompletion);
     let next = initial;
     let receivedAuthoritativeSnapshot = false;
-    let snapshotRequired = false;
     let deltas: Array<ShellStreamEvent> = [];
     const flushDeltas = () => {
       if (deltas.length > 0 && Option.isSome(next.snapshot)) {
@@ -296,10 +260,6 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       deltas = [];
     };
     for (const item of items) {
-      if (item.kind === "snapshot-required") {
-        snapshotRequired = true;
-        continue;
-      }
       if (item.kind !== "snapshot" && item.kind !== "synchronized") {
         deltas.push(item);
         continue;
@@ -309,13 +269,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       if (item.kind === "synchronized") {
         waiting = false;
         if (Option.isSome(next.snapshot)) {
-          next = {
-            ...next,
-            status: "live",
-            error: Option.none(),
-            // A cache resume that caught up is as current as a snapshot for generation readers.
-            generation: next.generation === 0 ? ++lastShellGeneration : next.generation,
-          };
+          next = { ...next, status: "live", error: Option.none() };
         }
         continue;
       }
@@ -338,20 +292,6 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
     }
     flushDeltas();
     yield* Ref.set(awaitingCompletion, waiting);
-    let nextOrigin = yield* Ref.get(origin);
-    if (snapshotRequired) {
-      // The rows stay on screen but reload before the next resume; the cache keeps the old
-      // origin until that reload saves, which costs at most one more refusal.
-      nextOrigin = undefined;
-      yield* Ref.set(origin, nextOrigin);
-      yield* Queue.offer(reloadRequests, undefined);
-    } else if (receivedAuthoritativeSnapshot) {
-      nextOrigin =
-        subscription?.identity == null
-          ? undefined
-          : { ...subscription.identity, snapshotAt: yield* Clock.currentTimeMillis };
-      yield* Ref.set(origin, nextOrigin);
-    }
     if (next === initial) return;
     if (pendingLinkIds !== undefined && Option.isSome(next.snapshot)) {
       pendingLinkRows = new Set(
@@ -359,12 +299,12 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       );
     }
     if (Option.isSome(next.snapshot)) {
-      yield* Ref.set(
-        latestLive,
-        Option.some({ snapshot: next.snapshot.value, origin: nextOrigin }),
-      );
+      yield* Ref.set(latestLiveSnapshot, next.snapshot);
     }
     yield* SubscriptionRef.set(state, next);
+    if (receivedAuthoritativeSnapshot && omission !== null) {
+      yield* Ref.set(authoritativeOmission, omission);
+    }
     if (next.snapshot !== initial.snapshot && Option.isSome(next.snapshot)) {
       yield* Queue.offer(persistence, next.snapshot.value);
     }
@@ -425,11 +365,11 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         },
       );
       pendingLinkRows = new Set();
-      const live = yield* Ref.get(latestLive);
+      const live = yield* Ref.get(latestLiveSnapshot);
       if (Option.isNone(live)) return;
-      const latest = Option.isSome(filled) ? filled.value : live.value.snapshot;
-      yield* Ref.set(latestLive, Option.some({ snapshot: latest, origin: live.value.origin }));
-      yield* Queue.offer(persistence, latest);
+      const latest = Option.isSome(filled) ? filled : live;
+      yield* Ref.set(latestLiveSnapshot, latest);
+      yield* Queue.offer(persistence, latest.value);
     },
     (effect) => snapshotWriteLock.withPermit(effect),
   );
@@ -437,52 +377,53 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
     yield* fillDeferredPullRequests(cached.value, cachedSnapshot.value);
   }
 
-  const resubscriptions = Stream.merge(
-    Stream.fromQueue(reloadRequests),
-    Option.match(wakeups, {
-      onNone: () => Stream.never,
-      onSome: (service) =>
-        service.changes.pipe(Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup)),
-    }),
-  );
+  const foregroundResubscriptions = Option.match(wakeups, {
+    onNone: () => Stream.never,
+    onSome: (service) =>
+      service.changes.pipe(Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup)),
+  });
 
   yield* setSynchronizing;
   yield* Effect.forkScoped(
     subscribeDynamicWithSession(
       ORCHESTRATION_V2_WS_METHODS.subscribeShell,
       Effect.fn("EnvironmentShellState.makeSubscribeInput")(function* (session) {
-        const identity = yield* session.initialConfig.pipe(
-          Effect.map((config): ShellOriginIdentity => {
-            const omitIdleSubagents = config.shellThreadFamilies === true;
-            return {
-              serverVersion: config.environment.serverVersion,
-              // Migrations rewrite projections without events, so a migrated server reloads.
-              databaseMigration: config.environment.databaseMigration ?? null,
-              omitIdleSubagents,
-              omitOlderSettled: config.shellOlderSettled === true && omitIdleSubagents,
-            };
-          }),
-          Effect.orElseSucceed(() => null),
-        );
-        const { omitIdleSubagents, omitOlderSettled } = identity ?? {
-          omitIdleSubagents: false,
-          omitOlderSettled: false,
-        };
-        yield* Ref.set(activeSubscription, { session, identity });
+        const { omitIdleSubagents, omitOlderSettled, omissionKey } =
+          yield* session.initialConfig.pipe(
+            Effect.map((config) => {
+              const omitIdleSubagents = config.shellThreadFamilies === true;
+              const omitOlderSettled = config.shellOlderSettled === true && omitIdleSubagents;
+              // Migrations rewrite projections without events, so an upgraded server reloads.
+              const { serverVersion, databaseMigration } = config.environment;
+              return {
+                omitIdleSubagents,
+                omitOlderSettled,
+                omissionKey: JSON.stringify([
+                  omitIdleSubagents,
+                  omitOlderSettled,
+                  serverVersion,
+                  databaseMigration ?? null,
+                ]),
+              };
+            }),
+            Effect.orElseSucceed(() => ({
+              omitIdleSubagents: false,
+              omitOlderSettled: false,
+              omissionKey: null,
+            })),
+          );
+        sessionOmissions.set(session, omissionKey);
         yield* Ref.set(awaitingCompletion, true);
         yield* setSynchronizing;
 
-        // Rows from a recent server snapshot with the same omissions and server build resume
-        // from their cursor, in memory or from the cache. Anything else reloads the HTTP
-        // snapshot so a valid cursor cannot preserve stale or incomplete data.
+        // A shell from a server snapshot resumes from its cursor, on this session or a
+        // new one. Cached data, other omissions, or another server build reload the
+        // authoritative HTTP snapshot so a valid cursor cannot preserve stale data.
+        const hasAuthoritativeSnapshot =
+          omissionKey !== null && (yield* Ref.get(authoritativeOmission)) === omissionKey;
+        let canResume = hasAuthoritativeSnapshot;
         let current = yield* SubscriptionRef.get(state);
-        let canResume =
-          Option.isSome(current.snapshot) &&
-          canResumeFrom(yield* Ref.get(origin), identity, yield* Clock.currentTimeMillis);
-        // Only rows the client already held may be refused; a cursor from the snapshot just
-        // loaded falls back to the socket snapshot, so a refusal cannot loop.
-        const resumingHeldRows = canResume;
-        if (!canResume) {
+        if (!hasAuthoritativeSnapshot || Option.isNone(current.snapshot)) {
           const prepared = yield* SubscriptionRef.get(supervisor.prepared).pipe(
             Effect.flatMap(
               Option.match({
@@ -514,7 +455,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
                 ? []
                 : httpSnapshot.value.threads.map((thread) => thread.id),
             );
-            yield* applyItems([[session, { kind: "snapshot", snapshot }]], pendingLinkIds);
+            yield* applyItems([{ kind: "snapshot", snapshot }], omissionKey, pendingLinkIds);
             canResume = true;
             current = yield* SubscriptionRef.get(state);
             if (Option.isSome(current.snapshot)) {
@@ -532,7 +473,6 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         }
         return {
           afterSequence: current.snapshot.value.snapshotSequence,
-          ...(resumingHeldRows ? { httpSnapshotFallback: true as const } : {}),
           ...omission,
           requestCompletionMarker: true as const,
         };
@@ -540,9 +480,17 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       {
         onExpectedFailure: (cause) => setStreamError(Cause.squash(cause)),
         retryExpectedFailureAfter: "250 millis",
-        resubscribe: resubscriptions,
+        resubscribe: foregroundResubscriptions,
       },
-    ).pipe(Stream.runForEachArray((entries) => applyItems(entries))),
+    ).pipe(
+      Stream.runForEachArray((entries) =>
+        Effect.forEach(
+          groupBySession(entries),
+          ([session, items]) => applyItems(items, sessionOmissions.get(session) ?? null),
+          { discard: true },
+        ),
+      ),
+    ),
   );
   yield* SubscriptionRef.changes(supervisor.state).pipe(
     Stream.runForEach((connectionState) => {

@@ -508,6 +508,7 @@ async function captureSource({
       ({ source, png } = await captureRegionWindowSnapshot(
         regionSnapShotPool,
         active,
+        snapShotFlashBounds(active, platform),
         snapShotThumbnailSize(active),
       ));
     } else {
@@ -546,7 +547,7 @@ async function captureSource({
       }
     }
     const accessibleIdentity = active
-      ? active
+      ? { ...active, bounds: snapShotFlashBounds(active, platform) }
       : linuxWindow?.processId
         ? {
             title: linuxWindow.title,

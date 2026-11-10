@@ -1,14 +1,11 @@
 import type { MenuAction } from "@react-native-menu/menu";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  appBarMenuItemsFromActions,
-  findAppBarMenuItem,
-  menuActionsFromAppBarItems,
-} from "./menuActionItems";
+import { androidHeaderMenuActions, findHeaderMenuAction } from "./headerMenu.android";
+import { appBarMenuItemsFromActions } from "./menuActionItems";
 
 describe("appBarMenuItemsFromActions", () => {
-  it("round-trips a filter menu through AppBar items back to menu actions", () => {
+  it("round-trips a filter menu through AppBar items back to Android actions", () => {
     const actions: MenuAction[] = [
       {
         id: "labels",
@@ -29,7 +26,7 @@ describe("appBarMenuItemsFromActions", () => {
 
     const items = appBarMenuItemsFromActions(actions, onSelect);
 
-    expect(menuActionsFromAppBarItems(items)).toEqual([
+    expect(androidHeaderMenuActions(items)).toEqual([
       {
         id: "labels",
         title: "Labels",
@@ -56,10 +53,7 @@ describe("appBarMenuItemsFromActions", () => {
         ],
       },
     ]);
-    findAppBarMenuItem(items, "label:docs")?.onPress();
+    findHeaderMenuAction(items, "label:docs")?.onPress();
     expect(onSelect).toHaveBeenCalledWith("label:docs");
-    expect(
-      menuActionsFromAppBarItems([{ id: "devices", title: "Devices", inline: true, items: [] }]),
-    ).toMatchObject([{ id: "devices", title: "Devices", displayInline: true }]);
   });
 });

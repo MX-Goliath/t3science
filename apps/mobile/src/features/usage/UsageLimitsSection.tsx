@@ -345,16 +345,18 @@ export function useRefreshLimits(
     .filter(([environmentId]) => failedIds.has(environmentId))
     .map(([, presentation]) => presentation.entry.target.label);
 
-  const refresh = () =>
+  const refresh = (afterPending: boolean) =>
     Promise.all(
-      connectedIds.map((environmentId) => refreshEnvironmentLimits(registry, environmentId)),
+      connectedIds.map((environmentId) =>
+        refreshEnvironmentLimits(registry, environmentId, { afterPending }),
+      ),
     );
   // Android RefreshControl needs a true-to-false cycle to stop, even with nothing to probe.
   const refreshManually = async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
     setRefreshing(true);
-    await refresh().finally(() => {
+    await refresh(false).finally(() => {
       refreshingRef.current = false;
       setRefreshing(false);
     });
@@ -364,5 +366,6 @@ export function useRefreshLimits(
     refreshing,
     failedLabels,
     refresh: refreshManually,
+    refreshAfterEnable: () => refresh(true),
   };
 }

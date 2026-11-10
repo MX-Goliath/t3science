@@ -1,4 +1,4 @@
-import { isMacPlatform, US_SHIFTED_TO_UNSHIFTED_KEYS } from "@t3tools/shared/keybindings";
+import { US_SHIFTED_TO_UNSHIFTED_KEYS } from "@t3tools/shared/keybindings";
 
 // This order mirrors GhosttyKey in ghostty/vt/key/event.h. The values are
 // intentionally derived from the official W3C-aligned enum instead of
@@ -216,14 +216,12 @@ export function loadGhosttyKeyboardLayoutMap(): Promise<GhosttyKeyboardLayoutMap
   return promise;
 }
 
-// Browsers omit consumed modifiers; macOS Option composes layout characters too.
+// Browsers omit consumed modifiers; treat Shift as consumed for unchorded characters.
 export function ghosttyConsumedMods(
   event: Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "metaKey" | "shiftKey">,
-  platform = navigator.platform,
 ): number {
-  if (event.ctrlKey || event.metaKey || [...event.key].length !== 1) return 0;
-  if (event.altKey && !isMacPlatform(platform)) return 0;
-  return (event.shiftKey ? 1 : 0) | (event.altKey ? 1 << 2 : 0);
+  if (!event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return 0;
+  return [...event.key].length === 1 ? 1 : 0;
 }
 
 export function ghosttyUnshiftedCodepoint(

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   groupOnboardingProjects,
-  isNewOnboardingProject,
   partitionOnboardingProjects,
   onboardingProjectKey,
   resolveOnboardingLandingProject,
@@ -142,7 +141,6 @@ describe("resolveOnboardingProjectId", () => {
   const localProjectId = ProjectId.make("local-project");
 
   it("uses the scanned project ID when the client still has an older project at that root", () => {
-    const scanned = candidate("/projects/repo", { projectId: localProjectId });
     expect(
       resolveOnboardingProjectId(
         [
@@ -153,47 +151,46 @@ describe("resolveOnboardingProjectId", () => {
           },
         ],
         localEnvironmentId,
-        scanned,
+        candidate("/projects/repo", { projectId: localProjectId }),
       ),
     ).toBe(localProjectId);
-    expect(isNewOnboardingProject([])(localEnvironmentId, scanned)).toBe(false);
   });
 
   it("finds an existing project by normalized root in the target environment", () => {
-    const projects = [
-      {
-        id: ProjectId.make("remote-project"),
-        environmentId: remoteEnvironmentId,
-        workspaceRoot: "C:\\Work\\Repo",
-      },
-      {
-        id: localProjectId,
-        environmentId: localEnvironmentId,
-        workspaceRoot: "C:\\Work\\Repo\\",
-      },
-    ];
     expect(
-      resolveOnboardingProjectId(projects, localEnvironmentId, candidate("c:/work/repo")),
+      resolveOnboardingProjectId(
+        [
+          {
+            id: ProjectId.make("remote-project"),
+            environmentId: remoteEnvironmentId,
+            workspaceRoot: "C:\\Work\\Repo",
+          },
+          {
+            id: localProjectId,
+            environmentId: localEnvironmentId,
+            workspaceRoot: "C:\\Work\\Repo\\",
+          },
+        ],
+        localEnvironmentId,
+        candidate("c:/work/repo"),
+      ),
     ).toBe(localProjectId);
-    expect(isNewOnboardingProject(projects)(localEnvironmentId, candidate("c:/work/repo"))).toBe(
-      false,
-    );
   });
 
   it("does not reuse a project from another environment", () => {
-    const projects = [
-      {
-        id: ProjectId.make("remote-project"),
-        environmentId: remoteEnvironmentId,
-        workspaceRoot: "/projects/repo",
-      },
-    ];
     expect(
-      resolveOnboardingProjectId(projects, localEnvironmentId, candidate("/projects/repo")),
+      resolveOnboardingProjectId(
+        [
+          {
+            id: ProjectId.make("remote-project"),
+            environmentId: remoteEnvironmentId,
+            workspaceRoot: "/projects/repo",
+          },
+        ],
+        localEnvironmentId,
+        candidate("/projects/repo"),
+      ),
     ).toBeNull();
-    expect(isNewOnboardingProject(projects)(localEnvironmentId, candidate("/projects/repo"))).toBe(
-      true,
-    );
   });
 });
 

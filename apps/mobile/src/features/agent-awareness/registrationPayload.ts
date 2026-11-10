@@ -21,19 +21,11 @@ export function makeRelayDeviceRegistrationRequest(
     readonly preferences: Preferences;
   } & (
     | { readonly platform?: "ios"; readonly iosMajorVersion: number }
-    | {
-        readonly platform: "android";
-        readonly androidApiLevel: number;
-        readonly notificationPermissionGranted: boolean;
-      }
+    | { readonly platform: "android"; readonly androidApiLevel: number }
   ),
 ): RelayDeviceRegistrationRequest {
   const pushAvailable = supportsAgentAwarenessPush();
-  const liveActivitiesEnabled =
-    pushAvailable &&
-    input.preferences.liveActivitiesEnabled !== false &&
-    (input.platform !== "android" ||
-      (input.notificationPermissionGranted && Boolean(input.pushToken)));
+  const liveActivitiesEnabled = pushAvailable && input.preferences.liveActivitiesEnabled !== false;
   return {
     deviceId: input.deviceId,
     label: input.label,

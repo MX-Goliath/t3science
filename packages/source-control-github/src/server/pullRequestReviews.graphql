@@ -37,7 +37,6 @@ fragment ThreadComment on PullRequestReviewComment {
   createdAt
   lastEditedAt
   url
-  isMinimized
   ...Reactions
 }
 
@@ -152,7 +151,6 @@ query ReviewThreads($owner: String!, $name: String!, $number: Int!, $requestedRe
       latestReviews(first: 50) {
         nodes {
           state
-          isMinimized
           author {
             __typename
             login

@@ -9,7 +9,6 @@ import { vi } from "vite-plus/test";
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
-  AuthEnvironmentMaintainScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
@@ -158,27 +157,28 @@ describe("command permissions", () => {
     ),
   );
 
-  it.effect.each([
-    { method: WS_METHODS.serverRunStorageCleanup, scope: AuthSettingsWriteScope },
-    { method: WS_METHODS.serverReclaimDatabaseSpace, scope: AuthEnvironmentMaintainScope },
-  ])("requires the destination $scope grant for $method", ({ method, scope }) =>
+  it.effect("requires the destination settings grant to run storage cleanup", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const registry = yield* setup;
-        const command = createCommandPermissions(runtime, method);
+        const cleanup = createCommandPermissions(runtime, WS_METHODS.serverRunStorageCleanup);
         registry.set(sessions(env), AsyncResult.success(grant(true)));
-        expect(registry.get(command.permissionAtom(env))).toBe(false);
-        expect((yield* command.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
+        expect(registry.get(cleanup.permissionAtom(env))).toBe(false);
+        expect((yield* cleanup.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
           "EnvironmentAuthorizationError",
         );
         registry.set(
           sessions(env),
-          AsyncResult.success({ ...grant(true), scopes: [scope], permissions: [scope] }),
+          AsyncResult.success({
+            ...grant(true),
+            scopes: [AuthSettingsWriteScope],
+            permissions: [AuthSettingsWriteScope],
+          }),
         );
-        expect(registry.get(command.permissionAtom(env))).toBe(true);
-        yield* command.authorize(registry, env);
+        expect(registry.get(cleanup.permissionAtom(env))).toBe(true);
+        yield* cleanup.authorize(registry, env);
         registry.set(sessions(other), AsyncResult.success(grant(false)));
-        expect(registry.get(command.permissionAtom(other))).toBe(false);
+        expect(registry.get(cleanup.permissionAtom(other))).toBe(false);
       }),
     ),
   );

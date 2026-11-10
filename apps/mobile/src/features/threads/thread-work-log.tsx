@@ -23,6 +23,7 @@ import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { useIsFocused } from "@react-navigation/native";
 import {
   useEffect,
+  useEffectEvent,
   useId,
   useLayoutEffect,
   useRef,
@@ -75,18 +76,20 @@ import {
 import { useTurnItemDetail } from "../../state/queries";
 import {
   resolveThreadWorkGroupInitialScroll,
+  shouldFollowThreadWorkGroupAppend,
   type ThreadWorkGroupScrollPosition,
-} from "./thread-feed-scroll-position";
+} from "./thread-feed-live-follow";
 import {
   resolveWorkEntryToolPresentation,
   toolGroupAction,
   type ToolGroupSummaryKind,
   workEntryViewedImagePath,
 } from "@t3tools/client-runtime/work-log/presentation";
+import { resolveWorkGroupScrollAnchor } from "@t3tools/client-runtime/work-log/scroll-anchor";
 import { notificationChildThreadId } from "@t3tools/client-runtime/state/thread-execution";
 import type { MarkdownImageRenderer } from "../../native/SelectableMarkdownText";
-import type { FilePreviewSource } from "../../components/ui/FilePreviewModal";
-import { FilePreviewGallery } from "../../components/ui/FilePreviewGallery";
+import type { FilePreviewSource } from "../../components/FilePreviewModal";
+import { FilePreviewGallery } from "../../components/FilePreviewGallery";
 import { ThreadMarkdownImage } from "./ThreadMarkdownImage";
 import Animated, {
   FadeIn,
@@ -594,11 +597,6 @@ function ThreadReasoningGroup(props: {
   );
 }
 
-const WORK_GROUP_MAINTAIN_SCROLL_AT_END = {
-  animated: false,
-  on: { dataAppend: true },
-} as const;
-
 function ThreadWorkGroupList(props: {
   readonly activities: ReadonlyArray<ThreadFeedActivity>;
   readonly edgeFadeColor: string;
@@ -612,27 +610,37 @@ function ThreadWorkGroupList(props: {
     props.activities,
     props.rowSizing.estimatedRowHeight,
   );
-  const savedPosition = props.scrollPositions.get(props.groupId);
-  const initialPosition = props.activities.some((row) => row.id === savedPosition?.rowId)
-    ? savedPosition
-    : undefined;
-  const initialScrollIndex = resolveThreadWorkGroupInitialScroll(props.activities, initialPosition);
+  const [initialPosition] = useState(() => {
+    const position = props.scrollPositions.get(props.groupId);
+    return props.activities.some((row) => row.id === position?.rowId) ? position : undefined;
+  });
+  const [initialScrollIndex] = useState(() =>
+    resolveThreadWorkGroupInitialScroll(props.activities, initialPosition),
+  );
+  const [restoringPosition, setRestoringPosition] = useState(initialScrollIndex !== undefined);
   const listRef = useRef<LegendListRef>(null);
-  const previousTextSize = useRef(props.rowSizing.textSizeKey);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the list's cached row sizes when the text size changes
-  useLayoutEffect(() => {
-    if (previousTextSize.current === props.rowSizing.textSizeKey) return;
-    previousTextSize.current = props.rowSizing.textSizeKey;
-    listRef.current?.clearCaches({ mode: "sizes" });
-  }, [props.rowSizing.textSizeKey]);
   const loadedRef = useRef(false);
-  const [contentHeight, setContentHeight] = useState(estimatedRowsHeight);
+  const userScrollingRef = useRef(false);
+  const pendingAppendHeightRef = useRef<number | null>(null);
+  const previousContent = useRef({
+    rows: props.activities,
+    height: Math.max(estimatedRowsHeight, initialPosition?.contentHeight ?? 0),
+    expandedRows: props.expandedRows,
+  });
+  const [measuredContent, setMeasuredContent] = useState(() => ({
+    height: Math.max(estimatedRowsHeight, initialPosition?.contentHeight ?? 0),
+    rowCount: props.activities.length,
+  }));
+  const contentHeight = Math.max(
+    1,
+    measuredContent.height +
+      Math.max(0, props.activities.length - measuredContent.rowCount) *
+        (props.rowSizing.estimatedRowHeight + WORK_ROW_GAP),
+  );
   const height = Math.min(contentHeight, WORK_GROUP_MAX_HEIGHT);
   const scrollOffset = useSharedValue(initialPosition?.scrollOffset ?? 0);
   const sharedValues = { scrollOffset };
 
-  // Each edge fades only while content continues past it. Scroll offset stays
-  // on the UI thread; only content-size changes update React state.
   const topFadeStyle = useAnimatedStyle(() => ({
     opacity: Math.min(1, Math.max(0, scrollOffset.value) / WORK_GROUP_EDGE_FADE_HEIGHT),
   }));
@@ -642,40 +650,78 @@ function ThreadWorkGroupList(props: {
       Math.max(0, contentHeight - height - scrollOffset.value) / WORK_GROUP_EDGE_FADE_HEIGHT,
     ),
   }));
-  const rememberPosition = (scroll: number) => {
+  const rememberPosition = () => {
     if (!loadedRef.current) return;
-    const position = listRef.current?.anchorVisibleContent({ hold: false });
-    if (!position) return;
+    const state = listRef.current?.getState();
+    const position = state && resolveWorkGroupScrollAnchor(state);
+    if (!state || !position) return;
     props.scrollPositions.set(props.groupId, {
-      rowId: position.key,
-      offsetWithinRow: position.offset,
-      scrollOffset: scroll,
+      ...position,
+      contentHeight: state.contentLength,
     });
   };
-  const handleMetricsChange = () => {
-    const metrics = listRef.current?.getState();
-    if (!metrics) return;
-    setContentHeight(Math.max(1, metrics.contentLength));
-    rememberPosition(metrics.scroll);
+  const finishPendingAppend = () => {
+    const targetHeight = pendingAppendHeightRef.current;
+    const state = listRef.current?.getState();
+    if (
+      targetHeight !== null &&
+      state &&
+      !userScrollingRef.current &&
+      Math.abs(state.scrollLength - targetHeight) <= 1
+    ) {
+      pendingAppendHeightRef.current = null;
+      void listRef.current?.scrollToEnd({ animated: false });
+    }
   };
-  const handleReady = () => {
-    loadedRef.current = true;
-    handleMetricsChange();
-  };
+  // LegendList notifies from child layout effects. Effect Events see the
+  // committed rows before those effects run, unlike a parent layout-effect ref.
+  const onContentSizeChange = useEffectEvent((nextHeight: number) => {
+    const previous = previousContent.current;
+    const detailsChanged = previous.expandedRows !== props.expandedRows;
+    const followAppend =
+      loadedRef.current &&
+      shouldFollowThreadWorkGroupAppend({
+        previousRows: previous.rows,
+        rows: props.activities,
+        previousContentHeight: previous.height,
+        contentHeight: nextHeight,
+        viewportHeight: Math.min(previous.height, WORK_GROUP_MAX_HEIGHT),
+        scrollOffset: scrollOffset.value,
+        detailsChanged,
+        userScrolling: userScrollingRef.current,
+      });
+    previousContent.current = {
+      rows: props.activities,
+      height: nextHeight,
+      expandedRows: props.expandedRows,
+    };
+    setMeasuredContent((current) =>
+      current.height === nextHeight && current.rowCount === props.activities.length
+        ? current
+        : { height: nextHeight, rowCount: props.activities.length },
+    );
+    if (followAppend) {
+      pendingAppendHeightRef.current = Math.min(nextHeight, WORK_GROUP_MAX_HEIGHT);
+    } else if (detailsChanged || userScrollingRef.current || previous.rows !== props.activities) {
+      pendingAppendHeightRef.current = null;
+    } else if (pendingAppendHeightRef.current !== null) {
+      pendingAppendHeightRef.current = Math.min(nextHeight, WORK_GROUP_MAX_HEIGHT);
+    }
+    finishPendingAppend();
+    rememberPosition();
+  });
+  // Native ScrollView reports size after LegendList lays out rows. Use LegendList's JS size
+  // so group height and row measurements settle in the same commit.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to LegendList's totalSize state to report content height in the same commit
   useLayoutEffect(() => {
-    const state = listRef.current?.getState();
-    if (!state) return;
-    handleMetricsChange();
-    const stops = [
-      state.listen("totalSize", handleMetricsChange),
-      state.listen("footerSize", handleMetricsChange),
-      state.listen("headerSize", handleMetricsChange),
-    ];
-    return () => {
-      for (const stop of stops) stop();
-    };
-  }, [handleMetricsChange]);
+    const list = listRef.current;
+    if (!list) return;
+    const unsubscribe = list.getState().listen("totalSize", () => {
+      onContentSizeChange(list.getState().contentLength);
+    });
+    onContentSizeChange(list.getState().contentLength);
+    return unsubscribe;
+  }, []);
   const getFixedItemSize = (row: ThreadFeedActivity, index: number) =>
     props.expandedRows[row.id] || props.rowSizing.fixedRowHeight === undefined
       ? undefined
@@ -692,20 +738,40 @@ function ThreadWorkGroupList(props: {
       <AnimatedLegendList
         ref={listRef}
         data={props.activities}
-        dataKey={props.groupId}
         keyExtractor={workLogRowKey}
         estimatedItemSize={props.rowSizing.estimatedRowHeight + WORK_ROW_GAP}
         getFixedItemSize={getFixedItemSize}
         initialScrollIndex={initialScrollIndex}
+        // 50px bootstrap overscan may leave expanded details unmeasured until after scroll restoration.
+        alwaysRender={
+          restoringPosition && initialPosition ? { keys: [initialPosition.rowId] } : undefined
+        }
         recycleItems={false}
         extraData={props.renderRow}
         renderItem={renderItem}
         sharedValues={sharedValues}
-        onReady={handleReady}
-        onScroll={handleMetricsChange}
-        onLayout={handleMetricsChange}
-        maintainScrollAtEnd={WORK_GROUP_MAINTAIN_SCROLL_AT_END}
-        maintainScrollAtEndThreshold={1 / Math.max(1, height)}
+        onLayout={finishPendingAppend}
+        onLoad={() => {
+          loadedRef.current = true;
+          setRestoringPosition(false);
+          rememberPosition();
+        }}
+        onScroll={rememberPosition}
+        onScrollBeginDrag={() => {
+          userScrollingRef.current = true;
+          pendingAppendHeightRef.current = null;
+        }}
+        onScrollEndDrag={() => {
+          userScrollingRef.current = false;
+        }}
+        onMomentumScrollBegin={() => {
+          userScrollingRef.current = true;
+          pendingAppendHeightRef.current = null;
+        }}
+        onMomentumScrollEnd={() => {
+          userScrollingRef.current = false;
+          rememberPosition();
+        }}
         maintainVisibleContentPosition
         nestedScrollEnabled
         directionalLockEnabled
@@ -733,7 +799,6 @@ function ThreadWorkGroupList(props: {
   );
 }
 
-/** A screen-colored gradient painted over the list edge that still has content past it. */
 function EdgeFade(props: { readonly color: string; readonly direction: "up" | "down" }) {
   const gradientId = `work-group-fade-${useId().replaceAll(":", "")}`;
   return (
@@ -1317,6 +1382,7 @@ export function ThreadWorkGroupToggle(props: {
             <WorkLogIcon icon="brain" color={props.iconSubtleColor} />
           </WorkLogIconSlot>
           <Text
+            key={props.rowSizing.textSizeKey}
             selectable={false}
             numberOfLines={4}
             ellipsizeMode="tail"
@@ -1341,6 +1407,7 @@ export function ThreadWorkGroupToggle(props: {
           >
             {props.shimmer ? (
               <ShimmeringWorkContent
+                key={props.rowSizing.textSizeKey}
                 environmentId={props.environmentId}
                 icon={icon}
                 iconSubtleColor={props.iconSubtleColor}
@@ -1360,7 +1427,7 @@ export function ThreadWorkGroupToggle(props: {
                     themeAppearance={props.themeAppearance}
                   />
                 </WorkLogIconSlot>
-                <WorkLogLabel>{props.summary}</WorkLogLabel>
+                <WorkLogLabel key={props.rowSizing.textSizeKey}>{props.summary}</WorkLogLabel>
               </>
             )}
             {commandCountLabel ? (
@@ -1396,6 +1463,7 @@ export function ThreadThinkingRow(props: {
       style={{ minHeight: props.rowSizing.estimatedRowHeight }}
     >
       <ShimmeringWorkContent
+        key={props.rowSizing.textSizeKey}
         icon="brain"
         iconSubtleColor={props.iconSubtleColor}
         label={label}

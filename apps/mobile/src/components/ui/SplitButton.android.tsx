@@ -6,8 +6,6 @@ import {
   RNHostView,
   Row,
   SplitButtonLayout,
-  SplitButtonLeadingButton,
-  SplitButtonTrailingButton,
   Text,
 } from "@expo/ui/jetpack-compose";
 import {
@@ -92,58 +90,54 @@ export function SplitButton(props: SplitButtonProps) {
       style={{ width: "100%" }}
     >
       <SplitButtonLayout modifiers={[fillMaxWidth()]}>
-        <SplitButtonLayout.LeadingButton>
-          <SplitButtonLeadingButton
-            enabled={enabled}
-            onClick={props.onPress}
-            colors={buttonColors}
-            modifiers={[
-              fillMaxWidth(),
-              defaultMinSize({ minHeight: 48 }),
-              semantics({ contentDescription: props.accessibilityLabel ?? props.label }),
-            ]}
-          >
-            {label}
-          </SplitButtonLeadingButton>
+        <SplitButtonLayout.LeadingButton
+          enabled={enabled}
+          onClick={props.onPress}
+          colors={buttonColors}
+          modifiers={[
+            fillMaxWidth(),
+            defaultMinSize({ minHeight: 48 }),
+            semantics({ contentDescription: props.accessibilityLabel ?? props.label }),
+          ]}
+        >
+          {label}
         </SplitButtonLayout.LeadingButton>
-        <SplitButtonLayout.TrailingButton>
-          <SplitButtonTrailingButton
-            checked={expanded}
-            onCheckedChange={setExpanded}
-            enabled={menuEnabled}
-            colors={trailingColors}
-            modifiers={[
-              defaultMinSize({ minWidth: 48, minHeight: 48 }),
-              semantics({ contentDescription: props.menuTitle }),
-            ]}
+        <SplitButtonLayout.TrailingButton
+          checked={expanded}
+          onCheckedChange={setExpanded}
+          enabled={menuEnabled}
+          colors={trailingColors}
+          modifiers={[
+            defaultMinSize({ minWidth: 48, minHeight: 48 }),
+            semantics({ contentDescription: props.menuTitle }),
+          ]}
+        >
+          <DropdownMenu
+            expanded={expanded && menuEnabled}
+            onDismissRequest={() => setExpanded(false)}
+            color={colors["--color-card-alt"]}
           >
-            <DropdownMenu
-              expanded={expanded && menuEnabled}
-              onDismissRequest={() => setExpanded(false)}
-              color={colors["--color-card-alt"]}
-            >
-              <DropdownMenu.Trigger>
-                <Icon
-                  source={require("../../../assets/icons/chevron-down.xml")}
-                  size={iconSize}
-                  modifiers={[rotate(expanded ? 180 : 0)]}
-                />
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Items>
-                <MenuPopupItems
-                  menuWidth={menuWidth}
-                  actions={props.actions}
-                  title={props.menuTitle}
-                  parent={null}
-                  onPress={(action) => {
-                    setExpanded(false);
-                    if (action.id !== undefined) props.onPressAction(action.id);
-                  }}
-                  onBack={() => {}}
-                />
-              </DropdownMenu.Items>
-            </DropdownMenu>
-          </SplitButtonTrailingButton>
+            <DropdownMenu.Trigger>
+              <Icon
+                source={require("../../../assets/icons/chevron-down.xml")}
+                size={iconSize}
+                modifiers={[rotate(expanded ? 180 : 0)]}
+              />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Items>
+              <MenuPopupItems
+                menuWidth={menuWidth}
+                actions={props.actions}
+                title={props.menuTitle}
+                parent={null}
+                onPress={(action) => {
+                  setExpanded(false);
+                  if (action.id !== undefined) props.onPressAction(action.id);
+                }}
+                onBack={() => {}}
+              />
+            </DropdownMenu.Items>
+          </DropdownMenu>
         </SplitButtonLayout.TrailingButton>
       </SplitButtonLayout>
     </NativeThemeHost>

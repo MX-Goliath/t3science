@@ -131,7 +131,10 @@ export function mergeShellSnapshotProjects(
 
 export function applyShellStreamEvent(
   snapshot: OrchestrationV2ShellSnapshot,
-  event: ShellStreamEvent,
+  event: Exclude<
+    OrchestrationV2ShellStreamItem,
+    { readonly kind: "snapshot" } | { readonly kind: "synchronized" }
+  >,
 ): OrchestrationV2ShellSnapshot {
   if (event.sequence <= snapshot.snapshotSequence) return snapshot;
 
@@ -214,9 +217,9 @@ function batchRows<T extends { readonly id: unknown }>(rows: ReadonlyArray<T>) {
   };
 }
 
-export type ShellStreamEvent = Extract<
+export type ShellStreamEvent = Exclude<
   OrchestrationV2ShellStreamItem,
-  { readonly sequence: number }
+  { readonly kind: "snapshot" } | { readonly kind: "synchronized" }
 >;
 
 /** Apply ordered deltas with one index and at most one new array per collection. */

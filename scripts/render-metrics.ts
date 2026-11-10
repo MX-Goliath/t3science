@@ -4,8 +4,6 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { vitePlusCommand } from "./check-changed-command.ts";
-
 const HELP = `Usage:
   node scripts/render-metrics.ts run [--out <file>] [--runs <n>]
   node scripts/render-metrics.ts compare <before.json> <after.json> [--top <n>]
@@ -42,8 +40,7 @@ const root = NodePath.resolve(import.meta.dirname, "..");
 export function runOnce(): RenderMetrics {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-renders-"));
   try {
-    const [command, commandArgs] = vitePlusCommand(["test", "run", "--project", "renders"]);
-    const result = NodeChildProcess.spawnSync(command, commandArgs, {
+    const result = NodeChildProcess.spawnSync("vp", ["test", "run", "--project", "renders"], {
       cwd: NodePath.join(root, "apps/web"),
       env: { ...process.env, T3CODE_RENDER_REPORT_DIR: directory },
       stdio: ["ignore", "inherit", "inherit"],

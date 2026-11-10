@@ -546,6 +546,7 @@ export const make = Effect.gen(function* () {
     readonly hostId?: string;
     readonly status?: UsageSource["status"];
     readonly message?: string;
+    readonly action?: UsageSource["action"];
     readonly files:
       | readonly {
           readonly path: string;
@@ -801,7 +802,7 @@ export const make = Effect.gen(function* () {
 
     for (const [
       index,
-      { provider, dir, volumeId, files, status, message, refreshing, hostId: sourceHostId },
+      { provider, dir, volumeId, files, status, message, action, refreshing, hostId: sourceHostId },
     ] of scannedDirs.entries()) {
       let scannedFiles = 0;
       let skippedFiles = 0;
@@ -865,6 +866,7 @@ export const make = Effect.gen(function* () {
                 .filter(Boolean)
                 .join(" ")
             : sourceMessage,
+        ...(action ? { action } : {}),
         ...(refreshing ? { refreshing } : {}),
       });
     }

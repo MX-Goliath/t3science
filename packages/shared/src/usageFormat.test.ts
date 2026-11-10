@@ -116,11 +116,12 @@ describe("usage source messages", () => {
     ]);
   });
 
-  it("omits empty missing sources and healthy sources", () => {
+  it("omits empty missing sources, healthy sources, and diagnostics handled by an action", () => {
     expect(
       usageSourceMessages([
         malformedSource(0, { status: "missing" }),
         malformedSource(1, { status: "ok" }),
+        malformedSource(1, { action: "enableCursorKeychain" }),
       ]),
     ).toEqual([]);
     expect(usageSourceMessages([])).toEqual([]);

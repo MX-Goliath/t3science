@@ -1,6 +1,5 @@
 import {
   ASSISTANT_CITATION_MAX_COMMENT_LENGTH,
-  type AssistantCitation,
   EnvironmentId,
   MessageId,
   ThreadId,
@@ -51,16 +50,12 @@ function setup() {
   return { sourceAnchor, [Symbol.dispose]: () => source.remove() };
 }
 
-function mount(
-  sourceAnchor: AssistantCitationSourceAnchor | undefined,
-  onSave: () => boolean,
-  chipCitation: AssistantCitation = citation,
-) {
+function mount(sourceAnchor: AssistantCitationSourceAnchor, onSave: () => boolean) {
   function Composer() {
     const [open, setOpen] = useState(true);
     return (
       <AssistantCitationChip
-        citation={chipCitation}
+        citation={citation}
         composer
         commentEditor={{ open, sourceAnchor, onOpenChange: setOpen, onSave }}
       />
@@ -130,25 +125,6 @@ describe("citation comment source disappearance", () => {
     await clickButton("Save");
     expect(onSave).toHaveBeenLastCalledWith("keep this draft");
     expect(textarea()).toBeNull();
-  });
-});
-
-describe("citation comment caret", () => {
-  it("opens a saved comment with the caret after its end, scrolled into view", async () => {
-    using _source = setup();
-    const comment = `${"line\n".repeat(40)}end`;
-    await using _screen = await mount(
-      undefined,
-      vi.fn(() => true),
-      { ...citation, comment },
-    );
-    await vi.waitFor(() => expect(document.activeElement).toBe(textarea()));
-    const input = textarea()!;
-
-    expect(input.scrollHeight).toBeGreaterThan(input.clientHeight);
-    expect(input.scrollTop).toBe(input.scrollHeight - input.clientHeight);
-    await userEvent.keyboard("!");
-    expect(input.value).toBe(`${comment}!`);
   });
 });
 

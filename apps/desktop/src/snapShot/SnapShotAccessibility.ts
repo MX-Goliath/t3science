@@ -125,7 +125,7 @@ async function readCapturedWindowAccessibility(
   const pidWindows =
     foreground !== undefined
       ? foreground.pid === active.owner.processId
-        ? await foreground.children().catch(() => [])
+        ? [foreground.asElement()]
         : []
       : await windowsForPid(App, active.owner.processId);
   const matchMode = isWaylandSession(platform, process.env) ? "wayland" : "screen-bounds";

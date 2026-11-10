@@ -92,7 +92,6 @@ describe("DesktopTelemetryPublisher", () => {
               Layer.succeed(DesktopShellEnvironment.DesktopShellEnvironment, {
                 installIntoProcess: Effect.succeed(true),
                 awaitDiscovery: Effect.succeed(true),
-                awaitUserShellDiscovery: Effect.succeed(true),
                 updates: Stream.make({
                   version: 1,
                   type: "shellEnvironment",

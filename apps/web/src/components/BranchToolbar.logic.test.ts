@@ -101,23 +101,16 @@ describe("deriveLocalBranchNameFromRemoteRef", () => {
 });
 
 describe("dedupeRemoteBranchesWithLocalMatches", () => {
-  it.each([
-    ["feature/demo", "origin/feature/demo", true],
-    ["feature/demo", "feature/demo", false],
-    ["demo", "demo", true],
-    ["origin/", "origin/", true],
-    ["/demo", "/demo", true],
-    ["", "", false],
-  ])("filters origin ref %s / %s (hidden: %s)", (localName, remoteName, hidden) => {
+  it("hides remote refs when the matching local ref exists", () => {
     const input: VcsRef[] = [
       {
-        name: localName,
+        name: "feature/demo",
         current: false,
         isDefault: false,
         worktreePath: null,
       },
       {
-        name: remoteName,
+        name: "origin/feature/demo",
         isRemote: true,
         remoteName: "origin",
         current: false,
@@ -134,12 +127,10 @@ describe("dedupeRemoteBranchesWithLocalMatches", () => {
       },
     ];
 
-    const result = dedupeRemoteBranchesWithLocalMatches(input);
-    const expected = hidden ? [input[0], input[2]] : input;
-    expect(result).toEqual(expected);
-    for (const [index, ref] of result.entries()) {
-      expect(ref).toBe(expected[index]);
-    }
+    expect(dedupeRemoteBranchesWithLocalMatches(input).map((ref) => ref.name)).toEqual([
+      "feature/demo",
+      "origin/feature/remote-only",
+    ]);
   });
 
   it("keeps non-origin remote refs visible when git tracks with first-slash local naming", () => {

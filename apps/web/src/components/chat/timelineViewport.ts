@@ -117,12 +117,6 @@ export function attachTimelineViewport(scrollNode: HTMLElement): TimelineViewpor
     top: scrollNode.scrollTop,
     height: scrollNode.scrollHeight,
   });
-  // Only a frame's input reaches the timeline unseen. Any other unexplained upward move is not
-  // the reader's: the browser clamps scrollTop when content briefly shrinks.
-  const frameHasInput = () =>
-    scrollNode.querySelector("iframe:hover") !== null ||
-    (document.activeElement instanceof HTMLIFrameElement &&
-      scrollNode.contains(document.activeElement));
   const handleScroll = () => {
     if (
       scrolledUp({
@@ -130,7 +124,6 @@ export function attachTimelineViewport(scrollNode: HTMLElement): TimelineViewpor
         height: scrollNode.scrollHeight,
         programmatic: programmaticHolds > 0,
       }) &&
-      frameHasInput() &&
       // LegendList updates its scroll state on the next animation frame.
       resolveTimelineIsAtEnd({
         contentLength: scrollNode.scrollHeight,

@@ -2198,9 +2198,9 @@ export const make = Effect.gen(function* () {
           .pipe(
             graphql({ ...input, operation: "getReviewThreadComments" }),
             Effect.map(toReviewThreadCommentsPage),
-            Effect.flatMap(({ belongsToPullRequest, ...page }) =>
+            Effect.flatMap(({ belongsToPullRequest, comments, nextCursor }) =>
               belongsToPullRequest
-                ? Effect.succeed(page)
+                ? Effect.succeed({ comments, nextCursor })
                 : Effect.fail(
                     new GitHubSubjectScopeError({
                       cwd: input.cwd,

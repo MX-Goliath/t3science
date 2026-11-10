@@ -512,8 +512,7 @@ export function routeProviderEvent(
     case "background_work.updated":
       return [state.ownedProviderTurns.has(event.providerTurnId), state];
     case "command_output.delta":
-    case "prompt_suggestion.updated":
-      // The session manager serves these to clients directly; runs never see them.
+      // The session manager hands live output to the command output hub; runs never see it.
       return [false, state];
     case "turn.terminal":
       return event.providerTurnId === state.rootProviderTurnId

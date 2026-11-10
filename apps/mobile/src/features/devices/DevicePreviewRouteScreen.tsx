@@ -16,15 +16,16 @@ import { Pressable, StatusBar, View } from "react-native";
 import Animated, { FadeIn, FadeOut, ReduceMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { AppText } from "../../components/ui/AppText";
 import { ControlPill } from "../../components/ui/ControlPill";
 import { Menu } from "../../components/ui/Menu";
 import { GlassSurface } from "../../components/ui/GlassSurface";
 import {
-  findAppBarMenuItem,
-  menuActionsFromAppBarItems,
-} from "../../components/ui/menuActionItems";
+  androidHeaderMenuActions,
+  findHeaderMenuAction,
+} from "../../components/ui/headerMenu.android";
 import { AppBar } from "../../components/ui/AppBar";
 import { useBarOverlap } from "../../components/ui/useBarInset";
 import type { AppBarMenuItem } from "../../components/ui/AppBar.types";
@@ -375,15 +376,21 @@ export function DevicePreviewScreen({
 function DeviceOptionsMenu({ items }: { readonly items: ReadonlyArray<AppBarMenuItem> }) {
   return (
     <Menu
-      actions={menuActionsFromAppBarItems(items)}
+      actions={androidHeaderMenuActions(items)}
       isAnchoredToRight
       title="Device options"
       onPressAction={({ nativeEvent }) => {
-        const action = findAppBarMenuItem(items, nativeEvent.event);
+        const action = findHeaderMenuAction(items, nativeEvent.event);
         if (action && !action.disabled) action.onPress();
       }}
     >
-      <ControlPill icon="ellipsis" accessibilityLabel="Device options" />
+      <Pressable
+        accessibilityLabel="Device options"
+        accessibilityRole="button"
+        className="size-11 items-center justify-center rounded-full bg-subtle"
+      >
+        <SymbolView name="ellipsis" size={18} tintColorClassName="accent-icon" />
+      </Pressable>
     </Menu>
   );
 }

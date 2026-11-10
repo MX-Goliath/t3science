@@ -8,7 +8,6 @@ const state = vi.hoisted(() => ({
   phase: "connected" as "connected" | "offline",
   sessionAtom: {},
   searchAtom: {},
-  searchRequests: vi.fn(),
   contentAtom: {},
   contentRequests: vi.fn(),
   contentError: null as string | null,
@@ -35,12 +34,7 @@ vi.mock("./presentation", () => ({
   }),
 }));
 vi.mock("./projects", () => ({
-  projectEnvironment: {
-    searchEntries: (target: unknown) => {
-      state.searchRequests(target);
-      return state.searchAtom;
-    },
-  },
+  projectEnvironment: { searchEntries: () => state.searchAtom },
   projectContentSearch: (target: unknown) => {
     state.contentRequests(target);
     return state.contentAtom;
@@ -73,7 +67,7 @@ vi.mock("./query", () => ({
   }),
 }));
 
-import { useComposerPathSearch, useProjectContentSearch } from "./queries";
+import { useProjectContentSearch } from "./queries";
 
 const target = {
   environmentId: EnvironmentId.make("test-environment"),
@@ -86,7 +80,6 @@ beforeEach(() => {
   state.sessionError = null;
   state.sessionWaiting = false;
   state.phase = "connected";
-  state.searchRequests.mockClear();
   state.contentRequests.mockClear();
   state.contentError = null;
 });
@@ -98,31 +91,6 @@ const contentTarget = {
   wholeWord: true,
   useRegex: false,
 };
-
-it.each([
-  { query: "src", expected: "src" },
-  { query: "a".repeat(256), expected: "a".repeat(256) },
-  {
-    query: ["a".repeat(86), "b".repeat(86), "c".repeat(86), "unique.ts"].join("/"),
-    expected: ["a".repeat(86), "b".repeat(86), "c".repeat(82)].join("/"),
-  },
-  { query: `${"a".repeat(255)}😀/boundary.ts`, expected: "a".repeat(255) },
-  { query: `${"a".repeat(254)}😀/boundary.ts`, expected: `${"a".repeat(254)}😀` },
-])(
-  "bounds the path search request while preserving query identity: $query",
-  ({ query, expected }) => {
-    state.session = { authenticated: true, scopes: [AuthFilesystemReadScope] };
-    const result = useComposerPathSearch({ ...target, query: ` ${query} ` });
-
-    expect(state.searchRequests).toHaveBeenCalledExactlyOnceWith({
-      environmentId: target.environmentId,
-      input: { cwd: target.cwd, query: expected, limit: 80 },
-    });
-    expect(result.searchedTarget).toMatchObject({ ...target, query });
-    expect(result.searchedQuery).toBe(query);
-    expect(result.isPending).toBe(false);
-  },
-);
 
 it("shows content-search denial before typing and never issues an unauthorized request", () => {
   state.session = { authenticated: true, scopes: [] };

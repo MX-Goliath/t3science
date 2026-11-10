@@ -11,5 +11,4 @@ export type MediaActionId =
   | "copy-url"
   | "open-file"
   | "save"
-  | "save-image"
   | "copy-image";

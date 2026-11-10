@@ -88,7 +88,7 @@ import {
 } from "../../state/use-composer-drafts";
 import { useQuietThreadStructure } from "../../state/use-thread-detail";
 import { activeComposerDraftKey, useQueuedRunEdit } from "../../state/queued-run-edit";
-import { selectThreadModel } from "../../state/thread-model-selection";
+import { updateThreadDraftModelSelection } from "../../state/use-thread-composer-state";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { threadAllowsProviderSwitch } from "../../state/thread-provider-switching";
 import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
@@ -1220,7 +1220,7 @@ function ThreadSettingsModelsScreen() {
           session.hasLegacyModels,
         ]}
         confirm={{
-          label: session.pendingModel ? "Save" : "Done",
+          label: session.pendingModel ? "Save thread settings" : "Done",
           onPress: commitAndClose,
         }}
         hideBottomBorder
@@ -1339,7 +1339,7 @@ export function ExistingThreadSettingsRouteScreen({
         option.selection.model === modelSelection.model,
     ) ?? null;
   const updateModelSelection = (selection: ModelSelection) =>
-    selectThreadModel(route.params, selection);
+    updateThreadDraftModelSelection(threadKey, selection, serverConfig?.providers ?? []);
 
   return (
     <ThreadSettingsPickerScreen

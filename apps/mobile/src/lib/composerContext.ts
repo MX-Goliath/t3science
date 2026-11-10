@@ -1,7 +1,3 @@
-import {
-  collectComposerModelMentions,
-  type ComposerModelMentionOccurrence,
-} from "@t3tools/client-runtime/composer-model-mentions";
 import { isProviderSkillUserInvocable } from "@t3tools/client-runtime/providerSkills";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
@@ -29,7 +25,6 @@ import {
 } from "@t3tools/shared/composerContextReferences";
 import {
   collectComposerInlineTokens,
-  composerMathRanges,
   type ComposerInlineToken,
 } from "@t3tools/shared/composerInlineTokens";
 
@@ -168,53 +163,23 @@ export function composerSkillLabels(
   );
 }
 
-/**
- * Like `$skill`, a typed reference waits for whitespace so `gpt-6` cannot chip on the way to
- * `gpt-6.1`. A chip already shown stays one when backspace removes the space after it.
- */
-export function collectComposerModelTokens(
-  text: string,
-  knownModels: { has(source: string): boolean },
-  preserveTrailingFrom: ReadonlyArray<ComposerModelMentionOccurrence> = [],
-): ReadonlyArray<ComposerModelMentionOccurrence> {
-  return collectComposerModelMentions(text).filter(
-    (mention) =>
-      knownModels.has(mention.source) &&
-      (/\s/u.test(text[mention.end] ?? "") ||
-        preserveTrailingFrom.some(
-          (token) => token.start === mention.start && token.source === mention.source,
-        )),
-  );
-}
-
 export function composerContextEditorTokens(
   text: string,
   tokens: readonly ComposerInlineToken[],
   knownSkills: { has(name: string): boolean },
-  modelTokens: ReadonlyArray<ComposerModelMentionOccurrence> = [],
 ) {
   const references = collectComposerContextReferences(text);
-  const inlineTokens = tokens.filter(
-    (token) =>
-      // `$HOME` and other `$name` text that is not one of the provider's skills stays prose.
-      (token.type !== "skill" || knownSkills.has(token.value)) &&
-      !references.some((ref) => token.start < ref.end && token.end > ref.start),
-  );
-  const taken = [...inlineTokens, ...references, ...composerMathRanges(text)];
-  const models = modelTokens.filter(
-    (mention) => !taken.some((range) => mention.start < range.end && mention.end > range.start),
-  );
   return [
-    ...inlineTokens,
+    ...tokens.filter(
+      (token) =>
+        // `$HOME` and other `$name` text that is not one of the provider's skills stays prose.
+        (token.type !== "skill" || knownSkills.has(token.value)) &&
+        !references.some((ref) => token.start < ref.end && token.end > ref.start),
+    ),
     ...references.map((ref) => ({
       type: "context" as const,
       value: ref.label,
       ...ref,
-    })),
-    ...models.map((mention) => ({
-      type: "model" as const,
-      value: mention.model,
-      ...mention,
     })),
   ].sort((a, b) => a.start - b.start);
 }

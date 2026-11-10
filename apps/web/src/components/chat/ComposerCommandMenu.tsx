@@ -9,7 +9,6 @@ import {
   type EnvironmentMachineKind,
   type ProjectEntry,
   type ProviderDriverKind,
-  type ProviderInstanceId,
   type PullRequestContextMetadata,
   type ScopedThreadRef,
   type ServerProviderSkill,
@@ -32,7 +31,6 @@ import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { PierreEntryIcon } from "./PierreEntryIcon";
-import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { ComposerBanner } from "./ComposerBanner";
 import { resolvePullRequestState } from "../pullRequest/pullRequestPresentation";
 
@@ -88,18 +86,6 @@ export type ComposerCommandItem =
       type: "environment";
       environmentId: EnvironmentId;
       machine: EnvironmentMachineKind;
-      label: string;
-      description: string;
-    }
-  | {
-      id: string;
-      type: "model";
-      instanceId: ProviderInstanceId;
-      model: string;
-      driverKind: ProviderDriverKind;
-      providerDisplayName: string;
-      acpRegistryAgentId: string | undefined;
-      acpRegistryIconUrl: string | undefined;
       label: string;
       description: string;
     };
@@ -233,16 +219,6 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           kind={props.item.machine}
           aria-hidden="true"
           className="size-4 shrink-0 text-secondary-label"
-        />
-      ) : null}
-      {props.item.type === "model" ? (
-        <ProviderInstanceIcon
-          driverKind={props.item.driverKind}
-          displayName={props.item.providerDisplayName}
-          acpRegistryAgentId={props.item.acpRegistryAgentId}
-          acpRegistryIconUrl={props.item.acpRegistryIconUrl}
-          className="size-4 shrink-0"
-          iconClassName="size-4"
         />
       ) : null}
       {pullRequestPresentation ? (

@@ -37,7 +37,6 @@ fragment PullRequestRow on PullRequest {
   latestReviews(first: 20) {
     nodes {
       state
-      isMinimized
       author {
         login
       }

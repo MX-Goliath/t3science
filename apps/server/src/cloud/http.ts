@@ -19,7 +19,6 @@ import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ManagedLimits from "../policy/managedLimits.ts";
 import * as CloudLink from "./CloudLink.ts";
 import * as ConnectReachability from "./ConnectReachability.ts";
-import { canLinkHere } from "./linkChecks.ts";
 import type { RelayRequestError } from "./relayResponse.ts";
 import { traceRelayRequest } from "./traceRelayRequest.ts";
 
@@ -130,12 +129,9 @@ export const layer = HttpApiBuilder.group(
         ),
       )
       .handle("linkState", () =>
-        Effect.gen(function* () {
-          const principal = yield* requireEnvironmentScope(AuthRelayReadScope);
-          const state = yield* toHttpError(cloudLink.linkState());
-          const request = yield* HttpServerRequest.HttpServerRequest;
-          return { ...state, linkableHere: canLinkHere(request, principal.subject) };
-        }),
+        requireEnvironmentScope(AuthRelayReadScope).pipe(
+          Effect.andThen(toHttpError(cloudLink.linkState())),
+        ),
       )
       .handle("checkReachability", () =>
         requireEnvironmentScope(AuthRelayReadScope).pipe(Effect.andThen(reachability.check)),

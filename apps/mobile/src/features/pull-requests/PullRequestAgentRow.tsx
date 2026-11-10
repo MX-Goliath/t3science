@@ -19,13 +19,15 @@ export function PullRequestAgentRow(props: {
       title={props.title ?? action.title}
       icon="sparkles"
       accessibilityLabel={props.title ?? action.title}
-      menu={agent.chooseThread && !action.attributes.disabled}
+      menu={agent.threads.length > 1}
       onPress={
-        action.attributes.disabled || agent.chooseThread ? undefined : () => agent.start(props.task)
+        action.attributes.disabled || agent.threads.length > 1
+          ? undefined
+          : () => agent.start(props.task)
       }
     />
   );
-  if (!agent.chooseThread || action.attributes.disabled) return row;
+  if (agent.threads.length <= 1 || action.attributes.disabled) return row;
   return (
     <Menu
       title={props.title ?? action.title}

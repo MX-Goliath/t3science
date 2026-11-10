@@ -22,7 +22,7 @@ import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2Pe
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import { isOrchestrationV2WorkActive, latestProviderTurnForAttempt } from "@t3tools/contracts";
+import { isOrchestrationV2WorkActive } from "@t3tools/contracts";
 
 function trimmed(value: string | null | undefined): string | undefined {
   const result = value?.trim();
@@ -176,19 +176,8 @@ export function makeSubagentConversationArtifacts(input: {
   return { message, turnItem };
 }
 
-/** A delegated result, led by a note when the provider reported running another model than requested. */
-export function withExecutedModelNote(
-  result: string,
-  requestedModel: string,
-  executedModel: string | null | undefined,
-): string {
-  return executedModel == null || executedModel === requestedModel
-    ? result
-    : `Requested model ${requestedModel}; the provider reported running ${executedModel}.\n\n${result}`;
-}
-
 export function subagentResultForRun(
-  projection: Pick<OrchestrationV2ThreadProjection, "messages" | "turnItems" | "providerTurns">,
+  projection: Pick<OrchestrationV2ThreadProjection, "messages" | "turnItems">,
   run: OrchestrationV2Run,
 ): {
   readonly text: string;
@@ -234,15 +223,8 @@ export function subagentResultForRun(
     (run.status === "completed"
       ? "Child task completed without an assistant result."
       : `Child task ended with status ${run.status}.`);
-  const executedModel = latestProviderTurnForAttempt(
-    projection.providerTurns,
-    run.activeAttemptId,
-  )?.model;
   return {
-    text:
-      executedModel === undefined
-        ? text
-        : withExecutedModelNote(text, run.modelSelection.model, executedModel),
+    text,
     messageId: failure === undefined ? (message?.id ?? turnItem?.messageId ?? null) : null,
     turnItemId: failure?.id ?? turnItem?.id ?? null,
   };

@@ -178,13 +178,6 @@ const makeStrictNdJsonRpcParser = () => {
   const codec = RpcSerialization.jsonRpc().makeUnsafe();
   const decoder = new TextDecoder();
   let buffer = "";
-  const decodeLine = (line: string): ReadonlyArray<AcpDecodedWireMessage> =>
-    codec.decode(line).map((message) => ({
-      message: normalizeAcpJsonRpcError(
-        message as RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded,
-      ),
-      lineLength: line.length,
-    }));
   return {
     // Every message in a batch line is charged the whole line.
     decode: (bytes: Uint8Array | string): ReadonlyArray<AcpDecodedWireMessage> => {
@@ -197,14 +190,28 @@ const makeStrictNdJsonRpcParser = () => {
       }
       const lines = (buffer + chunk.slice(0, lastNewline)).split("\n");
       buffer = chunk.slice(lastNewline + 1);
-      return lines.flatMap(decodeLine);
+      return lines.flatMap((line) =>
+        codec.decode(line).map((message) => ({
+          message: normalizeAcpJsonRpcError(
+            message as RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded,
+          ),
+          lineLength: line.length,
+        })),
+      );
     },
     // A truncated final line is left to the exit status, which explains a crash better.
     end: (): ReadonlyArray<AcpDecodedWireMessage> => {
       const line = buffer + decoder.decode();
       buffer = "";
       try {
-        return line.trim() === "" ? [] : decodeLine(line);
+        return line.trim() === ""
+          ? []
+          : codec.decode(line).map((message) => ({
+              message: normalizeAcpJsonRpcError(
+                message as RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded,
+              ),
+              lineLength: line.length,
+            }));
       } catch {
         return [];
       }

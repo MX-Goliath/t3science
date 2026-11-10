@@ -917,7 +917,7 @@ function DeviceIntegrationControls({
                   .finally(() => setPending(null));
               }}
             >
-              {pending === `update-${tool}` ? "Updating…" : "Update"}
+              {pending === `update-${tool}` ? "Updating…" : `Update to v${version.requiredVersion}`}
             </Button>
           ) : null}
           {state.supportsToolInspection ? (

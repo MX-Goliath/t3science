@@ -16,8 +16,6 @@ export interface BrowserImportPathContext {
   readonly path: Path.Path;
   readonly platform: NodeJS.Platform;
   readonly home: string;
-  readonly linuxConfigHome: string;
-  readonly linuxChromeConfigHome: string;
   readonly appData: string | undefined;
   readonly localAppData: string | undefined;
 }
@@ -70,10 +68,7 @@ const chromiumSource = (input: {
         : undefined;
     }
     return input.linuxSegments
-      ? context.path.join(
-          input.id === "chrome" ? context.linuxChromeConfigHome : context.linuxConfigHome,
-          ...input.linuxSegments,
-        )
+      ? context.path.join(context.home, ".config", ...input.linuxSegments)
       : undefined;
   },
 });
@@ -190,7 +185,7 @@ export const BROWSER_IMPORT_SOURCES: ReadonlyArray<BrowserImportSourceDefinition
       if (context.platform === "win32") {
         return context.appData ? context.path.join(context.appData, "zen") : undefined;
       }
-      return context.path.join(context.linuxConfigHome, "zen");
+      return context.path.join(context.home, ".config", "zen");
     },
     alternateLinuxRoots: (context) => [
       context.path.join(context.home, ".zen"),
@@ -297,18 +292,10 @@ export const sourcePathContext = Effect.gen(function* () {
   const path = yield* Path.Path;
   const platform = yield* HostProcess.Platform;
   const environment = yield* HostProcess.Environment;
-  const home = environment.HOME ?? environment.USERPROFILE ?? "";
-  const xdgConfigHome = environment.XDG_CONFIG_HOME;
-  const linuxConfigHome =
-    xdgConfigHome && path.isAbsolute(xdgConfigHome) ? xdgConfigHome : path.join(home, ".config");
-  const chromeConfigHome = environment.CHROME_CONFIG_HOME;
   return {
     path,
     platform,
-    home,
-    linuxConfigHome,
-    linuxChromeConfigHome:
-      chromeConfigHome && path.isAbsolute(chromeConfigHome) ? chromeConfigHome : linuxConfigHome,
+    home: environment.HOME ?? environment.USERPROFILE ?? "",
     appData: environment.APPDATA,
     localAppData: environment.LOCALAPPDATA,
   } satisfies BrowserImportPathContext;

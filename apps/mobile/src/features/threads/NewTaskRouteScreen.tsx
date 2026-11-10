@@ -402,27 +402,21 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               </Text>
               {Platform.OS === "android" ? (
                 <>
-                  <View>
-                    <Button
-                      label={
-                        catalogState.hasReadyEnvironment ? "Add new project" : "Add environment"
-                      }
-                      tone="primary"
-                      onPress={() =>
-                        catalogState.hasReadyEnvironment
-                          ? navigation.dispatch(StackActions.push("AddProject"))
-                          : navigation.navigate("ConnectionsNew")
-                      }
-                    />
-                  </View>
+                  <Button
+                    label={catalogState.hasReadyEnvironment ? "Add new project" : "Add environment"}
+                    tone="primary"
+                    onPress={() =>
+                      catalogState.hasReadyEnvironment
+                        ? navigation.dispatch(StackActions.push("AddProject"))
+                        : navigation.navigate("ConnectionsNew")
+                    }
+                  />
                   {canStartScratch ? (
-                    <View>
-                      <Button
-                        label="Start without a project"
-                        tone="secondary"
-                        onPress={() => void startScratch()}
-                      />
-                    </View>
+                    <Button
+                      label="Start without a project"
+                      tone="secondary"
+                      onPress={() => void startScratch()}
+                    />
                   ) : null}
                 </>
               ) : !catalogState.hasReadyEnvironment ? (
@@ -443,13 +437,11 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                     />
                   </View>
                   {canStartScratch ? (
-                    <View>
-                      <Button
-                        label="Start without a project"
-                        tone="secondary"
-                        onPress={() => void startScratch()}
-                      />
-                    </View>
+                    <Button
+                      label="Start without a project"
+                      tone="secondary"
+                      onPress={() => void startScratch()}
+                    />
                   ) : null}
                 </>
               )}

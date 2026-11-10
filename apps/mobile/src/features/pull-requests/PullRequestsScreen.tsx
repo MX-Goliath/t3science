@@ -294,16 +294,20 @@ export function PullRequestsScreen(
         // to this tab. The thread list shows none either.
         showsVerticalScrollIndicator={Platform.OS !== "android"}
         recycleItems
-        renderScrollComponent={Platform.OS === "ios" ? NativeScrollView : undefined}
-        contentInsetAdjustmentBehavior="never"
-        contentInset={Platform.OS === "ios" ? { top: contentTopInset } : undefined}
+        renderScrollComponent={NativeScrollView}
+        // UIKit owns the bar's inset, so a minimizing bar and a resized column move
+        // the list in the same frame as the bar.
+        contentInsetAdjustmentBehavior="automatic"
         // A plain offset: LegendList adds the list header to an index-based restore, which
         // landed every return one header lower.
         initialScrollOffset={
           initialScrollOffset > 0 ? initialScrollOffset - contentTopInset : undefined
         }
+        contentInsetStartAdjustment={contentTopInset}
         contentContainerStyle={{
-          paddingBottom: Math.max(bottomSafeArea, workspace.bottomClearance),
+          paddingBottom:
+            Math.max(bottomSafeArea, workspace.bottomClearance) -
+            (Platform.OS === "ios" ? bottomSafeArea : 0),
         }}
         onScroll={(event) => {
           workspace.recordScrollOffset(

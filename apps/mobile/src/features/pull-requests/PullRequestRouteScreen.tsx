@@ -383,7 +383,8 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
     requestedSection.current = next;
     scrollOffsets.current[next] = offset;
     currentScrollOffset.current = { tab: next, offset };
-    scrollViews.current[next]?.scrollToOffset({ offset, animated: false });
+    // LegendList clamps to its measured rows, which leave out the short-tab minHeight below.
+    scrollViews.current[next]?.getNativeScrollRef().scrollTo({ y: offset, animated: false });
     setSection(next);
   };
   const tabContent = activityContent;
@@ -443,10 +444,8 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
       filesContent.refresh();
     });
   const jumpToFiles = () => {
-    scrollViews.current.overview?.scrollToIndex({
-      index: 0,
-      viewPosition: 0,
-      viewOffset: -filesY.current,
+    scrollViews.current.overview?.scrollToOffset({
+      offset: bodyY.current + filesY.current - contentTopInset,
       animated: true,
     });
     pendingFilesJump.current = false;
@@ -603,13 +602,13 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
                       currentScrollOffset.current = { tab, offset };
                   }}
                   className="flex-1"
-                  renderScrollComponent={Platform.OS === "ios" ? NativeScrollView : undefined}
-                  contentInsetAdjustmentBehavior="never"
-                  contentInset={
-                    Platform.OS === "ios"
-                      ? { top: contentTopInset, bottom: contentBottomInset }
-                      : undefined
-                  }
+                  renderScrollComponent={NativeScrollView}
+                  // UIKit owns the bar's inset, so a minimizing bar and a resized column
+                  // move the list in the same frame as the bar.
+                  contentInsetAdjustmentBehavior="automatic"
+                  contentInsetStartAdjustment={contentTopInset}
+                  // RN scrollTo clamps against raw insets and ignores the automatic bar inset.
+                  scrollToOverflowEnabled
                   refreshControl={
                     <RefreshControl
                       refreshing={section === tab && pullRefresh.refreshing}
@@ -618,19 +617,17 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
                   }
                   alwaysBounceVertical
                   scrollsToTop={section === tab}
-                  onItemSizeChanged={({ itemKey }) => {
+                  onContentSizeChange={() => {
                     if (
                       tab !== "overview" ||
                       section !== "overview" ||
-                      itemKey !== "overview:body" ||
                       !pendingDescriptionJump.current
                     )
                       return;
                     pendingDescriptionJump.current = false;
-                    scrollViews.current.overview?.scrollToIndex({
-                      index: 0,
-                      viewPosition: 0,
-                      viewOffset: -descriptionY.current,
+                    // Collapse changes the scroll range; restore the heading after that layout commits.
+                    scrollViews.current.overview?.scrollToOffset({
+                      offset: bodyY.current + descriptionY.current - contentTopInset,
                       animated: false,
                     });
                   }}

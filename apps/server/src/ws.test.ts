@@ -51,7 +51,6 @@ import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as AntigravityInstallation from "./provider/AntigravityInstallation.ts";
-import * as ProviderInstallation from "./provider/providerInstallation.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as NativeChildWorkQuery from "./orchestration-v2/NativeChildWorkQuery.ts";
@@ -121,7 +120,6 @@ import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
 import * as ProjectFaviconResolver from "./project/ProjectFaviconResolver.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as TriageService from "./triage/TriageService.ts";
-import * as TextGenerators from "./textGeneration/TextGenerators.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerConfigModule from "./config.ts";
@@ -770,7 +768,6 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(WorkspacePaths.WorkspacePaths)({}),
   Layer.mock(TraceDiagnostics.TraceDiagnostics)({}),
   Layer.mock(TriageService.TriageService)({}),
-  Layer.mock(TextGenerators.TextGenerators)({}),
   Layer.mock(ProjectFaviconResolver.ProjectFaviconResolver)({}),
   Layer.mock(ProjectEnrichment.ProjectEnrichmentService)({}),
   Layer.mock(AcpRegistryRuntimeCoordinator.AcpRegistryRuntimeCoordinator)({}),
@@ -805,7 +802,6 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({}),
   Layer.mock(ProjectStore.ProjectStoreV2)({}),
   Layer.mock(ProviderAuthService.ProviderAuthService)({}),
-  Layer.mock(ProviderInstallation.ProviderInstallation)({}),
   Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({}),
   Layer.mock(ProviderLatestVersions.ProviderLatestVersions)({}),
   Layer.mock(ProviderMaintenanceRunner.ProviderMaintenanceRunner)({}),
@@ -1438,15 +1434,10 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
   ),
 );
 
-// Pruned history cannot be replayed: a cursor below the boundary must resync from a snapshot,
-// or, for a shell client that loads it over HTTP, be told to without the server building one.
-it.effect.each([
-  { scope: "thread", httpSnapshotFallback: false },
-  { scope: "shell", httpSnapshotFallback: false },
-  { scope: "shell", httpSnapshotFallback: true },
-] as const)(
-  "$scope resume from a cursor below the pruned boundary (HTTP fallback: $httpSnapshotFallback)",
-  ({ scope, httpSnapshotFallback }) =>
+// Pruned history cannot be replayed: a cursor below the boundary must resync from a snapshot.
+it.effect.each(["thread", "shell"] as const)(
+  "%s resume from a cursor below the pruned boundary loads a snapshot",
+  (scope) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const now = "2026-10-13T00:00:00.000Z";
@@ -1470,18 +1461,11 @@ it.effect.each([
         ) VALUES (${OrchestrationEventStore.EVENT_LOG_PRUNED_THROUGH}, 2, ${second!.sequence}, ${now})
       `;
       const subscription = Effect.gen(function* () {
-        const items: ReadonlyArray<unknown> =
+        const stream =
           scope === "thread"
-            ? yield* Stream.runCollect(
-                yield* subscribeOrchestrationV2Thread({ threadId, afterSequence: first!.sequence }),
-              )
-            : yield* Stream.runCollect(
-                yield* subscribeOrchestrationV2Shell({
-                  afterSequence: first!.sequence,
-                  ...(httpSnapshotFallback ? { httpSnapshotFallback: true as const } : {}),
-                }),
-              );
-        return items;
+            ? yield* subscribeOrchestrationV2Thread({ threadId, afterSequence: first!.sequence })
+            : yield* subscribeOrchestrationV2Shell({ afterSequence: first!.sequence });
+        return stream;
       });
       const exit = yield* subscription.pipe(
         Effect.provideService(ThreadManagement.ThreadManagementService, {
@@ -1503,10 +1487,7 @@ it.effect.each([
         } as ProjectEnrichment.ProjectEnrichmentService["Service"]),
         Effect.exit,
       );
-      assert.deepEqual(
-        Exit.isFailure(exit) ? Cause.squash(exit.cause) : Array.from(exit.value),
-        httpSnapshotFallback ? [{ kind: "snapshot-required" }] : "snapshot",
-      );
+      assert.deepEqual(Exit.isFailure(exit) ? Cause.squash(exit.cause) : exit, "snapshot");
     }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
 );
 

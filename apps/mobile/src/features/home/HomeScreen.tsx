@@ -1,4 +1,3 @@
-import { useContentTopInset } from "../../components/ui/useBarInset";
 import { usePaneRole } from "../../components/ui/Pane";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { useActiveNewTask } from "../../state/active-new-task";
@@ -263,7 +262,6 @@ export function HomeScreen(props: HomeScreenProps) {
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const homeScrollGesture = useNativeGesture();
   const insets = useSafeAreaInsets();
-  const contentTopInset = useContentTopInset();
   const emptyTopInset = useWorkspaceListEmptyTopInset();
   const { fabClearance } = useAndroidControlSizing();
   const screenMetrics = useNativeLayoutMetrics();
@@ -328,7 +326,7 @@ export function HomeScreen(props: HomeScreenProps) {
   useSearchScrollRestoration(searchMode, () => {
     if (restoredOffset === undefined) return;
     void listRef.current?.scrollToOffset({
-      offset: restoredOffset - contentTopInset,
+      offset: restoredOffset - (Platform.OS === "ios" ? insets.top : 0),
       animated: false,
     });
   });
@@ -349,7 +347,7 @@ export function HomeScreen(props: HomeScreenProps) {
     if (workspace)
       workspace.recordScrollOffset(
         "threads",
-        Math.max(0, event.nativeEvent.contentOffset.y + contentTopInset),
+        Math.max(0, event.nativeEvent.contentOffset.y + (Platform.OS === "ios" ? insets.top : 0)),
       );
     clearTimeout(activationTimerRef.current);
     activationTimerRef.current = setTimeout(
@@ -800,7 +798,7 @@ export function HomeScreen(props: HomeScreenProps) {
                 onTouchStart={(event) => trackListTouches(event, true)}
                 onTouchEnd={(event) => trackListTouches(event, false)}
                 onTouchCancel={(event) => trackListTouches(event, false)}
-                renderScrollComponent={Platform.OS === "ios" ? renderHomeScrollView : undefined}
+                renderScrollComponent={renderHomeScrollView}
                 data={threadListV2Items}
                 renderItem={renderV2Item}
                 keyExtractor={v2KeyExtractor}
@@ -831,11 +829,17 @@ export function HomeScreen(props: HomeScreenProps) {
                 }
                 ListEmptyComponent={v2ListEmpty}
                 style={{ flex: 1 }}
-                automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
-                contentInsetAdjustmentBehavior="never"
-                contentInset={Platform.OS === "ios" ? { top: contentTopInset } : undefined}
+                automaticallyAdjustsScrollIndicatorInsets
+                // UIKit owns the bar's inset, so a minimizing bar and a resized column move
+                // the list in the same frame as the bar.
+                contentInsetAdjustmentBehavior="automatic"
+                contentInsetStartAdjustment={Platform.OS === "ios" ? insets.top : 0}
+                // RN scrollTo clamps against raw insets and ignores the automatic bar inset.
+                scrollToOverflowEnabled
                 initialScrollOffset={
-                  initialScrollOffset > 0 ? initialScrollOffset - contentTopInset : undefined
+                  initialScrollOffset > 0
+                    ? initialScrollOffset - (Platform.OS === "ios" ? insets.top : 0)
+                    : undefined
                 }
                 showsVerticalScrollIndicator={false}
                 keyboardDismissMode="on-drag"
@@ -849,7 +853,7 @@ export function HomeScreen(props: HomeScreenProps) {
                     (contentSideInsets?.right ?? 0) + (sidebarSurface ? 8 : 0) + androidListGutter,
                   paddingBottom:
                     Platform.OS === "ios"
-                      ? iosBottomClearance
+                      ? iosBottomClearance - (columnMetrics?.safeArea.bottom ?? insets.bottom)
                       : (workspace?.bottomClearance ??
                         Math.max(insets.bottom, 16) +
                           (Platform.OS === "android" ? fabClearance : 88)),

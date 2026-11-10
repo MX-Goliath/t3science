@@ -13,7 +13,7 @@ import packageJson from "../../package.json" with { type: "json" };
 export type CliRunner = "npx" | "pnpm dlx" | "bunx";
 
 /** Detection is best-effort; callers must fail closed to a plain `t3` command. */
-export function detectCliRunner(entryPath: string): CliRunner | null {
+function detectCliRunner(entryPath: string): CliRunner | null {
   const path = entryPath.replaceAll("\\", "/");
   if (path.includes("/_npx/")) {
     return "npx";

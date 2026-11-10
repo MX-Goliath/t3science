@@ -1,1 +1,1 @@
-export { AndroidHeaderIconButton as ScreenHeaderButton } from "./AndroidScreenHeader.android";
+export { AndroidHeaderIconButton as ScreenHeaderButton } from "./AndroidScreenHeader";

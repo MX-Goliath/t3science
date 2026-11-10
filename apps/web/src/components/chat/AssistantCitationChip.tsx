@@ -193,13 +193,7 @@ export function AssistantCitationChip({
               align="end"
               anchor={popupAnchor}
               initialFocus={() => {
-                const input = commentInputRef.current;
-                if (input) {
-                  input.focus({ preventScroll: true });
-                  input.setSelectionRange(input.value.length, input.value.length);
-                  // Moving the caret doesn't scroll a long comment to it.
-                  input.scrollTop = input.scrollHeight;
-                }
+                commentInputRef.current?.focus({ preventScroll: true });
                 return false;
               }}
               finalFocus={
