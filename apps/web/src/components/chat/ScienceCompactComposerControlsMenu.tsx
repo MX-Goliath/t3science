@@ -1,14 +1,7 @@
-import { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import { RuntimeMode } from "@t3tools/contracts";
 import { memo, type ReactNode, useRef } from "react";
 import { EllipsisIcon } from "lucide-react";
-import {
-  Menu,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator as MenuDivider,
-  MenuTrigger,
-} from "../ui/menu";
+import { Menu, MenuPopup, MenuSeparator as MenuDivider, MenuTrigger } from "../ui/menu";
 import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { focusRequestedPermission, useComposerMenuProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
@@ -18,16 +11,13 @@ import {
 } from "./ScienceComposerFooterControls";
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
-  interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
   runtimeModeOptions: ReadonlyArray<RuntimeModeOption>;
-  showInteractionModeToggle: boolean;
   traitsMenuContent?: ReactNode;
   showPermissions?: boolean;
   size?: "sm" | "xs";
   /** Close the portaled popup when its trigger hides. */
   hidden?: boolean;
-  onToggleInteractionMode: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   const composerFloatingLayerProps = useComposerMenuProps();
@@ -65,24 +55,6 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
         {props.traitsMenuContent ? (
           <>
             {props.traitsMenuContent}
-            {props.showInteractionModeToggle || props.showPermissions !== false ? (
-              <MenuDivider />
-            ) : null}
-          </>
-        ) : null}
-        {props.showInteractionModeToggle ? (
-          <>
-            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Mode</div>
-            <MenuRadioGroup
-              value={props.interactionMode}
-              onValueChange={(value) => {
-                if (!value || value === props.interactionMode) return;
-                props.onToggleInteractionMode();
-              }}
-            >
-              <MenuRadioItem value="default">Chat</MenuRadioItem>
-              <MenuRadioItem value="plan">Plan</MenuRadioItem>
-            </MenuRadioGroup>
             {props.showPermissions !== false ? <MenuDivider /> : null}
           </>
         ) : null}

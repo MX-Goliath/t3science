@@ -152,6 +152,7 @@ vi.mock("@t3tools/client-runtime/voice-input", async (importOriginal) => ({
         acceleration: "auto",
         modelUnloadTimeout: "min_15",
         gpuDevices: [],
+        benchmarkTier: "cpu",
       };
     }),
   downloadEnvironmentSpeechModel: (_prepared: PreparedConnection, modelId: string) =>
@@ -313,8 +314,6 @@ function Probe(props: {
         followUpBehavior="queue"
         canSteer={false}
         alternateShortcutLabel={null}
-        showPlanFollowUpPrompt={false}
-        promptHasText={value.blocksSubmission}
         voiceInputActive={value.blocksSubmission}
         isSendBusy={false}
         sendDisabledReason={null}
@@ -326,7 +325,6 @@ function Probe(props: {
         onResume={() => {}}
         onPreviousPendingQuestion={() => {}}
         onInterrupt={() => {}}
-        onImplementPlanInNewThread={() => {}}
         scheduledSend={null}
         scheduledSendLabel={null}
         onScheduledSendClick={() => {}}

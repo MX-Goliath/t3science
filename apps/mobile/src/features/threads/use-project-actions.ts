@@ -26,7 +26,7 @@ import { setPendingConnectionError } from "../../state/use-remote-environment-re
 import { validateProjectThreadCreation } from "./projectThreadCreationValidation";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { serverEnvironment } from "../../state/server";
-import { resolveProviderInteractionMode } from "../../state/legacy-plan-mode";
+import { DEFAULT_PROVIDER_INTERACTION_MODE } from "@t3tools/contracts";
 
 export function useCreateProjectThread() {
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
@@ -125,9 +125,6 @@ export function useCreateProjectThread() {
         setPendingConnectionError(providerError);
         return AsyncResult.failure(Cause.fail(new Error(providerError)));
       }
-      const provider = serverConfig?.providers.find(
-        (candidate) => candidate.instanceId === input.modelSelection.instanceId,
-      );
 
       const result = await startTurn({
         environmentId: input.project.environmentId,
@@ -142,7 +139,7 @@ export function useCreateProjectThread() {
           uploadedAttachments: prepared.attachments,
           modelSelection: input.modelSelection,
           runtimeMode: input.runtimeMode,
-          interactionMode: resolveProviderInteractionMode(provider, input.interactionMode),
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
           workspaceMode: input.envMode,
           branch: input.branch,
           worktreePath: input.worktreePath,

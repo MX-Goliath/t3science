@@ -1,3 +1,5 @@
+import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
+import { useStableCallback } from "../../hooks/useStableCallback";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { scienceModelEffortLabel } from "./scienceModelPresets";
 import { TraitsPicker } from "./ScienceTraitsPicker";
@@ -21,7 +23,6 @@ import {
   type ModelSelection,
   type ProviderDriverKind,
   type ProviderInstanceId,
-  type ProviderInteractionMode,
   type RuntimeMode,
   type ServerProvider,
 } from "@t3tools/contracts";
@@ -58,14 +59,11 @@ export function ComposerControlsBar(props: {
   reportedModelSelection: ChatComposerProps["reportedModelSelection"];
   promptUltrathink: PromptUltrathink;
   onPromptEdit: (edit: (prompt: string) => string) => void;
-  planModeEnabled: boolean;
-  planModeUiEnabled: boolean;
+  includePlanAgent?: boolean | undefined;
   effortDisplay: EffortDisplay;
-  interactionMode: ProviderInteractionMode;
   compatibleRuntimeMode: RuntimeMode;
   defaultRuntimeMode: RuntimeMode | undefined;
   compatibleRuntimeModeOptions: ReadonlyArray<RuntimeModeOption>;
-  toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   composerControlsCollapsed: boolean;
   composerControlsHidden: boolean;
@@ -107,13 +105,10 @@ export function ComposerControlsBar(props: {
     reportedModelSelection,
     promptUltrathink,
     onPromptEdit,
-    planModeEnabled,
-    planModeUiEnabled,
-    interactionMode,
+    includePlanAgent,
     compatibleRuntimeMode,
     defaultRuntimeMode,
     compatibleRuntimeModeOptions,
-    toggleInteractionMode,
     handleRuntimeModeChange,
     composerControlsCollapsed,
     composerControlsHidden,
@@ -142,6 +137,8 @@ export function ComposerControlsBar(props: {
     modelPickerIconClassName,
     getModelDisabledReason,
   } = props;
+  const applyThreadModelPick = useApplyThreadModelPick();
+  const applyRouteThreadModelPick = useStableCallback(() => applyThreadModelPick(routeThreadRef));
   const presets = props.scienceModelPresets ?? [];
   const presetsEnabled = presets.length === 6;
   const presetsActive = presetsEnabled && !props.sciencePresetsManual && !multipleModelSelections;
@@ -150,7 +147,9 @@ export function ComposerControlsBar(props: {
   const providerTraitsMenuContent = renderProviderTraitsMenuContent({
     provider: selectedProvider,
     instanceId: selectedInstanceId,
-    ...(routeKind === "server" ? { threadRef: routeThreadRef } : {}),
+    ...(routeKind === "server"
+      ? { threadRef: routeThreadRef, onDraftModelOptionsChange: applyRouteThreadModelPick }
+      : {}),
     ...(routeKind === "draft" && draftId ? { draftId } : {}),
     model: selectedModel,
     models: selectedProviderModels,
@@ -158,7 +157,7 @@ export function ComposerControlsBar(props: {
     reportedModelSelection,
     promptUltrathink,
     onPromptEdit,
-    planModeEnabled,
+    includePlanAgent,
   });
   const customReasoningContent = presetsActive ? (
     <ScienceModelPresetsCard
@@ -188,6 +187,7 @@ export function ComposerControlsBar(props: {
             options,
             { instanceId: selectedInstanceId, model: selectedModel, persistSticky: true },
           );
+        if (routeKind === "server") applyRouteThreadModelPick();
       }}
     />
   ) : presetsEnabled &&
@@ -196,7 +196,7 @@ export function ComposerControlsBar(props: {
       models: selectedProviderModels,
       model: selectedModel,
       modelOptions: composerModelOptions?.[selectedInstanceId],
-      planModeEnabled,
+      includePlanAgent,
     }) ? (
     <>
       <ScienceManualModelCard
@@ -229,7 +229,7 @@ export function ComposerControlsBar(props: {
         model: selectedModel,
         models: selectedProviderModels,
         modelOptions: composerModelOptions?.[selectedInstanceId],
-        planModeEnabled,
+        includePlanAgent,
         ...(selectedProvider === "opencode" ? { descriptorIds: ["variant"] } : {}),
       }));
   const [effortMenuOpen, setEffortMenuOpen] = useComposerMenuState(
@@ -239,7 +239,9 @@ export function ComposerControlsBar(props: {
   const providerTraitsPickerInput = {
     provider: selectedProvider,
     instanceId: selectedInstanceId,
-    ...(routeKind === "server" ? { threadRef: routeThreadRef } : {}),
+    ...(routeKind === "server"
+      ? { threadRef: routeThreadRef, onDraftModelOptionsChange: applyRouteThreadModelPick }
+      : {}),
     ...(routeKind === "draft" && draftId ? { draftId } : {}),
     model: selectedModel,
     models: selectedProviderModels,
@@ -247,7 +249,7 @@ export function ComposerControlsBar(props: {
     reportedModelSelection,
     promptUltrathink,
     onPromptEdit,
-    planModeEnabled,
+    includePlanAgent,
     isComposerOwned: true,
     effortDisplay: props.effortDisplay,
     onOpenModelPicker: () => onModelPickerOpenChange(true),
@@ -274,7 +276,6 @@ export function ComposerControlsBar(props: {
   } = resolveComposerControlsOwnership({
     matchesDefault: accessMatchesDefault,
     hasTraits: providerTraitsPicker !== null,
-    planModeUiEnabled,
     collapsed: composerControlsCollapsed,
     measuredHiddenBlockCount,
   });
@@ -301,15 +302,12 @@ export function ComposerControlsBar(props: {
             id: "mode",
             content: (
               <ComposerFooterModeControls
-                showInteractionModeToggle={planModeUiEnabled}
-                interactionMode={interactionMode}
                 runtimeMode={compatibleRuntimeMode}
                 runtimeModeOptions={compatibleRuntimeModeOptions}
                 size={composerControlsCollapsed ? "xs" : "sm"}
                 hidden={composerControlsHidden || restingHiddenBlockCount > 0}
                 accessDisplay={accessDisplay}
                 emphasized={!accessMatchesDefault}
-                onToggleInteractionMode={toggleInteractionMode}
                 onRuntimeModeChange={handleRuntimeModeChange}
               />
             ),
@@ -424,12 +422,10 @@ export function ComposerControlsBar(props: {
           )}
         >
           <CompactComposerControlsMenu
-            interactionMode={interactionMode}
             runtimeMode={compatibleRuntimeMode}
             runtimeModeOptions={compatibleRuntimeModeOptions}
             size={composerControlsCollapsed ? "xs" : "sm"}
             hidden={composerControlsHidden || hiddenRestingBlockIds.length === 0}
-            showInteractionModeToggle={planModeUiEnabled && hiddenRestingBlockIds.includes("mode")}
             traitsMenuContent={
               hiddenRestingBlockIds.includes("traits")
                 ? (customReasoningContent ?? providerTraitsMenuContent)
@@ -437,7 +433,6 @@ export function ComposerControlsBar(props: {
             }
             // Permissions join the overflow only when their normal home is in it.
             showPermissions={overflowShowsPermissions}
-            onToggleInteractionMode={toggleInteractionMode}
             onRuntimeModeChange={handleRuntimeModeChange}
           />
         </div>

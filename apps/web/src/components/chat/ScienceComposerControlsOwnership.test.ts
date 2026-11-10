@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vite-plus/test";
+
+import { resolveComposerControlsOwnership } from "./ScienceComposerControlsOwnership";
+
+const base = {
+  matchesDefault: true,
+  hasTraits: true,
+  collapsed: false,
+  measuredHiddenBlockCount: 0,
+};
+
+describe("resolveComposerControlsOwnership", () => {
+  it("keeps the permissions icon at the default with its own composer.mode target", () => {
+    const result = resolveComposerControlsOwnership(base);
+    expect(result).toMatchObject({
+      accessDisplay: "icon",
+      showModeBlock: true,
+      hiddenBlockIds: [],
+      effortOwnsModeShortcut: false,
+    });
+  });
+
+  it("shows a labelled chip that owns composer.mode when the mode differs", () => {
+    const result = resolveComposerControlsOwnership({ ...base, matchesDefault: false });
+    expect(result).toMatchObject({
+      accessDisplay: "label",
+      showModeBlock: true,
+      effortOwnsModeShortcut: false,
+    });
+  });
+
+  it("never leaves an empty overflow menu: the effort chip overflows with the chip", () => {
+    const result = resolveComposerControlsOwnership({
+      ...base,
+      matchesDefault: false,
+      measuredHiddenBlockCount: 1,
+    });
+    expect(result.hiddenBlockIds).toEqual(["traits", "mode"]);
+    expect(result.overflowShowsPermissions).toBe(true);
+    // One composer.mode target: the overflow menu, not the overflowed effort chip.
+    expect(result.effortOwnsModeShortcut).toBe(false);
+  });
+
+  it("keeps a permissions icon for models without traits, even at the default", () => {
+    const result = resolveComposerControlsOwnership({ ...base, hasTraits: false });
+    expect(result.accessDisplay).toBe("icon");
+    const overflowed = resolveComposerControlsOwnership({
+      ...base,
+      hasTraits: false,
+      measuredHiddenBlockCount: 1,
+    });
+    expect(overflowed.hiddenBlockIds).toEqual(["mode"]);
+    expect(overflowed.overflowShowsPermissions).toBe(true);
+  });
+
+  it("shows the non-default chip as an icon in the compacted row", () => {
+    const result = resolveComposerControlsOwnership({
+      ...base,
+      matchesDefault: false,
+      collapsed: true,
+    });
+    expect(result.accessDisplay).toBe("icon");
+  });
+});

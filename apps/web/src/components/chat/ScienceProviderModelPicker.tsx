@@ -7,7 +7,19 @@ import {
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
-import { createContext, memo, type ReactNode, useRef, useState } from "react";
+import { RegistryContext } from "@effect/atom-react";
+import {
+  createContext,
+  memo,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
+import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -122,6 +134,22 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   if (pickerSession.open !== isMenuOpen) {
     setPickerSession({ open: isMenuOpen, key: pickerSession.key + Number(isMenuOpen) });
   }
+  const registry = useContext(RegistryContext);
+  const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
+    reportFailure: false,
+  });
+  const refreshModelCatalog = useEffectEvent(() => {
+    const environmentId = props.environmentId;
+    if (environmentId === null) return;
+    // An older server drops the field and probes every provider.
+    const config = registry.get(serverEnvironment.configValueAtom(environmentId));
+    if (config?.environment.capabilities.modelCatalogRefresh !== true) return;
+    void refreshProviders({ environmentId, input: { modelCatalogOnly: true } });
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the server for newly released models on every open; a parent, a keybinding or the palette can open the picker, so no one handler sees them all
+  useEffect(() => {
+    if (isMenuOpen) refreshModelCatalog();
+  }, [isMenuOpen]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);

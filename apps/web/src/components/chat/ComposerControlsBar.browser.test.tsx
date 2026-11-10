@@ -83,14 +83,10 @@ function Controls({
         reportedModelSelection={undefined}
         promptUltrathink="none"
         onPromptEdit={() => {}}
-        planModeEnabled
-        planModeUiEnabled={false}
         effortDisplay="label"
-        interactionMode="default"
         compatibleRuntimeMode="full-access"
         defaultRuntimeMode="full-access"
         compatibleRuntimeModeOptions={[]}
-        toggleInteractionMode={() => {}}
         handleRuntimeModeChange={() => {}}
         composerControlsCollapsed={false}
         composerControlsHidden={false}
@@ -129,6 +125,7 @@ const levels = [
 ];
 
 it("opens reasoning from both composer controls and opens model selection from reasoning", async () => {
+  useComposerDraftStore.setState(useComposerDraftStore.getInitialState(), true);
   await using screen = await render(
     <Controls
       descriptors={[
@@ -170,6 +167,7 @@ it("opens reasoning from both composer controls and opens model selection from r
 });
 
 it("opens models directly unless the model offers multiple reasoning levels", async () => {
+  useComposerDraftStore.setState(useComposerDraftStore.getInitialState(), true);
   await using screen = await render(<Controls descriptors={[]} />);
   for (const descriptors of [
     [],

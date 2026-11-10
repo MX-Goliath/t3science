@@ -55,6 +55,21 @@ export function ScienceSettingsPanel() {
           }
         />
       </SettingsSection>
+      <SettingsSection title="Legacy" id="science-legacy">
+        <SettingsRow
+          {...searchableSetting("legacy-context-window-indicator")}
+          description="Show context usage and manual compaction beside the Science composer. The thread details card is configured separately in Appearance."
+          control={
+            <Switch
+              checked={settings.contextWindowMeterEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
+              }
+              aria-label="Context window indicator (legacy)"
+            />
+          }
+        />
+      </SettingsSection>
       <SettingsSection title="Model presets" id="science-preset-slots">
         <p className="pb-3 text-sm text-muted-foreground">
           Arrange six presets from left to right. Each can use a different provider. Presets are
@@ -94,7 +109,6 @@ export function ScienceSettingsPanel() {
                       model={selection.model}
                       modelOptions={selection.options}
                       allowPromptInjectedEffort={false}
-                      planModeEnabled={settings.planModeEnabled}
                       onModelOptionsChange={(options) =>
                         updatePreset(index, {
                           modelSelection: {

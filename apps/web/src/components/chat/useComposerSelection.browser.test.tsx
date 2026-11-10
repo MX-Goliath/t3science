@@ -122,8 +122,6 @@ it.each([
         supportsProviderSwitchingViaHandoff: false,
         multipleModelSelections: null,
         runtimeMode: "full-access",
-        interactionMode: "default",
-        interactionModeEnabled: false,
         isLocalDraftThread: false,
         canOverrideServerThreadEnvMode: false,
         setPendingServerThreadEnvModeEntry: vi.fn(),
@@ -156,7 +154,6 @@ it.each([
             model={selection.model}
             models={provider.models}
             modelOptions={selection.options}
-            planModeEnabled
             modelReset={modelReset}
           />
         </>

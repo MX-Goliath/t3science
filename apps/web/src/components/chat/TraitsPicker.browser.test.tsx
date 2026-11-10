@@ -46,7 +46,6 @@ function settings(input: {
           modelOptions={options}
           promptUltrathink={readPromptUltrathink(prompt)}
           onPromptEdit={setPrompt}
-          planModeEnabled
           {...(input.descriptorIds ? { descriptorIds: input.descriptorIds } : {})}
           {...(input.reportedOptions
             ? {

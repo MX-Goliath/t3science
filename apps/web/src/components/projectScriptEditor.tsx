@@ -607,7 +607,6 @@ function ProjectScriptEditorForm({
                       {selectedModelEntry ? (
                         <TraitsPicker
                           provider={selectedModelEntry.driverKind}
-                          planModeEnabled={false}
                           models={selectedModelEntry.models}
                           model={modelSelection.model}
                           promptUltrathink={readPromptUltrathink(prompt)}

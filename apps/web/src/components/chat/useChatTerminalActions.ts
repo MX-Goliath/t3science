@@ -1,7 +1,7 @@
 import { isProjectCommandAction, isProjectPromptAction } from "@t3tools/shared/projectScripts";
 import { useNavigate } from "@tanstack/react-router";
 import { newMessageId, newThreadId } from "../../lib/utils";
-import { waitForStartedServerThread } from "../ChatView.logic";
+import { waitForThreadShell } from "../../state/entities";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
@@ -264,9 +264,13 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
       });
       failure = startResult._tag === "Failure" ? startResult : null;
       if (failure === null) {
-        const startedResult = await settlePromise(() =>
-          waitForStartedServerThread(scopeThreadRef(activeThread.environmentId, nextThreadId)),
-        );
+        const startedResult = await settlePromise(async () => {
+          if (
+            !(await waitForThreadShell(scopeThreadRef(activeThread.environmentId, nextThreadId)))
+          ) {
+            throw new Error("The new thread did not become available.");
+          }
+        });
         failure = startedResult._tag === "Failure" ? startedResult : null;
       }
       if (failure === null) {

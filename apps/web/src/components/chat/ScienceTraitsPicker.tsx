@@ -102,11 +102,13 @@ function buildUnavailableModelOptionDescriptors(
 type TraitsPersistence =
   | {
       threadRef?: ScopedThreadRef;
+      onDraftModelOptionsChange?: (() => void) | undefined;
       draftId?: DraftId;
       onModelOptionsChange?: never;
     }
   | {
       threadRef?: undefined;
+      onDraftModelOptionsChange?: never;
       onModelOptionsChange: (nextOptions: ProviderOptions | undefined) => void;
     };
 
@@ -125,16 +127,16 @@ function getSelectedTraits(
   promptUltrathink: PromptUltrathink,
   modelOptions: ProviderOptions | null | undefined,
   allowPromptInjectedEffort: boolean,
-  planModeEnabled: boolean,
+  includePlanAgent?: boolean | undefined,
   descriptorIds?: ReadonlyArray<string>,
 ) {
-  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const caps = getProviderModelCapabilities(models, model, provider, includePlanAgent);
   const modelIsUnavailable =
     provider === "opencode" &&
     !models.some((candidate) => candidate.slug === normalizeModelSlug(model, provider));
   const descriptors = modelIsUnavailable
     ? buildUnavailableModelOptionDescriptors(
-        planModeEnabled
+        includePlanAgent
           ? modelOptions
           : modelOptions?.filter((option) => option.id !== "agent" || option.value !== "plan"),
       )
@@ -208,7 +210,7 @@ function getTraitsSectionVisibility(input: {
   promptUltrathink?: PromptUltrathink | undefined;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
-  planModeEnabled: boolean;
+  includePlanAgent?: boolean | undefined;
   descriptorIds?: ReadonlyArray<string>;
 }) {
   const selected = getSelectedTraits(
@@ -218,7 +220,7 @@ function getTraitsSectionVisibility(input: {
     input.promptUltrathink ?? "none",
     input.modelOptions,
     input.allowPromptInjectedEffort ?? true,
-    input.planModeEnabled,
+    input.includePlanAgent,
     input.descriptorIds,
   );
 
@@ -258,7 +260,7 @@ export function getReasoningTraitStep(input: {
   modelOptions: ProviderOptions | undefined;
   reportedModelSelection: ModelSelection | null | undefined;
   prompt: string;
-  planModeEnabled: boolean;
+  includePlanAgent?: boolean | undefined;
   direction: 1 | -1;
 }) {
   const selected = getSelectedTraits(
@@ -268,7 +270,7 @@ export function getReasoningTraitStep(input: {
     readPromptUltrathink(input.prompt),
     input.modelOptions,
     true,
-    input.planModeEnabled,
+    input.includePlanAgent,
   );
   if (selected.modelIsUnavailable || selected.ultrathinkInBodyText) return null;
   const descriptor = selected.selectDescriptors.find(isReasoningSelect);
@@ -312,7 +314,7 @@ export function shouldRenderTraitsControls(input: {
   promptUltrathink?: PromptUltrathink | undefined;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
-  planModeEnabled: boolean;
+  includePlanAgent?: boolean | undefined;
   descriptorIds?: ReadonlyArray<string>;
 }): boolean {
   return getTraitsSectionVisibility(input).hasAnyControls;
@@ -342,7 +344,7 @@ interface TraitsMenuContentProps {
   modelOptions?: ProviderOptions | null | undefined;
   reportedModelSelection?: ModelSelection | null | undefined;
   allowPromptInjectedEffort?: boolean;
-  planModeEnabled: boolean;
+  includePlanAgent?: boolean | undefined;
   descriptorIds?: ReadonlyArray<string>;
   triggerClassName?: string;
   isComposerOwned?: boolean;
@@ -370,7 +372,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   modelOptions,
   reportedModelSelection,
   allowPromptInjectedEffort = true,
-  planModeEnabled,
+  includePlanAgent,
   descriptorIds,
   isComposerOwned,
   onOpenModelPicker,
@@ -394,6 +396,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
       model,
       persistSticky: true,
     });
+    persistence.onDraftModelOptionsChange?.();
   };
   const selected = getTraitsSectionVisibility({
     provider,
@@ -402,7 +405,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     promptUltrathink,
     modelOptions,
     allowPromptInjectedEffort,
-    planModeEnabled,
+    includePlanAgent,
     ...(descriptorIds ? { descriptorIds } : {}),
   });
   const {
@@ -665,7 +668,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   modelOptions,
   reportedModelSelection,
   allowPromptInjectedEffort = true,
-  planModeEnabled,
+  includePlanAgent,
   descriptorIds,
   triggerClassName,
   isComposerOwned,
@@ -708,7 +711,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       promptUltrathink,
       modelOptions,
       allowPromptInjectedEffort,
-      planModeEnabled,
+      includePlanAgent,
       ...(descriptorIds ? { descriptorIds } : {}),
     });
   if (
@@ -720,7 +723,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       promptUltrathink,
       modelOptions,
       allowPromptInjectedEffort,
-      planModeEnabled,
+      includePlanAgent,
       ...(descriptorIds ? { descriptorIds } : {}),
     })
   ) {
@@ -732,7 +735,6 @@ export const TraitsPicker = memo(function TraitsPicker({
     speedLabel,
     otherLabels,
   } = buildTraitsTriggerDisplay({
-    provider,
     descriptors: visibleDescriptors,
     primarySelectDescriptorId: primarySelectDescriptor?.id ?? null,
     ultrathinkPromptControlled,
@@ -957,7 +959,7 @@ export const TraitsPicker = memo(function TraitsPicker({
             modelOptions={modelOptions}
             reportedModelSelection={reportedModelSelection}
             allowPromptInjectedEffort={allowPromptInjectedEffort}
-            planModeEnabled={planModeEnabled}
+            includePlanAgent={includePlanAgent}
             {...(isComposerOwned ? { isComposerOwned } : {})}
             {...(modelReset ? { modelReset } : {})}
             {...(onOpenModelPicker

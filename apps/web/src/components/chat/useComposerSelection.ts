@@ -3,13 +3,13 @@ import type { UnifiedSettings } from "@t3tools/contracts";
 import type { Dispatch } from "react";
 import type { ComposerThreadTarget, DraftSessionState } from "../../composerDraftStore";
 import { useStableCallback } from "../../hooks/useStableCallback";
+import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
 import {
   type EnvironmentId,
   type ModelSelection,
   ProviderInstanceId,
   type ServerProvider,
   type ThreadId,
-  ProviderInteractionMode,
   RuntimeMode,
 } from "@t3tools/contracts";
 import type { deriveThreadStructureRuntime } from "@t3tools/client-runtime/state/thread-execution";
@@ -51,8 +51,6 @@ interface ComposerSelectionInput {
   readonly supportsProviderSwitchingViaHandoff: boolean;
   readonly multipleModelSelections: ReadonlyArray<ModelSelection> | null;
   readonly runtimeMode: RuntimeMode;
-  readonly interactionMode: ProviderInteractionMode;
-  readonly interactionModeEnabled: boolean;
   readonly isLocalDraftThread: boolean;
   readonly canOverrideServerThreadEnvMode: boolean;
   readonly setPendingServerThreadEnvModeEntry: Dispatch<
@@ -65,7 +63,7 @@ interface ComposerSelectionInput {
 }
 
 /**
- * The composer's choices for the next turn: provider and model, runtime and interaction mode,
+ * The composer's choices for the next turn: provider and model, runtime mode,
  * and where a new thread runs (local or a new worktree, from the remote's tip or not).
  */
 export function useComposerSelection(input: ComposerSelectionInput) {
@@ -82,8 +80,6 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     supportsProviderSwitchingViaHandoff,
     multipleModelSelections,
     runtimeMode,
-    interactionMode,
-    interactionModeEnabled,
     isLocalDraftThread,
     canOverrideServerThreadEnvMode,
     setPendingServerThreadEnvModeEntry,
@@ -96,10 +92,8 @@ export function useComposerSelection(input: ComposerSelectionInput) {
   );
   const setComposerDraftModelSelection = useComposerDraftStore((store) => store.setModelSelection);
   const setComposerDraftRuntimeMode = useComposerDraftStore((store) => store.setRuntimeMode);
-  const setComposerDraftInteractionMode = useComposerDraftStore(
-    (store) => store.setInteractionMode,
-  );
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
+  const applyThreadModelPick = useApplyThreadModelPick();
 
   const handleRuntimeModeChange = (mode: RuntimeMode) => {
     if (mode === runtimeMode) return;
@@ -111,21 +105,6 @@ export function useComposerSelection(input: ComposerSelectionInput) {
   };
   const handleRuntimeModeChangeStable = useStableCallback(handleRuntimeModeChange);
 
-  const handleInteractionModeChange = (mode: ProviderInteractionMode) => {
-    if (mode === "plan" && !interactionModeEnabled) return;
-    if (mode === interactionMode) return;
-    setComposerDraftInteractionMode(composerDraftTarget, mode);
-    if (isLocalDraftThread) {
-      setDraftThreadContext(composerDraftTarget, { interactionMode: mode });
-    }
-    scheduleComposerFocus();
-  };
-  const handleInteractionModeChangeStable = useStableCallback(handleInteractionModeChange);
-  const toggleInteractionMode = () => {
-    if (!interactionModeEnabled) return;
-    handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
-  };
-  const toggleInteractionModeStable = useStableCallback(toggleInteractionMode);
   const openProviderSetup = (instanceId: ProviderInstanceId) => {
     void navigate({
       to: "/settings/providers",
@@ -219,19 +198,17 @@ export function useComposerSelection(input: ComposerSelectionInput) {
       if (options?.focusComposer !== false) scheduleComposerFocus();
       return;
     }
-    setComposerDraftModelSelection(
-      scopeThreadRef(activeThread.environmentId, activeThread.id),
-      nextModelSelection,
-      {
-        explicit: true,
-        replaceOptions: true,
-        ...((settings.scienceComposer && settings.scienceModelPresetsEnabled) ||
-        options?.sciencePreset
-          ? { sciencePreset: Boolean(options?.sciencePreset) }
-          : {}),
-      },
-    );
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    setComposerDraftModelSelection(threadRef, nextModelSelection, {
+      explicit: true,
+      replaceOptions: true,
+      ...((settings.scienceComposer && settings.scienceModelPresetsEnabled) ||
+      options?.sciencePreset
+        ? { sciencePreset: Boolean(options?.sciencePreset) }
+        : {}),
+    });
     setStickyComposerModelSelection(nextModelSelection);
+    if (!isLocalDraftThread) applyThreadModelPick(threadRef);
     if (options?.focusComposer !== false) scheduleComposerFocus();
     return true;
   };
@@ -270,7 +247,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
       defaultProvider.models,
       defaultModel,
       defaultProvider.driver,
-      settings.planModeEnabled,
+      false,
     );
     const defaultOptions = buildProviderOptionSelectionsFromDescriptors(
       getProviderOptionDescriptors({
@@ -285,6 +262,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
         model: defaultModel,
         persistSticky: true,
       });
+    if (!isLocalDraftThread) applyThreadModelPick(composerDraftTarget);
   });
   const defaultModelLabel =
     defaultProvider?.models.find((model) => model.slug === defaultModel)?.name ??
@@ -337,13 +315,10 @@ export function useComposerSelection(input: ComposerSelectionInput) {
   return {
     modelReset,
     getModelDisabledReason,
-    handleInteractionModeChange,
-    handleInteractionModeChangeStable,
     handleRuntimeModeChangeStable,
     onEnvModeChangeStable,
     onProviderModelSelectStable,
     onStartFromOriginChange,
     openProviderSetupStable,
-    toggleInteractionModeStable,
   };
 }
