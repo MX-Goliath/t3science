@@ -435,31 +435,31 @@ it.each([false, true])(
       "one",
       watching("turn", "completed", "2026-09-13T07:00:01.000Z", false, monitor),
     );
-    expect(titles()).toEqual(["Thread completed"]);
+    expect(titles()).toEqual(["Done · Test thread"]);
 
     state.shells.set("one", watching("wake", "running", null, true, monitor));
     state.shells.set(
       "one",
       watching("wake", "completed", "2026-09-13T07:00:09.000Z", true, monitor),
     );
-    expect(titles()).toEqual(["Thread completed"]);
+    expect(titles()).toEqual(["Done · Test thread"]);
 
     // The adapter drains the roster before the final wake starts.
     state.shells.set("one", watching("wake", "completed", "2026-09-13T07:00:09.000Z", true, []));
-    expect(titles()).toEqual(["Thread completed"]);
+    expect(titles()).toEqual(["Done · Test thread"]);
     if (disconnect) {
       state.shells.set("one", {
         ...watching("wake", "completed", "2026-09-13T07:00:09.000Z", true, []),
         status: "cached",
       });
       vi.advanceTimersByTime(RELEASED_COMPLETION_GRACE_MS);
-      expect(titles()).toEqual(["Thread completed"]);
+      expect(titles()).toEqual(["Done · Test thread"]);
     }
 
     state.shells.set("one", watching("final", "running", null, false, []));
     vi.advanceTimersByTime(RELEASED_COMPLETION_GRACE_MS);
     state.shells.set("one", watching("final", "completed", "2026-09-13T07:00:11.000Z", false, []));
-    expect(titles()).toEqual(["Thread completed", "Thread completed"]);
+    expect(titles()).toEqual(["Done · Test thread", "Done · Test thread"]);
     expect(state.sound).toHaveBeenCalledTimes(2);
   },
 );
