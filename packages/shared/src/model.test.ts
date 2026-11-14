@@ -12,6 +12,7 @@ import {
   getProviderOptionDescriptors,
   readCustomModelEntries,
   modelSelectionsEqual,
+  withImplicitFastModeDefault,
 } from "./model.ts";
 
 const codexCaps: ModelCapabilities = createModelCapabilities({
@@ -249,4 +250,20 @@ it("formats model metadata with provider-specific reasoning options", () => {
     )?.reasoning,
   ).toBe("medium");
   expect(resolveModelSelectionDisplayMeta(undefined)).toBeNull();
+});
+
+describe("withImplicitFastModeDefault", () => {
+  // regression: #2981 a remembered Fast mode choice must survive the implicit default on new chats
+  it("injects fastMode false only when the model exposes fastMode and no selection exists", () => {
+    const caps = createModelCapabilities({
+      optionDescriptors: [{ id: "fastMode", label: "Fast", type: "boolean", currentValue: true }],
+    });
+
+    expect(withImplicitFastModeDefault(caps, undefined)).toEqual([
+      { id: "fastMode", value: false },
+    ]);
+    expect(withImplicitFastModeDefault(caps, [{ id: "fastMode", value: true }])).toEqual([
+      { id: "fastMode", value: true },
+    ]);
+  });
 });

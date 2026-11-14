@@ -89,6 +89,7 @@ const DockedPickerContext = createContext<{ modelLabel: string }>({ modelLabel: 
 
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   environmentId: EnvironmentId | null;
+  workspaceCwd?: string | null;
   activeInstanceId: ProviderInstanceId;
   model: string;
   selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string }>;
@@ -284,6 +285,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       key={pickerSession.key}
       searchInputRef={searchInputRef}
       environmentId={props.environmentId}
+      workspaceCwd={props.workspaceCwd ?? null}
       isComposerOwned={props.isComposerOwned === true}
       activeInstanceId={activeInstanceId}
       model={props.model}

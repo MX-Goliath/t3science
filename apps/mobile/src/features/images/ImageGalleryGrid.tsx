@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { FlatList, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { LegendList } from "@legendapp/list/react-native";
+import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { Image } from "expo-image";
 import type { EnvironmentId, ImageLibraryEntry } from "@t3tools/contracts";
 import { useEnvironmentQuery } from "../../state/query";
@@ -65,12 +67,12 @@ export function ImageGalleryGrid(props: {
   }
   const copy = imageLibraryCopy();
   return (
-    <FlatList
+    <LegendList
       data={pages}
+      extraData={props}
+      renderScrollComponent={NativeScrollView}
       keyExtractor={(image) => image.id}
       numColumns={3}
-      initialNumToRender={12}
-      windowSize={5}
       contentContainerStyle={{ padding: 8, paddingBottom: props.bottomInset }}
       keyboardDismissMode="on-drag"
       onScrollBeginDrag={props.onBrowse}

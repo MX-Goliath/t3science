@@ -10,7 +10,7 @@ import { getProviderModelCapabilities } from "../../providerModels";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import type { ModelEsque } from "./providerIconUtils";
 import { getReasoningAppearance } from "./reasoningAppearance";
-import { withImplicitFastModeDefault } from "./composerProviderState";
+import { withImplicitFastModeDefault } from "@t3tools/shared/model";
 
 export function scienceModelEffortLabel(
   selection: ModelSelection,

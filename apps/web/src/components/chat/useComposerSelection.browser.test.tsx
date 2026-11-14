@@ -1,196 +1,210 @@
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
+  EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
-  type ModelSelection,
+  ThreadId,
   type ServerProvider,
 } from "@t3tools/contracts";
-import {
-  DEFAULT_SCIENCE_MODEL_PRESETS,
-  DEFAULT_UNIFIED_SETTINGS,
-} from "@t3tools/contracts/settings";
-import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import { createModelSelection } from "@t3tools/shared/model";
+import * as Cause from "effect/Cause";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
-import { render } from "../../../test/render";
-import { useComposerDraftStore } from "../../composerDraftStore";
-import { makeThreadFixture } from "../../test-fixtures";
-import { useComposerSelection } from "./useComposerSelection";
-import { TraitsPicker } from "./ScienceTraitsPicker";
 
-it.each([
-  { hasOptions: true, presets: false },
-  { hasOptions: false, presets: false },
-  { hasOptions: true, presets: true },
-  { hasOptions: false, presets: true },
-])(
-  "resets to the project model with its saved options (%s), replacing remembered options",
-  async ({ hasOptions, presets }) => {
-    useComposerDraftStore.setState({
-      draftsByThreadKey: {},
-      stickyModelSelectionByProvider: {},
-      stickyOptionsByModelByProvider: {},
-      stickyActiveProvider: null,
-    });
-    const instanceId = ProviderInstanceId.make("codex");
-    const driver = ProviderDriverKind.make("codex");
-    const activeThread = makeThreadFixture();
-    const target = scopeThreadRef(activeThread.environmentId, activeThread.id);
-    const projectDefault: ModelSelection = {
-      instanceId,
-      model: "project-model",
-      ...(hasOptions ? { options: [{ id: "reasoningEffort", value: "low" }] } : {}),
-    };
-    useComposerDraftStore.getState().setModelSelection(target, {
-      ...projectDefault,
-      model: hasOptions ? "provider-model" : "project-model",
-      options: [{ id: "reasoningEffort", value: "high" }],
-    });
-    useComposerDraftStore.getState().setStickyModelSelection({
-      ...projectDefault,
-      options: [{ id: "reasoningEffort", value: "high" }],
-    });
-    const capabilities = {
-      optionDescriptors: [
-        {
-          id: "reasoningEffort",
-          label: "Reasoning effort",
-          type: "select" as const,
-          currentValue: "medium",
-          options: [
-            { id: "low", label: "Low" },
-            { id: "medium", label: "Medium", isDefault: true },
-            { id: "high", label: "High" },
-          ],
-        },
-      ],
-    };
-    const provider: ServerProvider = {
-      instanceId,
-      driver,
-      enabled: true,
-      installed: true,
-      version: null,
-      status: "ready",
-      auth: { status: "authenticated" },
-      checkedAt: "2026-01-01T00:00:00.000Z",
-      models: [
-        {
-          slug: "provider-model",
-          name: "Provider model",
-          isCustom: false,
-          isDefault: true,
-          capabilities,
-        },
-        { slug: "project-model", name: "Project model", isCustom: false, capabilities },
-      ],
-      slashCommands: [],
-      skills: [],
-    };
-    function Composer() {
-      const selection = useComposerDraftStore(
-        (state) =>
-          state.draftsByThreadKey[scopedThreadKey(target)]!.modelSelectionByProvider[instanceId]!,
-      );
-      const { modelReset, onProviderModelSelectStable } = useComposerSelection({
-        environmentId: activeThread.environmentId,
-        composerDraftTarget: target,
-        draftThread: null,
-        activeThread,
-        activeRuntime: null,
-        activeProjectSettings: {
-          settings: { newWorktreesStartFromOrigin: false, defaultModelSelection: projectDefault },
-        },
-        settings: {
-          ...DEFAULT_UNIFIED_SETTINGS,
-          scienceComposer: presets,
-          scienceModelPresetsEnabled: presets,
-          scienceModelPresets: DEFAULT_SCIENCE_MODEL_PRESETS.map((preset, index) => ({
-            ...preset,
-            modelSelection:
-              index === 0
-                ? {
-                    instanceId,
-                    model: "provider-model",
-                    options: [{ id: "reasoningEffort", value: "low" }],
-                  }
-                : null,
-          })),
-          defaultModelSelection: { instanceId, model: "provider-model" },
-        },
-        providerStatuses: [provider],
-        lockedProvider: null,
-        supportsProviderSwitchingViaHandoff: false,
-        multipleModelSelections: null,
-        runtimeMode: "full-access",
-        isLocalDraftThread: false,
-        canOverrideServerThreadEnvMode: false,
-        setPendingServerThreadEnvModeEntry: vi.fn(),
-        setPendingServerThreadStartFromOriginByThreadId: vi.fn(),
-        scheduleComposerFocus: vi.fn(),
-      });
-      return (
-        <>
-          <button
-            onClick={() =>
-              onProviderModelSelectStable(instanceId, "provider-model", {
-                sciencePreset: {
-                  instanceId,
-                  model: "provider-model",
-                  options: [{ id: "reasoningEffort", value: "high" }],
-                },
-              })
-            }
-          >
-            Choose preset
-          </button>
-          <button onClick={() => onProviderModelSelectStable(instanceId, "provider-model")}>
-            Choose manually
-          </button>
-          <TraitsPicker
-            isComposerOwned
-            provider={driver}
-            instanceId={instanceId}
-            threadRef={target}
-            model={selection.model}
-            models={provider.models}
-            modelOptions={selection.options}
-            modelReset={modelReset}
-          />
-        </>
-      );
-    }
-    await using screen = await render(<Composer />);
-    if (presets) {
-      await screen.getByRole("button", { name: "Choose preset" }).click();
-      expect(useComposerDraftStore.getState().getComposerDraft(target)?.sciencePresetsManual).toBe(
-        false,
-      );
-    }
-    await screen.getByRole("button", { name: "Choose manually" }).click();
-    expect(useComposerDraftStore.getState().getComposerDraft(target)?.sciencePresetsManual).toBe(
-      presets ? true : undefined,
-    );
-    await screen.getByRole("button", { name: /^Effort:/ }).click();
-    await page
-      .getByRole("button", {
-        name: "Reset to project default: Project model",
-      })
-      .click();
-    await expect
-      .element(page.getByRole("slider"))
-      .toHaveAttribute("aria-valuetext", hasOptions ? "Low" : "Medium");
-    const state = useComposerDraftStore.getState();
-    expect(state.getComposerDraft(target)?.sciencePresetsManual).not.toBe(true);
-    const expectedSelection = {
-      ...projectDefault,
-      options: projectDefault.options ?? [{ id: "reasoningEffort", value: "medium" }],
-    };
-    expect(
-      state.draftsByThreadKey[scopedThreadKey(target)]?.modelSelectionByProvider[instanceId],
-    ).toEqual(expectedSelection);
-    expect(state.stickyModelSelectionByProvider[instanceId]).toEqual(expectedSelection);
-    expect(state.stickyOptionsByModelByProvider[instanceId]?.[projectDefault.model]).toEqual(
-      expectedSelection.options,
-    );
+const mocks = vi.hoisted(() => ({
+  setModelSelection: null as ((value: unknown) => Promise<AtomCommandResult<void, unknown>>) | null,
+}));
+
+vi.mock(import("../../state/use-orchestration-command"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  useOrchestrationCommand: (() => (value: unknown) => mocks.setModelSelection?.(value)) as never,
+}));
+
+vi.mock(import("../../state/threads"), async (original) => {
+  const actual = await original();
+  return {
+    ...actual,
+    environmentThreadShells: {
+      ...actual.environmentThreadShells,
+      threadShellAtom: ((ref: { threadId: string }) => shellAtom(ref.threadId)) as never,
+    },
+  };
+});
+
+import { render } from "../../../test/render";
+import { deriveEffectiveComposerModelState, useComposerDraftStore } from "../../composerDraftStore";
+import { AppAtomRegistryProvider, appAtomRegistry } from "../../rpc/atomRegistry";
+import { useComposerSelection } from "./useComposerSelection";
+
+// Kept alive so a shell set before the hook mounts is still there when it saves a pick.
+const shellAtom = Atom.family((_threadId: string) => Atom.make<unknown>(null).pipe(Atom.keepAlive));
+
+function setup() {
+  const setModelSelection = vi.fn<(value: unknown) => Promise<AtomCommandResult<void, unknown>>>();
+  mocks.setModelSelection = setModelSelection;
+  return { setModelSelection };
+}
+
+const environmentId = EnvironmentId.make("environment-local");
+const cursor = ProviderInstanceId.make("cursor");
+const stored = createModelSelection(cursor, "claude-opus-5-5", [{ id: "effort", value: "medium" }]);
+
+const providers: ReadonlyArray<ServerProvider> = [
+  {
+    instanceId: cursor,
+    driver: ProviderDriverKind.make("cursor"),
+    enabled: true,
+    installed: true,
+    version: null,
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-01-01T00:00:00.000Z",
+    models: [{ slug: "auto-smart", name: "Auto", isCustom: false, capabilities: {} }],
+    slashCommands: [],
+    skills: [],
   },
-);
+];
+
+// The hook reads only the thread's identity and stored selection.
+function cursorThread(id: string) {
+  return { environmentId, id: ThreadId.make(id), modelSelection: stored } as EnvironmentThreadShell;
+}
+
+function Picker(props: {
+  thread: EnvironmentThreadShell;
+  runtime: Parameters<typeof useComposerSelection>[0]["activeRuntime"];
+  model?: string;
+}) {
+  const { onProviderModelSelectStable } = useComposerSelection({
+    environmentId,
+    composerDraftTarget: scopeThreadRef(environmentId, props.thread.id),
+    draftThread: null,
+    activeThread: props.thread,
+    activeRuntime: props.runtime,
+    activeProjectSettings: {
+      settings: { newWorktreesStartFromOrigin: false, defaultModelSelection: null },
+    },
+    settings: DEFAULT_UNIFIED_SETTINGS,
+    providerStatuses: providers,
+    lockedProvider: null,
+    supportsProviderSwitchingViaHandoff: true,
+    multipleModelSelections: null,
+    runtimeMode: "full-access",
+    isLocalDraftThread: false,
+    canOverrideServerThreadEnvMode: false,
+    setPendingServerThreadEnvModeEntry: () => {},
+    setPendingServerThreadStartFromOriginByThreadId: () => {},
+    scheduleComposerFocus: () => {},
+  });
+  return (
+    <button
+      type="button"
+      onClick={() => onProviderModelSelectStable(cursor, props.model ?? stored.model)}
+    >
+      Pick the model
+    </button>
+  );
+}
+
+it("keeps a Cursor thread's stored model and options when the user re-picks its unavailable row", async () => {
+  setup();
+  const thread = cursorThread("thread-cursor");
+  await using _screen = await render(<Picker thread={thread} runtime={null} />);
+  await page.getByRole("button", { name: "Pick the model" }).click();
+
+  await vi.waitFor(() => {
+    const draft = useComposerDraftStore
+      .getState()
+      .getComposerDraft(scopeThreadRef(environmentId, thread.id));
+    expect(draft?.modelSelectionByProvider[cursor] ?? thread.modelSelection).toEqual(stored);
+  });
+});
+
+it("switches back to the thread's stored model while the session runs on another instance", async () => {
+  setup();
+  const thread = cursorThread("thread-cursor-handoff");
+  const runtime = { providerInstanceId: ProviderInstanceId.make("codex") } as Parameters<
+    typeof useComposerSelection
+  >[0]["activeRuntime"];
+  await using _screen = await render(<Picker thread={thread} runtime={runtime} />);
+  await page.getByRole("button", { name: "Pick the model" }).click();
+
+  await vi.waitFor(() => {
+    const draft = useComposerDraftStore
+      .getState()
+      .getComposerDraft(scopeThreadRef(environmentId, thread.id));
+    expect(draft?.activeProvider).toBe(cursor);
+    expect(
+      deriveEffectiveComposerModelState({
+        draft,
+        threadStarted: true,
+        providers,
+        selectedProvider: ProviderDriverKind.make("cursor"),
+        selectedInstanceId: cursor,
+        threadModelSelection: thread.modelSelection,
+        projectModelSelection: null,
+        settings: DEFAULT_UNIFIED_SETTINGS,
+      }),
+    ).toEqual({ selectedModel: stored.model, modelOptions: { [cursor]: stored.options } });
+  });
+});
+
+it("saves a re-picked model again when its first save failed", async () => {
+  const { setModelSelection } = setup();
+  setModelSelection
+    .mockResolvedValueOnce(AsyncResult.failure(Cause.fail(new Error("offline"))))
+    .mockResolvedValue(AsyncResult.success(undefined));
+  const thread = cursorThread("thread-cursor-retry");
+  appAtomRegistry.set(shellAtom(thread.id), thread);
+  await using _screen = await render(
+    <AppAtomRegistryProvider>
+      <Picker thread={thread} runtime={null} model="auto-smart" />
+    </AppAtomRegistryProvider>,
+  );
+  const pick = page.getByRole("button", { name: "Pick the model" });
+  await pick.click();
+  await vi.waitFor(() => expect(setModelSelection).toHaveBeenCalledTimes(1));
+  await pick.click();
+
+  const autoSave = expect.objectContaining({
+    input: {
+      threadId: thread.id,
+      modelSelection: expect.objectContaining({ instanceId: cursor, model: "auto-smart" }),
+    },
+  });
+  await vi.waitFor(() => expect(setModelSelection.mock.calls).toEqual([[autoSave], [autoSave]]));
+});
+
+it("saves a pick of a seeded model the started thread does not show", async () => {
+  const { setModelSelection } = setup();
+  setModelSelection.mockResolvedValue(AsyncResult.success(undefined));
+  const thread = cursorThread("thread-cursor-seeded");
+  appAtomRegistry.set(shellAtom(thread.id), thread);
+  useComposerDraftStore
+    .getState()
+    .setModelSelection(
+      scopeThreadRef(environmentId, thread.id),
+      createModelSelection(cursor, "auto-smart"),
+    );
+  await using _screen = await render(
+    <AppAtomRegistryProvider>
+      <Picker thread={thread} runtime={null} model="auto-smart" />
+    </AppAtomRegistryProvider>,
+  );
+  await page.getByRole("button", { name: "Pick the model" }).click();
+
+  await vi.waitFor(() =>
+    expect(setModelSelection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: {
+          threadId: thread.id,
+          modelSelection: expect.objectContaining({ instanceId: cursor, model: "auto-smart" }),
+        },
+      }),
+    ),
+  );
+});

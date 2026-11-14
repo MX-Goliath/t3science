@@ -5,7 +5,7 @@ import {
 } from "@t3tools/shared/model";
 import { replaceDescriptorCurrentValue } from "@t3tools/client-runtime/model-traits";
 import { getProviderModelCapabilities } from "../../providerModels";
-import { withImplicitFastModeDefault } from "./composerProviderState";
+import { withImplicitFastModeDefault } from "@t3tools/shared/model";
 import type {
   ModelSelection,
   ProviderInstanceId,

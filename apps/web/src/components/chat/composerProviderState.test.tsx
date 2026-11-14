@@ -6,11 +6,7 @@ import {
   type ProviderOptionSelection,
   type ServerProviderModel,
 } from "@t3tools/contracts";
-import {
-  getComposerProviderState,
-  getComposerReasoningStep,
-  withImplicitFastModeDefault,
-} from "./ScienceComposerProviderState";
+import { getComposerProviderState, getComposerReasoningStep } from "./ScienceComposerProviderState";
 import { readPromptUltrathink } from "./ScienceTraitsPicker";
 
 const PROVIDER: ProviderDriverKind = ProviderDriverKind.make("codex");
@@ -151,25 +147,28 @@ describe("getComposerProviderState", () => {
     expect(state.modelOptionsForDispatch).toEqual(selections(["agent", "build"]));
   });
 
-  it("preserves explicit options when the selected model is absent from the catalog", () => {
-    const state = getComposerProviderState({
-      provider: ProviderDriverKind.make("opencode"),
-      model: "opencode/kimi-k3",
-      models: [
-        {
-          slug: "opencode/big-pickle",
-          name: "Big Pickle",
-          isCustom: false,
-          capabilities: {},
-        },
-      ],
-      modelOptions: selections(["variant", "max"], ["agent", "build"]),
-    });
+  it.each(["opencode", "cursor"])(
+    "preserves explicit options when the %s model is absent from the catalog",
+    (driver) => {
+      const state = getComposerProviderState({
+        provider: ProviderDriverKind.make(driver),
+        model: "missing-model",
+        models: [
+          {
+            slug: "opencode/big-pickle",
+            name: "Big Pickle",
+            isCustom: false,
+            capabilities: {},
+          },
+        ],
+        modelOptions: selections(["variant", "max"], ["agent", "build"]),
+      });
 
-    expect(state.modelOptionsForDispatch).toEqual(
-      selections(["variant", "max"], ["agent", "build"]),
-    );
-  });
+      expect(state.modelOptionsForDispatch).toEqual(
+        selections(["variant", "max"], ["agent", "build"]),
+      );
+    },
+  );
 
   it("validates options for a known model selected through a legacy alias", () => {
     const state = getComposerProviderState({
@@ -206,29 +205,6 @@ describe("getComposerProviderState", () => {
     });
 
     expect(state.modelOptionsForDispatch).toEqual(selections(["fastMode", false]));
-  });
-});
-
-describe("withImplicitFastModeDefault", () => {
-  // regression: #2981 a remembered Fast mode choice must survive the implicit default on new chats
-  it("injects fastMode false only when the model exposes fastMode and no selection exists", () => {
-    expect(
-      withImplicitFastModeDefault(
-        {
-          optionDescriptors: [booleanDescriptor("fastMode", true)],
-        },
-        undefined,
-      ),
-    ).toEqual(selections(["fastMode", false]));
-
-    expect(
-      withImplicitFastModeDefault(
-        {
-          optionDescriptors: [booleanDescriptor("fastMode", true)],
-        },
-        selections(["fastMode", true]),
-      ),
-    ).toEqual(selections(["fastMode", true]));
   });
 });
 

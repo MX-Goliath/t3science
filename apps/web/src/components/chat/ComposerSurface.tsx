@@ -76,7 +76,7 @@ function ContextStrip({ className, ...props }: ComponentProps<"div">) {
     <div
       data-slot="composer-context-strip"
       className={cn(
-        "group/composer-context relative flex w-full items-center gap-2 overflow-x-clip px-2 pt-2 text-muted-foreground",
+        "group/composer-context surface-glass relative flex w-full items-center gap-2 overflow-x-clip px-2 pt-2 text-muted-foreground",
         "group-data-attached-context-row/composer-surface:mx-3 group-data-attached-context-row/composer-surface:-mt-2 group-data-attached-context-row/composer-surface:w-auto group-data-attached-context-row/composer-surface:rounded-b-2xl group-data-attached-context-row/composer-surface:pb-1.5 group-data-attached-context-row/composer-surface:pt-3.5",
         "group-data-attached-context-row/composer-surface:[--chat-composer-context-surface:color-mix(in_srgb,var(--chat-composer-glass-surface)_75%,var(--background))] group-data-attached-context-row/composer-surface:bg-(--chat-composer-context-surface)/(--glass-opacity) group-data-attached-context-row/composer-surface:backdrop-blur-(--glass-blur) group-data-attached-context-row/composer-surface:backdrop-saturate-(--glass-saturation)",
         className,

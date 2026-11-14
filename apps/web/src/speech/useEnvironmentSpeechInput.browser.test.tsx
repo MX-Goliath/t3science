@@ -115,6 +115,8 @@ vi.mock("../state/environments", () => ({
 vi.mock("../hooks/useSettings", () => ({
   updateClientSettings: vi.fn(),
   useEnvironmentIdentificationMode: () => "off",
+  getClientSettings: () => ({ ...DEFAULT_CLIENT_SETTINGS, ...mocks.settings }),
+  isClientSettingsHydrated: () => true,
   useClientSettingsHydrated: () => true,
   useClientSettings: (selector?: (settings: Record<string, unknown>) => unknown) => {
     const settings = { ...DEFAULT_CLIENT_SETTINGS, ...mocks.settings };
@@ -279,7 +281,6 @@ function Probe(props: {
     projectName: props.projectName,
     cleanup: props.cleanup,
     ownerKey: "draft",
-    draftText: mocks.draft,
     readDraft: () => ({
       text: mocks.draft,
       selection: { start: mocks.draft.length, end: mocks.draft.length },
@@ -311,6 +312,8 @@ function Probe(props: {
         }}
         isRunning={false}
         canInterrupt={false}
+        runId={null}
+        hideCompactToggle={false}
         followUpBehavior="queue"
         canSteer={false}
         alternateShortcutLabel={null}
@@ -334,12 +337,7 @@ function Probe(props: {
         keepFullHistory={false}
         onToggleKeepFullHistory={() => {}}
       >
-        <ComposerSpeechButton
-          state={value.state}
-          progress={null}
-          onStart={() => void value.start()}
-          onCancel={value.cancel}
-        />
+        <ComposerSpeechButton state={value.state} onStart={() => void value.start()} />
         <ComposerSpeechRecordingPill
           state={value.state}
           progress={null}

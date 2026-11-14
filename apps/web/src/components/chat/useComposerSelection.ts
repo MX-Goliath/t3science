@@ -24,9 +24,13 @@ import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionDescriptors,
 } from "@t3tools/shared/model";
-import { withImplicitFastModeDefault } from "./composerProviderState";
+import { withImplicitFastModeDefault } from "@t3tools/shared/model";
 import type { ModelResetAction } from "./ReasoningSettingsCard";
-import { resolveNewDraftStartFromOrigin } from "../../lib/chatThreadActions";
+import {
+  draftModelSelectionApplies,
+  resolveNewDraftStartFromOrigin,
+  threadHasStarted,
+} from "../../lib/chatThreadActions";
 import { type DraftThreadEnvMode, useComposerDraftStore } from "../../composerDraftStore";
 import {
   getStartedThreadModelChangeBlockReason,
@@ -132,7 +136,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
   const onProviderModelSelect = (
     instanceId: ProviderInstanceId,
     model: string,
-    options?: { focusComposer?: boolean; sciencePreset?: ModelSelection },
+    options?: { focusComposer?: boolean; sciencePreset?: ModelSelection; reset?: boolean },
   ) => {
     if (!activeThread) return;
     const entry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
@@ -163,13 +167,41 @@ export function useComposerSelection(input: ComposerSelectionInput) {
         return;
       }
     }
+    // The picker lists an unavailable model only as the active selection, so re-picking keeps it.
     const resolvedModel = resolveAppModelSelectionForInstance(
       instanceId,
       settings,
       providerStatuses,
       model,
+      { preserveUnavailableSelection: true },
     );
-    if (!resolvedModel) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    const storedDraft = useComposerDraftStore.getState().getComposerDraft(threadRef);
+    const draft = draftModelSelectionApplies(storedDraft, threadHasStarted(activeThread))
+      ? storedDraft
+      : null;
+    const shownInstanceId =
+      draft?.activeProvider ??
+      activeRuntime?.providerInstanceId ??
+      activeThread.modelSelection.instanceId;
+    const shownSelection =
+      draft?.modelSelectionByProvider[shownInstanceId] ?? activeThread.modelSelection;
+    if (
+      !resolvedModel ||
+      (!options?.sciencePreset &&
+        !options?.reset &&
+        instanceId === shownInstanceId &&
+        shownSelection.instanceId === instanceId &&
+        shownSelection.model === resolvedModel)
+    ) {
+      if (resolvedModel && settings.scienceComposer && settings.scienceModelPresetsEnabled) {
+        setComposerDraftModelSelection(threadRef, shownSelection, {
+          explicit: true,
+          sciencePreset: false,
+        });
+      }
+      // Re-picking the shown model keeps its options and saves it again if that save failed.
+      if (resolvedModel && !isLocalDraftThread) applyThreadModelPick(threadRef);
       if (options?.focusComposer !== false) scheduleComposerFocus();
       return;
     }
@@ -198,7 +230,6 @@ export function useComposerSelection(input: ComposerSelectionInput) {
       if (options?.focusComposer !== false) scheduleComposerFocus();
       return;
     }
-    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
     setComposerDraftModelSelection(threadRef, nextModelSelection, {
       explicit: true,
       replaceOptions: true,
@@ -240,6 +271,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     if (!defaultSelection || !defaultModel || resetDisabledReason) return;
     const applied = onProviderModelSelect(defaultSelection.instanceId, defaultModel, {
       focusComposer: false,
+      reset: true,
       ...(presetsEnabled ? { sciencePreset: { ...defaultSelection, model: defaultModel } } : {}),
     });
     if (!applied || !defaultProvider) return;

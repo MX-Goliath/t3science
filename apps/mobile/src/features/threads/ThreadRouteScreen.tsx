@@ -30,6 +30,7 @@ import {
   AuthTerminalReadScope,
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
+  isProviderNativeSubagentThread,
   MessageId,
   ThreadId,
   type ProjectScript,
@@ -125,6 +126,7 @@ import {
   type ThreadInspectorPresentation,
 } from "./thread-inspector-preview";
 import { useStartSideChat } from "./useStartSideChat";
+import { useThreadStatusAnnouncements } from "./useThreadStatusAnnouncements";
 import type { ThreadInspectorMode, ThreadInspectorTarget } from "./thread-inspector-navigation";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 
@@ -137,7 +139,7 @@ function firstRouteParam(value: string | string[] | undefined): string | null {
 const InspectorHeaderShownContext = createContext(false);
 
 function ThreadRouteFallbackLayout(props: { readonly children: ReactNode }) {
-  const goBack = useWorkspaceBackNavigation("threads");
+  const goBack = useWorkspaceBackNavigation();
   const inspectorHeaderShown = use(InspectorHeaderShownContext);
   return (
     <ThreadScreenFallback
@@ -242,7 +244,7 @@ export function ThreadRouteScreen(props: ThreadRouteScreenProps) {
 }
 
 function LiveThreadRouteController(props: ThreadRouteScreenProps) {
-  useAndroidWorkspaceBack("threads");
+  useAndroidWorkspaceBack();
   const connectionsReady = useConnectionsReady();
   const { connectionState } = useRemoteConnectionStatus();
   const { selectedThread } = useThreadSelection();
@@ -380,6 +382,24 @@ function ThreadRouteContent(
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
+  useThreadStatusAnnouncements({
+    threadKey:
+      selectedThread === null || isProviderNativeSubagentThread(selectedThread.source)
+        ? null
+        : scopedThreadKey(selectedThread.environmentId, selectedThread.id),
+    // A preview beside its host names its thread, so the two threads' statuses can't be confused.
+    subject:
+      props.inspectorPresentation !== undefined && "onMaximize" in props.inspectorPresentation
+        ? (selectedThread?.title ?? null)
+        : null,
+    approvalRequestId: requests.activePendingApproval?.requestId ?? null,
+    userInputRequestId: requests.activePendingUserInput?.requestId ?? null,
+    shellRequestId: selectedThread?.source.pendingRuntimeRequest?.id ?? null,
+    shellPendingUserInput: selectedThread?.hasPendingUserInput === true,
+    working: composer.activeWorkStartedAt !== null || composer.isCompacting,
+    run: composer.selectedThreadAnnouncedRun,
+    detailBehind: composer.selectedThreadDetailBehindShell,
+  });
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, "thread interrupt");
   const resumeThreadQueue = useAtomCommand(threadEnvironment.resumeThreadQueue, {
     label: "resume queue",
@@ -1009,7 +1029,10 @@ function ThreadRouteContent(
           selectedThread={selectedThreadWithDraftSettings ?? selectedThread}
           selectedThreadDetailRef={selectedThreadDetailRef}
           contentPresentation={contentPresentation}
-          screenTone={connectionTone(routeConnectionState)}
+          screenTone={connectionTone(
+            routeConnectionState,
+            routeEnvironmentRuntime?.connectionAwaitingApproval === true,
+          )}
           connectionError={routeConnectionError}
           environmentLabel={selectedEnvironmentConnection?.environmentLabel ?? null}
           feedbackSubmissions={composer.feedbackSubmissions}
@@ -1024,6 +1047,7 @@ function ThreadRouteContent(
               : composer.activeWorkStartedAt
           }
           isCompacting={composer.isCompacting}
+          compactBeforeSend={composer.compactBeforeSend}
           runlessWorkActive={composer.runlessWorkActive}
           extensionStatuses={composer.extensionStatuses}
           providerSubagentStatus={composer.providerSubagentStatus}
@@ -1057,6 +1081,7 @@ function ThreadRouteContent(
           activePendingUserInputAnswers={requests.activePendingUserInputAnswers}
           respondingUserInputId={requests.respondingUserInputId}
           connectionStateLabel={routeConnectionState}
+          connectionAwaitingApproval={routeEnvironmentRuntime?.connectionAwaitingApproval === true}
           threadSyncStatus={selectedThreadDetailState.status}
           historyControls={historyControls}
           activeThreadBusy={composer.activeThreadBusy}
@@ -1089,9 +1114,7 @@ function ThreadRouteContent(
           onRemoveDraftImage={composer.onRemoveDraftImage}
           serverConfig={serverConfig}
           onStopThread={awaitingBootstrapTurn ? handleCancelWorktreeSetup : handleStopThread}
-          onResumeQueue={
-            composer.queueHeld || composer.resumableRunId !== null ? handleResumeQueue : null
-          }
+          onResumeQueue={composer.canResume ? handleResumeQueue : null}
           onSendMessage={composer.onSendMessage}
           offersSideChat={composer.sideChatUnavailableReason === null}
           onReconnectEnvironment={handleReconnectEnvironment}

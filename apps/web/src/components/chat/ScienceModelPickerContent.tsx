@@ -57,6 +57,7 @@ import { announce } from "~/lib/announce";
 import { cn } from "~/lib/utils";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import { TooltipProvider } from "../ui/tooltip";
+import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
 import { InlineButton } from "../ui/button";
 import {
   isProviderInstancePickerReady,
@@ -112,7 +113,9 @@ function shouldIncludeModelPickerOption(input: {
   if (isProviderInstancePickerReady(input.entry)) return true;
   return (
     input.entry.enabled &&
-    (input.entry.driverKind === "opencode" || input.entry.driverKind === "antigravity") &&
+    (input.entry.driverKind === "opencode" ||
+      input.entry.driverKind === "antigravity" ||
+      input.entry.driverKind === "cursor") &&
     input.entry.instanceId === input.activeInstanceId &&
     input.option.slug === input.activeModel &&
     input.option.isUnavailable === true
@@ -323,6 +326,7 @@ function WindowKeyDownListener({ onKeyDown }: { onKeyDown: (event: KeyboardEvent
 
 export const ModelPickerContent = memo(function ModelPickerContent(props: {
   environmentId: EnvironmentId | null;
+  workspaceCwd?: string | null;
   activeInstanceId: ProviderInstanceId;
   isComposerOwned?: boolean;
   model: string;
@@ -404,6 +408,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | "favorites">(
     props.activeInstanceId,
   );
+  const { scanning: workspaceModelsScanning } = useProviderWorkspaceSnapshotRefresh({
+    environmentId: props.environmentId,
+    gitCwd: props.workspaceCwd ?? null,
+    instanceId: selectedInstanceId === "favorites" ? undefined : selectedInstanceId,
+  });
   const favoritesSet = new Set(favorites.map((fav) => providerModelKey(fav.provider, fav.model)));
   const [expandedLegacyInstances, setExpandedLegacyInstances] = useState(
     () =>
@@ -1036,7 +1045,9 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               emptyLabel={
                 selectedInstanceId === "favorites" && !isSearching
                   ? "No favorites yet"
-                  : "No models found"
+                  : workspaceModelsScanning
+                    ? "Searching project models..."
+                    : "No models found"
               }
               onRequestClose={onRequestClose}
               onOpenProviderSetup={onOpenProviderSetup}

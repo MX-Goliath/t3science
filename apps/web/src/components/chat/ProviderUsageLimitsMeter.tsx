@@ -5,13 +5,13 @@ import type {
   ServerProviderUsageLimits,
   ServerProviderUsageWindow,
 } from "@t3tools/contracts";
-import { remainingPercent } from "@t3tools/shared/usageLimits";
+import { remainingPercent, resetCreditChoices } from "@t3tools/shared/usageLimits";
 import { useEffect, useState } from "react";
 
 import { Button } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { toastManager } from "../ui/toast";
-import { ResetCreditDialog, resetCreditsSummary, useResetCredit } from "../usage/UsageLimits";
+import { ResetCreditDialog, useResetCredit } from "../usage/UsageLimits";
 
 export function providerUsageLimitColor(remainingPercent: number): string {
   if (remainingPercent > 50) return "var(--color-success)";
@@ -35,7 +35,7 @@ function UsageWindow(props: {
 }) {
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(Date.now);
-  const redeem = useResetCredit(props.environmentId, { instanceId: props.instanceId });
+  const redeem = useResetCredit(props.environmentId);
   const showReset = canResetLowWeeklyLimit(props.window, props.credits);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Present status updates from the reset-credit operation as toasts.
   useEffect(() => {
@@ -104,20 +104,26 @@ function UsageWindow(props: {
           {resetTime ? <span className="text-secondary-label">Resets {resetTime}</span> : null}
           {showReset && props.credits ? (
             <div className="mt-2 flex flex-col items-start gap-2 border-t border-border/60 pt-2">
-              <span className="text-muted-foreground tabular-nums">
-                {resetCreditsSummary(props.credits, now)}
-              </span>
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={redeem.busy || !redeem.canManageProviders}
-                onClick={() => {
-                  setOpen(false);
-                  redeem.setConfirming(true);
-                }}
-              >
-                {redeem.busy ? "Using…" : "Use reset"}
-              </Button>
+              {resetCreditChoices(props.credits, { instanceId: props.instanceId }, now).map(
+                (choice) => (
+                  <div key={choice.key} className="flex flex-col items-start gap-2">
+                    <span className="text-muted-foreground tabular-nums">{choice.summary}</span>
+                    {choice.availableCount > 0 ? (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={redeem.busy || !redeem.canManageProviders}
+                        onClick={() => {
+                          setOpen(false);
+                          redeem.confirm(choice);
+                        }}
+                      >
+                        {redeem.busy ? "Using…" : choice.actionLabel}
+                      </Button>
+                    ) : null}
+                  </div>
+                ),
+              )}
             </div>
           ) : null}
         </div>
@@ -125,6 +131,7 @@ function UsageWindow(props: {
       <ResetCreditDialog
         open={redeem.confirming}
         onOpenChange={redeem.setConfirming}
+        choice={redeem.choice}
         onConfirm={() => void redeem.redeem()}
         disabled={redeem.busy || !redeem.canManageProviders}
       />

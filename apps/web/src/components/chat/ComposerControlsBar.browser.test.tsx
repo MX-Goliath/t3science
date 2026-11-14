@@ -65,6 +65,7 @@ function Controls({
   return (
     <div data-chat-composer-resting-controls>
       <ComposerControlsBar
+        workspaceCwd={null}
         {...(presets ? { scienceModelPresets: presets } : {})}
         sciencePresetsManual={manual}
         environmentId={EnvironmentId.make("test")}
