@@ -40,20 +40,20 @@ it.effect("prepares each platform independently using only its own release asset
     for (const file of [portable, "T3-Science-2.2.1-x64.exe", "latest.yml"]) {
       yield* fs.writeFileString(path.join(windows, file), file);
     }
-    yield* fs.writeFileString(path.join(linux, "T3-Science-2.2.1-x86_64.AppImage"), "image");
+    yield* fs.writeFileString(path.join(linux, "T3-Science-x86_64.AppImage"), "image");
     yield* fs.writeFileString(path.join(android, apk), apk);
     yield* fs.writeFileString(
       path.join(linux, "latest-linux.yml"),
       `version: 2.2.1
 files:
-  - url: T3-Science-2.2.1-x86_64.AppImage
+  - url: T3-Science-x86_64.AppImage
     sha512: image-checksum
     size: 100
     blockMapSize: 20
   - url: T3-Science-2.2.1-amd64.deb
     sha512: deb-checksum
     size: 200
-path: T3-Science-2.2.1-x86_64.AppImage
+path: T3-Science-x86_64.AppImage
 sha512: image-checksum
 releaseDate: '2026-10-31T00:00:00.000Z'
 `,

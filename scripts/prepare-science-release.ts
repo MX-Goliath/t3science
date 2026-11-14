@@ -60,12 +60,10 @@ export const prepareLinuxRelease = Effect.fn("prepareLinuxRelease")(function* (
   validateStableVersion(version);
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  yield* fs.stat(path.join(directory, `T3-Science-${version}-x86_64.AppImage`));
+  yield* fs.stat(path.join(directory, "T3-Science-x86_64.AppImage"));
   const linuxManifestPath = path.join(directory, "latest-linux.yml");
   const linuxManifest = yield* decodeLinuxManifest(yield* fs.readFileString(linuxManifestPath));
-  const appImage = linuxManifest.files.find(
-    (file) => file.url === `T3-Science-${version}-x86_64.AppImage`,
-  );
+  const appImage = linuxManifest.files.find((file) => file.url === "T3-Science-x86_64.AppImage");
   if (linuxManifest.version !== version || !appImage)
     throw new Error("Linux update manifest does not match this release.");
   yield* fs.writeFileString(
