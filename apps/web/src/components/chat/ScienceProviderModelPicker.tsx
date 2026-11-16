@@ -1,3 +1,4 @@
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { ModelName } from "./ModelName";
 import "./modelPickerTransition.css";
 import {
@@ -154,6 +155,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
+  const isCoarsePointer = useMediaQuery({ pointer: "coarse" });
   const size = props.size ?? "sm";
   const docked = props.effortColumn !== undefined;
 
@@ -453,7 +455,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             unlock?.();
           };
         }}
-        initialFocus={searchInputRef}
+        initialFocus={isCoarsePointer ? popupRef : searchInputRef}
         align={props.popupAlign ?? "start"}
         anchor={
           props.isComposerOwned

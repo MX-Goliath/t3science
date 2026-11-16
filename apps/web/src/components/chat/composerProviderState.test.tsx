@@ -147,26 +147,42 @@ describe("getComposerProviderState", () => {
     expect(state.modelOptionsForDispatch).toEqual(selections(["agent", "build"]));
   });
 
-  it.each(["opencode", "cursor"])(
-    "preserves explicit options when the %s model is absent from the catalog",
-    (driver) => {
+  it.each([
+    {
+      driver: "cursor",
+      model: "missing-model",
+      catalogModel: "default",
+      options: selections(["variant", "max"], ["agent", "build"]),
+    },
+    {
+      driver: "opencode",
+      model: "opencode/kimi-k3",
+      catalogModel: "opencode/big-pickle",
+      options: selections(["variant", "max"], ["agent", "build"]),
+    },
+    {
+      driver: "pi",
+      model: "anthropic/claude-sonnet-4",
+      catalogModel: "default",
+      options: selections(["thinking", "high"]),
+    },
+    {
+      driver: "acpRegistry",
+      model: "gateway/chosen-model",
+      catalogModel: "default",
+      options: selections(["reasoning", "high"]),
+    },
+  ])(
+    "preserves explicit $driver options when the selected model is absent from the catalog",
+    ({ driver, model, catalogModel, options }) => {
       const state = getComposerProviderState({
         provider: ProviderDriverKind.make(driver),
-        model: "missing-model",
-        models: [
-          {
-            slug: "opencode/big-pickle",
-            name: "Big Pickle",
-            isCustom: false,
-            capabilities: {},
-          },
-        ],
-        modelOptions: selections(["variant", "max"], ["agent", "build"]),
+        model,
+        models: [{ slug: catalogModel, name: catalogModel, isCustom: false, capabilities: {} }],
+        modelOptions: options,
       });
 
-      expect(state.modelOptionsForDispatch).toEqual(
-        selections(["variant", "max"], ["agent", "build"]),
-      );
+      expect(state.modelOptionsForDispatch).toEqual(options);
     },
   );
 

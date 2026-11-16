@@ -1,3 +1,5 @@
+import * as Cause from "effect/Cause";
+import * as Exit from "effect/Exit";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -62,6 +64,78 @@ export const withLocalTracing = <A, E, R>(effect: Effect.Effect<A, E, R>): Effec
       }),
     ),
   );
+
+// Error messages can carry machine names (environment labels) and paths, so
+// relay spans export only the error name and its stack frames.
+function traceFrames(error: Error): Array<string> {
+  const lines = (error.stack ?? "").split("\n");
+  const headerLines = error.message.split("\n").length;
+  const frames = lines.slice(0, headerLines).join("\n").endsWith(error.message)
+    ? lines.slice(headerLines)
+    : lines;
+  const effectFrameIndex = frames.findIndex((line) =>
+    /(?:Generator\.next|~effect\/Effect)/.test(line),
+  );
+  return effectFrameIndex < 0 ? frames : frames.slice(0, effectFrameIndex);
+}
+
+function traceSafeError(value: unknown, seen = new WeakSet<object>()): Error {
+  const name =
+    typeof value === "object" && value !== null && "name" in value && typeof value.name === "string"
+      ? value.name
+      : "Error";
+
+  let cause: Error | undefined;
+  if (typeof value === "object" && value !== null && !seen.has(value)) {
+    seen.add(value);
+    if ("cause" in value && value.cause !== undefined) {
+      cause = traceSafeError(value.cause, seen);
+    }
+  }
+
+  const error = new Error(name, cause ? { cause } : undefined);
+  error.name = name;
+  error.stack = [name, ...(value instanceof Error ? traceFrames(value) : [])].join("\n");
+  if (cause) {
+    error.stack = `${error.stack}\nCaused by: ${cause.stack}`;
+  }
+  return error;
+}
+
+function traceSafeExit(exit: Exit.Exit<unknown, unknown>): Exit.Exit<unknown, unknown> {
+  if (Exit.isSuccess(exit)) {
+    return exit;
+  }
+  return Exit.failCause(
+    Cause.fromReasons(
+      exit.cause.reasons.map((reason) => {
+        if (Cause.isFailReason(reason)) {
+          return Cause.makeFailReason(traceSafeError(reason.error));
+        }
+        if (Cause.isDieReason(reason)) {
+          return Cause.makeDieReason(traceSafeError(reason.defect));
+        }
+        return reason;
+      }),
+    ),
+  );
+}
+
+export function nonInterferingTracer(delegate: Tracer.Tracer): Tracer.Tracer {
+  return Tracer.make({
+    span(options) {
+      const span = delegate.span(options);
+      const end = span.end.bind(span);
+      span.end = (endTime, exit) => {
+        try {
+          end(endTime, traceSafeExit(exit));
+        } catch {}
+      };
+      return span;
+    },
+    ...(delegate.context ? { context: delegate.context } : {}),
+  });
+}
 
 export function layer(
   _config: RelayClientTracingConfig | null,

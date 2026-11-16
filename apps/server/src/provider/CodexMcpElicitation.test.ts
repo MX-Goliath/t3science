@@ -36,40 +36,52 @@ describe("Codex MCP elicitation approvals", () => {
     },
   } satisfies EffectCodexSchema.McpServerElicitationRequestParams;
 
-  it("auto-approves tagged tool requests only when the active policy disables approvals", () => {
-    const toolRequest = {
-      ...request,
-      _meta: { codex_approval_kind: "mcp_tool_call" },
-    };
-    for (const runtimeMode of [
-      "approval-required",
-      "auto-accept-edits",
-      "auto",
-      "full-access",
-    ] as const) {
-      NodeAssert.equal(
-        shouldAutoApproveMcpToolElicitation(toolRequest, { runtimeMode }),
-        runtimeMode === "full-access",
-      );
-      NodeAssert.equal(
-        shouldAutoApproveMcpToolElicitation(toolRequest, { runtimeMode, approvalPolicy: "never" }),
-        true,
-      );
-      NodeAssert.equal(
-        shouldAutoApproveMcpToolElicitation(toolRequest, {
-          runtimeMode,
-          approvalPolicy: "on-request",
-        }),
-        false,
-      );
-    }
-  });
+  it.each(["tool", "app", "app-without-metadata"])(
+    "auto-approves %s requests only when the active policy disables approvals",
+    (kind) => {
+      const toolRequest = {
+        ...request,
+        _meta:
+          kind === "tool"
+            ? { codex_approval_kind: "mcp_tool_call" }
+            : kind === "app"
+              ? request._meta
+              : null,
+      };
+      for (const runtimeMode of [
+        "approval-required",
+        "auto-accept-edits",
+        "auto",
+        "full-access",
+      ] as const) {
+        NodeAssert.equal(
+          shouldAutoApproveMcpToolElicitation(toolRequest, { runtimeMode }),
+          runtimeMode === "full-access",
+        );
+        NodeAssert.equal(
+          shouldAutoApproveMcpToolElicitation(toolRequest, {
+            runtimeMode,
+            approvalPolicy: "never",
+          }),
+          true,
+        );
+        NodeAssert.equal(
+          shouldAutoApproveMcpToolElicitation(toolRequest, {
+            runtimeMode,
+            approvalPolicy: "on-request",
+          }),
+          false,
+        );
+      }
+    },
+  );
 
   it("keeps ordinary forms and URL elicitations interactive in Full access", () => {
     const policy = { runtimeMode: "full-access" as const };
-    NodeAssert.equal(shouldAutoApproveMcpToolElicitation(request, policy), false);
+    const ordinaryRequest = { ...request, message: "Choose a deployment target" };
+    NodeAssert.equal(shouldAutoApproveMcpToolElicitation(ordinaryRequest, policy), false);
     NodeAssert.equal(
-      shouldAutoApproveMcpToolElicitation({ ...request, _meta: null }, policy),
+      shouldAutoApproveMcpToolElicitation({ ...ordinaryRequest, _meta: null }, policy),
       false,
     );
     NodeAssert.equal(
@@ -204,7 +216,7 @@ describe("Codex MCP elicitation approvals", () => {
     } satisfies EffectCodexSchema.McpServerElicitationRequestParams;
 
     NodeAssert.deepStrictEqual(toMcpElicitationResponse(inputRequest, "accept"), {
-      action: "decline",
+      action: "cancel",
     });
   });
 
@@ -220,7 +232,7 @@ describe("Codex MCP elicitation approvals", () => {
     } satisfies EffectCodexSchema.McpServerElicitationRequestParams;
 
     NodeAssert.deepStrictEqual(toMcpElicitationResponse(urlRequest, "accept"), {
-      action: "decline",
+      action: "cancel",
     });
   });
 

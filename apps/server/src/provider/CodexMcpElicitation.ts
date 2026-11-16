@@ -60,15 +60,23 @@ const McpElicitationForm = Schema.Struct({
 const isMcpElicitationMetadata = Schema.is(McpElicitationMetadata);
 const isMcpElicitationForm = Schema.is(McpElicitationForm);
 
-/** Tool approvals honor Full access; other MCP forms still require user input. */
+/** Access approvals honor the explicit policy; other MCP forms still require user input. */
 export function shouldAutoApproveMcpToolElicitation(
   payload: EffectCodexSchema.McpServerElicitationRequestParams,
   runtimePolicy: { readonly runtimeMode: RuntimeMode; readonly approvalPolicy?: unknown },
 ): boolean {
-  return (
-    payload.mode !== "url" &&
+  if (payload.mode === "url") return false;
+  const taggedTool =
     isMcpElicitationMetadata(payload._meta) &&
-    payload._meta.codex_approval_kind === "mcp_tool_call" &&
+    payload._meta.codex_approval_kind === "mcp_tool_call";
+  const form = mcpElicitationFormFields(payload);
+  const appAccess =
+    /^Allow ChatGPT to use .+\?$/i.test(payload.message) &&
+    form?.properties?.approval !== undefined &&
+    Object.keys(form.properties).every((key) => key === "approval") &&
+    toMcpElicitationResponse(payload, "accept").action === "accept";
+  return (
+    (taggedTool || appAccess) &&
     (runtimePolicy.approvalPolicy === undefined
       ? runtimePolicy.runtimeMode === "full-access"
       : runtimePolicy.approvalPolicy === "never")
@@ -205,8 +213,10 @@ export function toMcpElicitationResponse(
     return { action: decision };
   }
 
+  // T3 cannot answer these itself. `decline` reads as the user's refusal, and Codex's browser
+  // plugin saves it as a thread-wide site denial; `cancel` leaves no saved decision.
   if (payload.mode === "url") {
-    return { action: "decline" };
+    return { action: "cancel" };
   }
 
   const persist =
@@ -237,7 +247,7 @@ export function toMcpElicitationResponse(
   }
 
   if (form?.required?.some((key) => !Object.hasOwn(content, key))) {
-    return { action: "decline" };
+    return { action: "cancel" };
   }
 
   return {

@@ -34,7 +34,6 @@ const SETTINGS_SEARCH_TERMS = {
     "zen",
     "final answers only",
   ],
-  SettingsLanguage: ["language", "locale", "translation", "english"],
   SettingsNavigation: ["tabs", "tab order", "reorder", "hide tabs", "images", "gallery", "photos"],
   SettingsKeyboard: ["return key", "send message", "new line", "hardware keyboard"],
   SettingsVoice: [
@@ -62,6 +61,10 @@ const SETTINGS_SEARCH_TERMS = {
     "export conversations",
   ],
   SettingsOrganization: [
+    "language",
+    "locale",
+    "translation",
+    "english",
     "project grouping",
     "group projects",
     "organization",

@@ -100,8 +100,7 @@ function PopoverPopup({
             variant !== "panel" && "dropdown-glass",
             // Electron drag hit-testing ignores z-index; popups over a drag region would swallow hover.
             "[-webkit-app-region:no-drag]",
-            tooltipStyle &&
-              "w-fit text-balance rounded-md text-xs before:rounded-[calc(var(--radius-md)-1px)]",
+            tooltipStyle && "w-fit rounded-md text-xs before:rounded-[calc(var(--radius-md)-1px)]",
             tooltipStyle && shadow === "default" && "shadow-md/5",
             !tooltipStyle &&
               variant !== "panel" &&

@@ -270,6 +270,7 @@ function ReadyImageComposer(props: Props & { project: EnvironmentProject; draftK
         </Text>
       ) : null}
       <ThreadComposer
+        redirectsApproval={false}
         isDraft
         canOperateThread={canOperate}
         placeholder={props.image ? copy.changes : copy.describe}
