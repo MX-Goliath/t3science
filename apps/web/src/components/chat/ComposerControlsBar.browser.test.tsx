@@ -125,15 +125,26 @@ const levels = [
   { id: "high", label: "High", isDefault: true },
 ];
 
+const cyberAccess = {
+  id: "cyberAccessProgram",
+  label: "Cyber Access",
+  type: "select",
+  options: [{ id: "standard", label: "Standard", isDefault: true }],
+} satisfies ProviderOptionDescriptor;
+
 it("opens reasoning from both composer controls and opens model selection from reasoning", async () => {
   useComposerDraftStore.setState(useComposerDraftStore.getInitialState(), true);
   await using screen = await render(
     <Controls
       descriptors={[
         { id: "reasoningEffort", label: "Reasoning effort", type: "select", options: levels },
+        cyberAccess,
       ]}
     />,
   );
+  const effortTrigger = screen.getByRole("button", { name: /^Effort:/ });
+  expect(effortTrigger.element()).toHaveAccessibleName("Effort: High");
+  expect(effortTrigger.element()).not.toHaveTextContent("Standard");
   const slider = page.getByRole("slider", { name: "Reasoning effort" });
   const search = page.getByPlaceholder("Search models...");
   for (const name of ["Test model", /^Effort:/]) {
@@ -172,11 +183,17 @@ it("opens models directly unless the model offers multiple reasoning levels", as
   await using screen = await render(<Controls descriptors={[]} />);
   for (const descriptors of [
     [],
+    [cyberAccess],
     [{ id: "reasoningEffort", label: "Effort", type: "select" as const, options: [levels[0]!] }],
     [{ id: "contextWindow", label: "Context", type: "select" as const, options: levels }],
     [{ id: "thinking", label: "Thinking", type: "boolean" as const }],
   ]) {
     await screen.rerender(<Controls descriptors={descriptors} />);
+    if (descriptors.length === 1 && descriptors[0] === cyberAccess) {
+      await expect
+        .element(screen.getByRole("button", { name: /^Effort:/ }))
+        .not.toBeInTheDocument();
+    }
     await screen.getByRole("button", { name: "Test model", exact: true }).click();
     const search = page.getByPlaceholder("Search models...");
     await expect.element(search).toBeVisible();

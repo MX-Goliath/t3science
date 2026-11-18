@@ -131,6 +131,7 @@ function getSelectedTraits(
   allowPromptInjectedEffort: boolean,
   includePlanAgent?: boolean | undefined,
   descriptorIds?: ReadonlyArray<string>,
+  hideCyberAccess = false,
 ) {
   const caps = getProviderModelCapabilities(models, model, provider, includePlanAgent);
   const modelIsUnavailable =
@@ -146,9 +147,14 @@ function getSelectedTraits(
         caps,
         selections: modelOptions,
       });
-  const visibleDescriptors = descriptorIds
-    ? descriptors.filter((descriptor) => descriptorIds.includes(descriptor.id))
-    : descriptors;
+  const visibleDescriptors =
+    descriptorIds || hideCyberAccess
+      ? descriptors.filter(
+          (descriptor) =>
+            (!descriptorIds || descriptorIds.includes(descriptor.id)) &&
+            (!hideCyberAccess || descriptor.id !== "cyberAccessProgram"),
+        )
+      : descriptors;
   const selectDescriptors = visibleDescriptors.filter(
     (descriptor): descriptor is Extract<ProviderOptionDescriptor, { type: "select" }> =>
       descriptor.type === "select",
@@ -214,6 +220,7 @@ function getTraitsSectionVisibility(input: {
   allowPromptInjectedEffort?: boolean;
   includePlanAgent?: boolean | undefined;
   descriptorIds?: ReadonlyArray<string>;
+  hideCyberAccess?: boolean | undefined;
 }) {
   const selected = getSelectedTraits(
     input.provider,
@@ -224,6 +231,7 @@ function getTraitsSectionVisibility(input: {
     input.allowPromptInjectedEffort ?? true,
     input.includePlanAgent,
     input.descriptorIds,
+    input.hideCyberAccess,
   );
 
   const showEffort = selected.primarySelectDescriptor !== null;
@@ -309,16 +317,9 @@ export function getReasoningTraitStep(input: {
   return null;
 }
 
-export function shouldRenderTraitsControls(input: {
-  provider: ProviderDriverKind;
-  models: ReadonlyArray<ServerProviderModel>;
-  model: string | null | undefined;
-  promptUltrathink?: PromptUltrathink | undefined;
-  modelOptions: ProviderOptions | null | undefined;
-  allowPromptInjectedEffort?: boolean;
-  includePlanAgent?: boolean | undefined;
-  descriptorIds?: ReadonlyArray<string>;
-}): boolean {
+export function shouldRenderTraitsControls(
+  input: Parameters<typeof getTraitsSectionVisibility>[0],
+): boolean {
   return getTraitsSectionVisibility(input).hasAnyControls;
 }
 
@@ -711,30 +712,23 @@ export const TraitsPicker = memo(function TraitsPicker({
   };
   const triggerRef = useRef<HTMLButtonElement>(null);
   const openingModelPickerRef = useRef(false);
-  const { visibleDescriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
-    getTraitsSectionVisibility({
-      provider,
-      models,
-      model,
-      promptUltrathink,
-      modelOptions,
-      allowPromptInjectedEffort,
-      includePlanAgent,
-      ...(descriptorIds ? { descriptorIds } : {}),
-    });
-  if (
-    !customReasoningContent &&
-    !shouldRenderTraitsControls({
-      provider,
-      models,
-      model,
-      promptUltrathink,
-      modelOptions,
-      allowPromptInjectedEffort,
-      includePlanAgent,
-      ...(descriptorIds ? { descriptorIds } : {}),
-    })
-  ) {
+  const {
+    visibleDescriptors,
+    primarySelectDescriptor,
+    ultrathinkPromptControlled,
+    hasAnyControls,
+  } = getTraitsSectionVisibility({
+    provider,
+    models,
+    model,
+    promptUltrathink,
+    modelOptions,
+    allowPromptInjectedEffort,
+    includePlanAgent,
+    ...(descriptorIds ? { descriptorIds } : {}),
+    hideCyberAccess: isComposerOwned,
+  });
+  if (!customReasoningContent && !hasAnyControls) {
     return null;
   }
 

@@ -705,6 +705,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
         prompt={draftMessage}
         surfaceColor={composerPanel}
         iconOnly={!compactEditor.isExpanded}
+        hideCyberAccess={scienceComposer}
         onPress={openSettings}
       />
     </View>

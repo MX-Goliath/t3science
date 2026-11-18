@@ -20,14 +20,18 @@ export function ComposerModelControl(props: {
   readonly disabled?: boolean;
   readonly size?: "regular" | "large";
   readonly iconOnly?: boolean;
+  readonly hideCyberAccess?: boolean;
   readonly onPress: () => void;
 }) {
   const gt = useGT();
   const m = useMessages();
-  const descriptors = resolveProviderOptionDescriptors({
+  const modelDescriptors = resolveProviderOptionDescriptors({
     capabilities: props.modelOption?.capabilities,
     selections: props.selection?.options,
   });
+  const descriptors = props.hideCyberAccess
+    ? modelDescriptors.filter((descriptor) => descriptor.id !== "cyberAccessProgram")
+    : modelDescriptors;
   const promptTraits = getPromptControlledTraits(descriptors, props.prompt);
   const summary = props.provider
     ? buildTraitsTriggerDisplay(
