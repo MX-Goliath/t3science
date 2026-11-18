@@ -125,7 +125,7 @@ const browserTestProject = {
       "fast-xml-parser",
       "entities",
       "dompurify",
-      "heic-to/next",
+      "heic-to/csp",
       "jszip",
       "pdfjs-dist",
       "sql.js",
@@ -285,7 +285,7 @@ function bootstrapTitlePlugin(): Plugin {
         hostedAppChannel: configuredHostedAppChannel,
         development,
       });
-      const title = formatAppDisplayName({ baseName: "T3 Code", stageLabel });
+      const title = formatAppDisplayName({ baseName: "T3 Science", stageLabel });
       return html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
     },
   };

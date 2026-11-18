@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionCurrentValue,
@@ -70,7 +72,7 @@ export function ScienceModelPresetsCard(props: {
     <ReasoningSettingsCard
       effort={{
         id: "sciencePreset",
-        label: "Science preset",
+        label: translateScienceCopy(msg("Science preset")),
         type: "select",
         options: props.presets.map((preset, index) => ({
           id: String(index),
@@ -84,7 +86,7 @@ export function ScienceModelPresetsCard(props: {
               ]
                 .filter(Boolean)
                 .join(" · ")
-            : "Choose model",
+            : translateScienceCopy(msg("Choose model")),
         })),
       }}
       value={selected < 0 ? props.modelLabel : String(selected)}
@@ -128,7 +130,9 @@ export function ScienceManualModelCard(props: {
         type="button"
         onClick={props.onOpenModelPicker}
         className="flex min-w-0 items-center text-sm"
-        aria-label={`Change model: ${props.modelLabel}`}
+        aria-label={translateScienceCopy(
+          msg("Change model: {modelLabel}", { modelLabel: props.modelLabel }),
+        )}
       >
         <ModelName>{props.modelLabel}</ModelName>
         <ChevronRightIcon className="size-3 shrink-0" />

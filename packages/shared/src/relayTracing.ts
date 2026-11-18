@@ -137,9 +137,12 @@ export function nonInterferingTracer(delegate: Tracer.Tracer): Tracer.Tracer {
   });
 }
 
+/** Spans started while `isEnabled` says no stay local instead of being exported. */
+
 export function layer(
   _config: RelayClientTracingConfig | null,
   _resource: RelayClientTracingResource,
+  _options?: { readonly isEnabled?: () => boolean },
 ): Layer.Layer<never> {
   return Layer.succeed(RelayClientTracer, Option.none());
 }

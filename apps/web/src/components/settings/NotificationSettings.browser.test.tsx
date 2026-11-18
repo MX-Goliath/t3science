@@ -14,7 +14,7 @@ vi.mock("./useScopedSettings", () => ({
     select({ notificationMode: state.mode }),
   useUpdateScopedSettings: () => state.update,
 }));
-vi.mock("./settingsSearch", () => ({ searchableSetting: () => ({}) }));
+vi.mock("./settingsSearch", () => ({ useSearchableSetting: () => () => ({}) }));
 vi.mock("./settingsLayout", () => ({
   SettingsRow: ({ description, control }: { description: ReactNode; control: ReactNode }) => (
     <div>

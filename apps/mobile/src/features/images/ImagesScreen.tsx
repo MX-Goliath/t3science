@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "../../i18n/messages";
+import { msg } from "gt-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, ScrollView, View, type ScrollViewInstance } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -43,13 +45,16 @@ export function ImagesScreen(props: { workspace?: boolean }) {
     <EnabledImagesScreen {...props} />
   ) : (
     <View className="flex-1 bg-screen">
-      <AppBar title="Images" />
+      <AppBar title={translateScienceCopy(msg("Images"))} />
       <View className="flex-1 items-center justify-center gap-4 px-6">
         <EmptyState
-          title="Images is turned off"
-          detail="Enable Images in Settings → Navigation tabs."
+          title={translateScienceCopy(msg("Images is turned off"))}
+          detail={translateScienceCopy(msg("Enable Images in Settings → Navigation tabs."))}
         />
-        <Button label="Open settings" onPress={() => navigation.navigate("SettingsNavigation")} />
+        <Button
+          label={translateScienceCopy(msg("Open settings"))}
+          onPress={() => navigation.navigate("SettingsNavigation")}
+        />
       </View>
     </View>
   );
@@ -196,7 +201,9 @@ function EnabledImagesScreen(props: { workspace?: boolean }) {
       />
       {environments.length > 1 && !image ? (
         <Menu
-          accessibilityLabel={environment?.environmentLabel ?? "Environment"}
+          accessibilityLabel={
+            environment?.environmentLabel ?? translateScienceCopy(msg("Environment"))
+          }
           actions={environments.map((entry) => ({
             id: entry.environmentId,
             title: entry.environmentLabel,

@@ -1,3 +1,13 @@
+import { m as translateScienceCopy } from "../../i18n/messages";
+import { T } from "gt-react-native";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import * as Dialog from "../../components/ui/Dialog";
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
+import { msg } from "gt-react-native";
+import { m } from "../../i18n/messages";
 import { type StaticScreenProps, useNavigation } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -99,15 +109,16 @@ function QueuedRunSender(props: {
       ? {
           icon: "calendar.badge.clock" as const,
           label:
-            tasks.data?.tasks.find((task) => task.id === scheduledTaskId)?.title ?? "Automation",
+            tasks.data?.tasks.find((task) => task.id === scheduledTaskId)?.title ??
+            translateScienceCopy(msg("Automation")),
         }
       : attribution === "agent"
         ? {
             icon: "bubble.left.and.bubble.right" as const,
-            label: senderShell?.title.trim() || "Agent",
+            label: senderShell?.title.trim() || translateScienceCopy(msg("Agent")),
           }
         : attribution === "t3code"
-          ? { icon: null, label: "Sent by T3 Science" }
+          ? { icon: null, label: translateScienceCopy(msg("Sent by T3 Science")) }
           : null;
   if (sender === null) return null;
   return (
@@ -225,22 +236,30 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
     busyRef.current = true;
     setBusyRunId(runId);
     void Haptics.selectionAsync();
-    if (action === "remove") {
-      await cancel(buildCancelQueuedRunCommand({ ...target, runId }));
-    } else if (workflow?.canSendNow) {
-      await resume({ ...target, input: { threadId: target.threadId, runId } });
-    } else if (workflow?.activeRun && workflow.canPromoteToSteer) {
-      await promote({
-        ...target,
-        input: {
-          threadId: target.threadId,
-          queuedRunId: runId,
-          targetRunId: workflow.activeRun.id,
-        },
-      });
-    }
+    const result =
+      action === "remove"
+        ? await cancel(buildCancelQueuedRunCommand({ ...target, runId }))
+        : workflow?.canSendNow
+          ? await resume({ ...target, input: { threadId: target.threadId, runId } })
+          : workflow?.activeRun && workflow.canPromoteToSteer
+            ? await promote({
+                ...target,
+                input: {
+                  threadId: target.threadId,
+                  queuedRunId: runId,
+                  targetRunId: workflow.activeRun.id,
+                },
+              })
+            : null;
     busyRef.current = false;
     setBusyRunId(null);
+    if (action === "steer" && result?._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      Dialog.alert(
+        m(msg("Could not send queued message")),
+        errorDisplayMessage(error, m) ?? m(msg("Try again.")),
+      );
+    }
   };
 
   const canReorder = workflow?.canReorder === true && queuedRuns.length > 1;
@@ -268,9 +287,11 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
     >
       {workflow?.isHeld && queuedRuns.length > 0 ? (
         <View className="gap-2 py-3">
-          <Text className="text-sm text-foreground-muted">Queue paused</Text>
+          <Text className="text-sm text-foreground-muted">
+            <T>Queue paused</T>
+          </Text>
           <Button
-            label="Resume queue"
+            label={translateScienceCopy(msg("Resume queue"))}
             disabled={resuming || busyRunId !== null}
             onPress={async () => {
               if (busyRef.current) return;
@@ -288,7 +309,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
       ) : null}
       {queuedRuns.length === 0 ? (
         <Text className="pt-6 text-center text-sm text-foreground-muted">
-          No messages waiting in this queue.
+          <T>No messages waiting in this queue.</T>
         </Text>
       ) : null}
       {queuedRuns.map(({ run, text, attachments, context, message }, index) => {
@@ -405,7 +426,9 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
               >
                 <View className="flex-row items-center">
                   <Menu
-                    accessibilityLabel={`Actions for queued message ${index + 1}`}
+                    accessibilityLabel={translateScienceCopy(
+                      msg("Actions for queued message {value1}", { value1: index + 1 }),
+                    )}
                     shouldOpenOnLongPress
                     style={{ flex: 1 }}
                     actions={[
@@ -413,7 +436,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                         ? [
                             {
                               id: "steer",
-                              title: "Send now",
+                              title: translateScienceCopy(msg("Send now")),
                               attributes: { disabled: !controls.canSend },
                               image: Platform.OS === "ios" ? "arrow.up" : "arrow_upward",
                             },
@@ -421,19 +444,23 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                         : []),
                       {
                         id: "edit",
-                        title: "Edit",
+                        title: translateScienceCopy(msg("Edit")),
                         attributes: { disabled: !controls.canEdit },
                         image: Platform.OS === "ios" ? "pencil" : "edit",
                       },
-                      { id: "up", title: "Move up", attributes: { disabled: !controls.canMoveUp } },
+                      {
+                        id: "up",
+                        title: translateScienceCopy(msg("Move up")),
+                        attributes: { disabled: !controls.canMoveUp },
+                      },
                       {
                         id: "down",
-                        title: "Move down",
+                        title: translateScienceCopy(msg("Move down")),
                         attributes: { disabled: !controls.canMoveDown },
                       },
                       {
                         id: "remove",
-                        title: "Remove",
+                        title: translateScienceCopy(msg("Remove")),
                         attributes: { disabled: !controls.canDismiss, destructive: true },
                       },
                     ]}
@@ -446,7 +473,9 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                       accessibilityLabel={title}
                       accessibilityHint={
                         controls.canEdit
-                          ? "Opens this message in the composer for editing"
+                          ? translateScienceCopy(
+                              msg("Opens this message in the composer for editing"),
+                            )
                           : (editBlockedReason ?? undefined)
                       }
                       disabled={!controls.canEdit}
@@ -479,7 +508,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                       </View>
                       {controls.isEditing ? (
                         <Text className="shrink-0 text-2xs uppercase tracking-wide text-primary">
-                          Editing
+                          <T>Editing</T>
                         </Text>
                       ) : null}
                     </Pressable>
@@ -488,7 +517,9 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                     // Outside the edit row and full row height, so a near miss never opens the editor.
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Send now, queued message ${index + 1}`}
+                      accessibilityLabel={translateScienceCopy(
+                        msg("Send now, queued message {value1}", { value1: index + 1 }),
+                      )}
                       disabled={!controls.canSend}
                       onPress={() => void act(run.id, "steer")}
                       className="shrink-0 justify-center self-stretch pl-4 active:opacity-70 disabled:opacity-40"
@@ -500,7 +531,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                           tintColorClassName="accent-primary-foreground"
                         />
                         <Text className="font-t3-medium text-sm text-primary-foreground">
-                          Send now
+                          <T>Send now</T>
                         </Text>
                       </View>
                     </Pressable>
@@ -534,7 +565,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                 color={theme["--color-foreground"]}
                 hideBackButton
                 hideShadow={false}
-                title="Queued"
+                title={translateScienceCopy(msg("Queued"))}
                 titleColor={theme["--color-foreground"]}
                 titleFontSize={18}
                 titleFontWeight="800"
@@ -551,7 +582,11 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View collapsable={false} className="flex-1 bg-sheet">
         <NativeStackScreenOptions options={{ sheetCornerRadius: 28 }} />
-        <AppBar sheet title="Queued" onBack={() => navigation.goBack()} />
+        <AppBar
+          sheet
+          title={translateScienceCopy(msg("Queued"))}
+          onBack={() => navigation.goBack()}
+        />
         <ScreenContent insetHorizontal={layout.usesSplitView}>{content}</ScreenContent>
       </View>
     </GestureHandlerRootView>
@@ -618,7 +653,9 @@ function QueueRowSwipeable(props: {
           style={{ width: REMOVE_ACTION_WIDTH }}
         >
           <SymbolView name="trash" size={16} tintColorClassName="accent-danger-foreground" />
-          <Text className="pt-1 text-2xs font-t3-medium text-danger-foreground">Remove</Text>
+          <Text className="pt-1 text-2xs font-t3-medium text-danger-foreground">
+            <T>Remove</T>
+          </Text>
         </Pressable>
       )}
     >
@@ -709,11 +746,15 @@ function QueueDragHandle(props: {
         collapsable={false}
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel={`Reorder ${props.title}`}
+        accessibilityLabel={translateScienceCopy(msg("Reorder {title}", { title: props.title }))}
         accessibilityState={{ disabled: props.disabled }}
         accessibilityActions={[
-          ...(props.canMoveUp ? [{ name: "decrement", label: "Move up" }] : []),
-          ...(props.canMoveDown ? [{ name: "increment", label: "Move down" }] : []),
+          ...(props.canMoveUp
+            ? [{ name: "decrement", label: translateScienceCopy(msg("Move up")) }]
+            : []),
+          ...(props.canMoveDown
+            ? [{ name: "increment", label: translateScienceCopy(msg("Move down")) }]
+            : []),
         ]}
         onAccessibilityAction={({ nativeEvent }) => {
           if (props.disabled) return;

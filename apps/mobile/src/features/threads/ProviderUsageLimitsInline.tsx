@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "../../i18n/messages";
+import { msg } from "gt-react-native";
 import type { ServerProviderUsageLimits, ServerProviderUsageWindow } from "@t3tools/contracts";
 import { remainingPercent } from "@t3tools/shared/usageLimits";
 import { View } from "react-native";
@@ -15,7 +17,13 @@ function UsageWindow(props: { window: ServerProviderUsageWindow; providerLabel: 
     <View
       className="flex-row items-center gap-1"
       accessible
-      accessibilityLabel={`${props.window.label} ${props.providerLabel} limit: ${remaining}% remaining`}
+      accessibilityLabel={translateScienceCopy(
+        msg("{label} {providerLabel} limit: {remaining}% remaining", {
+          label: props.window.label,
+          providerLabel: props.providerLabel,
+          remaining,
+        }),
+      )}
     >
       <Svg width={18} height={18} viewBox="0 0 18 18" style={{ transform: [{ rotate: "-90deg" }] }}>
         <Circle

@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import { hasRuntimeModelCatalog } from "../../providerModels";
 import { useLegendListRef } from "~/hooks/useLegendListRef";
 import {
@@ -225,7 +227,11 @@ function ModelPickerProviderNotices({
                   onOpenProviderSetup?.(entry.instanceId);
                 }}
               >
-                {setupEntries.length > 1 ? `Set up ${entry.displayName}` : "Open provider setup"}
+                {setupEntries.length > 1
+                  ? translateScienceCopy(
+                      msg("Set up {displayName}", { displayName: entry.displayName }),
+                    )
+                  : translateScienceCopy(msg("Open provider setup"))}
               </InlineButton>
             </div>
           ))}
@@ -245,7 +251,7 @@ function ModelPickerProviderNotices({
               void navigate({ to: "/settings/providers" });
             }}
           >
-            Provider settings
+            <T>Provider settings</T>
           </InlineButton>
         </p>
       ))}
@@ -515,13 +521,16 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   const flatModels = (() => {
     const out: ModelPickerItem[] = [];
+    const seenKeys = new Set<string>();
     for (const [instanceId, models] of modelOptionsByInstance) {
       const entry = entryByInstanceId.get(instanceId);
       if (!entry) {
         continue;
       }
       for (const model of models) {
+        const key = providerModelKey(instanceId, model.slug);
         if (
+          seenKeys.has(key) ||
           !shouldIncludeModelPickerOption({
             entry,
             option: model,
@@ -531,6 +540,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         ) {
           continue;
         }
+        seenKeys.add(key);
         out.push({
           slug: model.slug,
           name: model.name,
@@ -776,7 +786,9 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       setSearchQuery("");
       handleSelectInstance(next);
       announce(
-        next === "favorites" ? "Favorites" : (entryByInstanceId.get(next)?.displayName ?? next),
+        next === "favorites"
+          ? translateScienceCopy(msg("Favorites"))
+          : (entryByInstanceId.get(next)?.displayName ?? next),
         "model-picker",
       );
       return;
@@ -801,7 +813,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     const name = flatModels.find(
       (item) => item.slug === selectedSlug && item.instanceId === model.instanceId,
     )?.name;
-    announce(`Model: ${name ?? selectedSlug}`, "model-picker");
+    announce(
+      translateScienceCopy(msg("Model: {value1}", { value1: name ?? selectedSlug })),
+      "model-picker",
+    );
   };
 
   const heightScale = props.isComposerOwned && !props.docked ? 1.3 : 1;
@@ -897,7 +912,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           >
             <ComboboxSearchInput
               ref={searchInputRef}
-              placeholder="Search models..."
+              placeholder={translateScienceCopy(msg("Search models..."))}
               value={searchQuery}
               onChange={(e) => {
                 if (!isSearching) setSearchHeight(pickerContentRef.current?.offsetHeight ?? 0);
@@ -998,7 +1013,9 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                       className="group w-full cursor-pointer"
                     >
                       <span className="text-sm leading-snug text-muted-foreground group-hover:text-foreground group-data-highlighted:text-foreground">
-                        {legacySection.isExpanded ? "Show less" : "Show more"}
+                        {legacySection.isExpanded
+                          ? translateScienceCopy(msg("Show less"))
+                          : translateScienceCopy(msg("Show more"))}
                       </span>
                     </ComboboxItem>
                   );
@@ -1044,10 +1061,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               updateRequiredNotices={updateRequiredNotices}
               emptyLabel={
                 selectedInstanceId === "favorites" && !isSearching
-                  ? "No favorites yet"
+                  ? translateScienceCopy(msg("No favorites yet"))
                   : workspaceModelsScanning
-                    ? "Searching project models..."
-                    : "No models found"
+                    ? translateScienceCopy(msg("Searching project models..."))
+                    : translateScienceCopy(msg("No models found"))
               }
               onRequestClose={onRequestClose}
               onOpenProviderSetup={onOpenProviderSetup}

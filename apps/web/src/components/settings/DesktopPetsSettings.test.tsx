@@ -1,6 +1,17 @@
+import { GTProvider, initializeGT } from "gt-react";
+import type { ReactNode } from "react";
 import type { DesktopPetMetadata, DesktopPetsState } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+initializeGT({ defaultLocale: "en" });
+
+const renderLocalized = (child: ReactNode) =>
+  renderToStaticMarkup(
+    <GTProvider locale="en" translations={{}}>
+      {child}
+    </GTProvider>,
+  );
 
 const mockPets = vi.hoisted(() => ({
   state: null as DesktopPetsState | null,
@@ -49,7 +60,7 @@ describe("DesktopPetsSettings", () => {
   });
 
   it("stays hidden outside a supported desktop bridge", () => {
-    expect(renderToStaticMarkup(<DesktopPetsSettings />)).toBe("");
+    expect(renderLocalized(<DesktopPetsSettings />)).toBe("");
   });
 
   it("lists the installed library without a shared selection, and offers removal only for imported pets", () => {
@@ -61,7 +72,7 @@ describe("DesktopPetsSettings", () => {
       errors: [],
     };
 
-    const markup = renderToStaticMarkup(<DesktopPetsSettings />);
+    const markup = renderLocalized(<DesktopPetsSettings />);
 
     expect(markup).toContain("Codex");
     expect(markup).toContain("Custom Pet");

@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import { Trash2Icon, UploadIcon } from "lucide-react";
 
 import { PetSprite } from "../pets/PetSprite";
@@ -5,7 +7,7 @@ import { useDesktopPets } from "../pets/useDesktopPets";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 /**
  * Manages the installed pet library only. Which pet appears while a turn
@@ -13,14 +15,15 @@ import { searchableSetting } from "./settingsSearch";
  * shared companion.
  */
 export function DesktopPetsSettings() {
+  const setting = useSearchableSetting();
   const pets = useDesktopPets();
   const state = pets.state;
   if (!state?.supported) return null;
 
   return (
     <SettingsSection
-      id={searchableSetting("desktop-pets").id}
-      title="Desktop pets"
+      id={setting("desktop-pets").id}
+      title={translateScienceCopy(msg("Desktop pets"))}
       headerAction={
         <Button
           size="sm"
@@ -29,26 +32,34 @@ export function DesktopPetsSettings() {
           onClick={() => void pets.importArchive()}
         >
           <UploadIcon className="size-3.5" aria-hidden />
-          Import ZIP
+          <T>Import ZIP</T>
         </Button>
       }
     >
       <SettingsRow
-        id={searchableSetting("desktop-pets-enabled").id}
-        title="Show pets"
-        description="Show each provider's OpenPets companion in the Working row. Assign a pet to a provider in Provider settings. This setting only affects the Desktop app."
+        id={setting("desktop-pets-enabled").id}
+        title={translateScienceCopy(msg("Show pets"))}
+        description={translateScienceCopy(
+          msg(
+            "Show each provider's OpenPets companion in the Working row. Assign a pet to a provider in Provider settings. This setting only affects the Desktop app.",
+          ),
+        )}
         control={
           <Switch
             checked={state.enabled}
             disabled={pets.busy || pets.loading}
             onCheckedChange={(checked) => void pets.setEnabled(Boolean(checked))}
-            aria-label="Show pets"
+            aria-label={translateScienceCopy(msg("Show pets"))}
           />
         }
       />
       <SettingsRow
-        title="Installed pets"
-        description="Imported OpenPets archives available to every provider. Assign and preview them per provider in Provider settings."
+        title={translateScienceCopy(msg("Installed pets"))}
+        description={translateScienceCopy(
+          msg(
+            "Imported OpenPets archives available to every provider. Assign and preview them per provider in Provider settings.",
+          ),
+        )}
       >
         {state.pets.length > 0 ? (
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -80,7 +91,7 @@ export function DesktopPetsSettings() {
                       onClick={() => void pets.removePet(pet.id)}
                     >
                       <Trash2Icon className="size-3.5" aria-hidden />
-                      Remove
+                      <T>Remove</T>
                     </Button>
                   </div>
                 ) : null}
@@ -88,12 +99,18 @@ export function DesktopPetsSettings() {
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-xs text-muted-foreground">No valid pet is currently available.</p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            <T>No valid pet is currently available.</T>
+          </p>
         )}
       </SettingsRow>
       {pets.busy || pets.error || state.errors.length > 0 ? (
         <div className="mx-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-xs sm:mx-4">
-          {pets.busy ? <p className="text-muted-foreground">Updating desktop pets…</p> : null}
+          {pets.busy ? (
+            <p className="text-muted-foreground">
+              <T>Updating desktop pets…</T>
+            </p>
+          ) : null}
           {pets.error ? <p className="text-destructive">{pets.error}</p> : null}
           {state.errors.map((error) => (
             <p key={error} className="text-destructive">

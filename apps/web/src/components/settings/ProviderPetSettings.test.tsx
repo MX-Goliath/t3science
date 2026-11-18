@@ -1,6 +1,17 @@
+import { GTProvider, initializeGT } from "gt-react";
+import type { ReactNode } from "react";
 import type { DesktopPetMetadata, DesktopPetsState, ProviderInstanceId } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+initializeGT({ defaultLocale: "en" });
+
+const renderLocalized = (child: ReactNode) =>
+  renderToStaticMarkup(
+    <GTProvider locale="en" translations={{}}>
+      {child}
+    </GTProvider>,
+  );
 
 const mockPets = vi.hoisted(() => ({
   state: null as DesktopPetsState | null,
@@ -58,7 +69,7 @@ describe("ProviderPetSettings", () => {
 
   it("stays hidden outside a supported desktop bridge", () => {
     expect(
-      renderToStaticMarkup(<ProviderPetSettings instanceId={instanceId} displayName="Codex" />),
+      renderLocalized(<ProviderPetSettings instanceId={instanceId} displayName="Codex" />),
     ).toBe("");
   });
 
@@ -71,7 +82,7 @@ describe("ProviderPetSettings", () => {
       errors: [],
     };
 
-    const markup = renderToStaticMarkup(
+    const markup = renderLocalized(
       <ProviderPetSettings instanceId={instanceId} displayName="Codex Personal" />,
     );
 
@@ -94,7 +105,7 @@ describe("ProviderPetSettings", () => {
       errors: [],
     };
 
-    const markup = renderToStaticMarkup(
+    const markup = renderLocalized(
       <ProviderPetSettings instanceId={instanceId} displayName="Codex Personal" />,
     );
 

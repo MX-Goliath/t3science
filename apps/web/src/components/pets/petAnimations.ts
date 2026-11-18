@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import type { DesktopPetAnimationState } from "@t3tools/contracts";
 
 export interface PetAnimationDefinition {
@@ -19,13 +21,13 @@ export const PET_ANIMATIONS: Readonly<Record<DesktopPetAnimationState, PetAnimat
 };
 
 export const PET_ANIMATION_OPTIONS = [
-  { id: "idle", label: "Idle" },
-  { id: "running-right", label: "Running right" },
-  { id: "running-left", label: "Running left" },
-  { id: "waving", label: "Waving" },
-  { id: "jumping", label: "Jumping" },
-  { id: "failed", label: "Failed" },
-  { id: "waiting", label: "Waiting" },
-  { id: "running", label: "Running" },
-  { id: "review", label: "Review" },
+  { id: "idle", label: translateScienceCopy(msg("Idle")) },
+  { id: "running-right", label: translateScienceCopy(msg("Running right")) },
+  { id: "running-left", label: translateScienceCopy(msg("Running left")) },
+  { id: "waving", label: translateScienceCopy(msg("Waving")) },
+  { id: "jumping", label: translateScienceCopy(msg("Jumping")) },
+  { id: "failed", label: translateScienceCopy(msg("Failed")) },
+  { id: "waiting", label: translateScienceCopy(msg("Waiting")) },
+  { id: "running", label: translateScienceCopy(msg("Running")) },
+  { id: "review", label: translateScienceCopy(msg("Review")) },
 ] as const satisfies ReadonlyArray<{ id: DesktopPetAnimationState; label: string }>;

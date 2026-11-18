@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import type { ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
 import { getDisplayModelName, type ModelEsque } from "./providerIconUtils";
 export function resolveContextWindowModelDisplayName(
@@ -20,11 +22,19 @@ export function formatContextWindowCompactionMessage(
   autoCompactThreshold?: number | null,
 ): string {
   if (typeof autoCompactThreshold === "number" && autoCompactThreshold > 0) {
-    return `Compacts automatically at about ${autoCompactThreshold.toLocaleString("en-US")} tokens.`;
+    return translateScienceCopy(
+      msg("Compacts automatically at about {value1} tokens.", {
+        value1: autoCompactThreshold.toLocaleString("en-US"),
+      }),
+    );
   }
   return modelDisplayName
-    ? `Context for ${modelDisplayName} compacts automatically when needed.`
-    : "Context compacts automatically when needed.";
+    ? translateScienceCopy(
+        msg("Context for {modelDisplayName} compacts automatically when needed.", {
+          modelDisplayName,
+        }),
+      )
+    : translateScienceCopy(msg("Context compacts automatically when needed."));
 }
 
 export function formatContextWindowCost(cost: {

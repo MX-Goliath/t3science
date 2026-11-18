@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import type { ProviderOptionDescriptor } from "@t3tools/contracts";
 import { ChevronRightIcon, RotateCcwIcon, ZapIcon } from "lucide-react";
 
@@ -47,8 +49,8 @@ export function ReasoningSettingsCard(props: {
       ? props.speed.options.map((option) => ({ value: option.id, label: option.label }))
       : props.speed
         ? [
-            { value: false, label: "Normal" },
-            { value: true, label: "Fast" },
+            { value: false, label: translateScienceCopy(msg("Normal")) },
+            { value: true, label: translateScienceCopy(msg("Fast")) },
           ]
         : [];
   const speedIndex = speedChoices.findIndex((option) => option.value === props.speedValue);
@@ -71,7 +73,12 @@ export function ReasoningSettingsCard(props: {
                   className={styles.icon}
                   data-speed-active={accelerated}
                   aria-pressed={accelerated}
-                  aria-label={`Speed: ${currentSpeed?.label ?? "Default"}. Switch to ${nextSpeed.label}`}
+                  aria-label={translateScienceCopy(
+                    msg("Speed: {value1}. Switch to {label}", {
+                      value1: currentSpeed?.label ?? "Default",
+                      label: nextSpeed.label,
+                    }),
+                  )}
                   onClick={() => props.onSpeedChange(nextSpeed.value)}
                 />
               }
@@ -87,7 +94,8 @@ export function ReasoningSettingsCard(props: {
               />
             </TooltipTrigger>
             <TooltipPopup side="top">
-              Speed: {currentSpeed?.label ?? "Default"} · Switch to {nextSpeed.label}
+              <T>Speed:</T> {currentSpeed?.label ?? translateScienceCopy(msg("Default"))}{" "}
+              <T>· Switch to</T> {nextSpeed.label}
             </TooltipPopup>
           </Tooltip>
         ) : (
@@ -111,7 +119,9 @@ export function ReasoningSettingsCard(props: {
             <button
               type="button"
               onClick={props.onOpenModelPicker}
-              aria-label={`Change model: ${props.modelLabel}`}
+              aria-label={translateScienceCopy(
+                msg("Change model: {modelLabel}", { modelLabel: props.modelLabel }),
+              )}
               className="group/model flex max-w-full items-center rounded-sm text-xs text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <ModelName>{props.modelLabel}</ModelName>
@@ -129,7 +139,9 @@ export function ReasoningSettingsCard(props: {
               <button
                 type="button"
                 className={cn(styles.icon, "group/reset")}
-                aria-label={props.modelReset?.label ?? "Reset effort and speed"}
+                aria-label={
+                  props.modelReset?.label ?? translateScienceCopy(msg("Reset effort and speed"))
+                }
                 disabled={props.effortDisabled || Boolean(props.modelReset?.disabledReason)}
                 onClick={props.onReset}
               />
@@ -140,7 +152,7 @@ export function ReasoningSettingsCard(props: {
           <TooltipPopup side="top">
             {props.modelReset?.disabledReason ??
               props.modelReset?.label ??
-              "Reset effort and speed"}
+              translateScienceCopy(msg("Reset effort and speed"))}
           </TooltipPopup>
         </Tooltip>
       </div>
@@ -238,7 +250,7 @@ export function ReasoningSettingsCard(props: {
       </div>
       {props.effortDisabled ? (
         <p className="mt-3 text-xs text-muted-foreground">
-          Remove “ultrathink” from your message to change reasoning effort.
+          <T>Remove “ultrathink” from your message to change reasoning effort.</T>
         </p>
       ) : null}
     </div>

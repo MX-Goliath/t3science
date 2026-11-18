@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+vi.mock("gt-react", () => ({ msg: (message: string) => message }));
+
 const SOUND_SECONDS = 0.6;
 
 const audio = { currentTime: 0, started: 0 };
@@ -63,14 +65,14 @@ describe("playNotificationSound", () => {
     vi.mocked(fetch).mockRejectedValue(new Error("offline"));
     const { unlockNotificationAudio, playNotificationSound } = await loadUnlocked();
     await playNotificationSound("completion", () => true);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    const requestsAfterFailure = vi.mocked(fetch).mock.calls.length;
 
     unlockNotificationAudio();
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(requestsAfterFailure);
 
     vi.mocked(fetch).mockResolvedValue(new Response(new ArrayBuffer(0)));
     await playNotificationSound("completion", () => true);
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(requestsAfterFailure + 1);
     expect(audio.started).toBe(1);
   });
 

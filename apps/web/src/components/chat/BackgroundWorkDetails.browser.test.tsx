@@ -9,8 +9,8 @@ vi.mock(import("./CommandOutputPanel"), () => ({
 }));
 
 import { render } from "../../../test/render";
-import { backgroundWorkNowItem } from "./ThreadActivityBanners";
-import { ThreadNow } from "./ThreadNow";
+import { backgroundWorkBannerItem } from "./ThreadActivityBanners";
+import { ComposerBannerStack } from "./ComposerBannerStack";
 
 it("opens full command details for short labels and keeps pending tasks current", async () => {
   const command = "python3 audit.py -j 6\n> scratch/audit.log 2>&1";
@@ -37,44 +37,40 @@ it("opens full command details for short labels and keeps pending tasks current"
     description?: string,
     status: "running" | "completed" = "completed",
     explicitItem = true,
-  ) => (
-    <ThreadNow
-      attention={null}
-      syncPhase={null}
-      goal={null}
-      work={backgroundWorkNowItem({
-        environmentId: EnvironmentId.make("test"),
-        threadId: ThreadId.make("thread"),
-        tasks: [
-          {
-            taskId: "native-task",
-            itemId: explicitItem ? TurnItemId.make("bash-1") : undefined,
-            kind: "command",
-            description,
-            command,
-            awaited: true,
+  ) => {
+    const banner = backgroundWorkBannerItem({
+      environmentId: EnvironmentId.make("test"),
+      threadId: ThreadId.make("thread"),
+      tasks: [
+        {
+          taskId: "native-task",
+          itemId: explicitItem ? TurnItemId.make("bash-1") : undefined,
+          kind: "command",
+          description,
+          command,
+          awaited: true,
+        },
+      ],
+      turnItems: [
+        commandItem(status),
+        {
+          ...commandItem("running"),
+          id: TurnItemId.make("native-match"),
+          nativeItemRef: {
+            driver: ProviderDriverKind.make("codex"),
+            nativeId: "native-task",
+            strength: "strong",
           },
-        ],
-        turnItems: [
-          commandItem(status),
-          {
-            ...commandItem("running"),
-            id: TurnItemId.make("native-match"),
-            nativeItemRef: {
-              driver: ProviderDriverKind.make("codex"),
-              nativeId: "native-task",
-              strength: "strong",
-            },
-            ordinal: 2,
-          },
-        ],
-        stopDisabled: false,
-        stopping: false,
-        onStop: async () => undefined,
-        onOpenThread: () => undefined,
-      })}
-    />
-  );
+          ordinal: 2,
+        },
+      ],
+      stopDisabled: false,
+      stopping: false,
+      onStop: async () => undefined,
+      onOpenThread: () => undefined,
+    });
+    return <ComposerBannerStack items={banner ? [banner] : []} />;
+  };
   await using screen = await render(view("Audit"));
   await screen.getByRole("button", { name: "Details", exact: true }).click();
   await vi.waitFor(() => expect(page.getByRole("dialog").element().textContent).toContain(command));

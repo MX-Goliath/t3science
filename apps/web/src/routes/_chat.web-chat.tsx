@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 
@@ -29,13 +31,17 @@ function WebChatRouteView() {
       <SidebarInset className="h-dvh min-h-0 overflow-hidden">
         <Empty className="flex-1">
           <EmptyHeader className="max-w-md">
-            <EmptyTitle>Web chat is unavailable</EmptyTitle>
+            <EmptyTitle>
+              <T>Web chat is unavailable</T>
+            </EmptyTitle>
             <EmptyDescription>
-              Enable Web chat in the desktop app’s General settings. Provider sites cannot be
-              embedded safely in the regular web client.
+              <T>
+                Enable Web chat in the desktop app’s General settings. Provider sites cannot be
+                embedded safely in the regular web client.
+              </T>
             </EmptyDescription>
             <Button render={<Link to="/settings/general" />} size="sm" className="mt-4">
-              Open settings
+              <T>Open settings</T>
             </Button>
           </EmptyHeader>
         </Empty>
@@ -56,7 +62,7 @@ function WebChatRouteView() {
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label="Go back"
+              aria-label={translateScienceCopy(msg("Go back"))}
               disabled={!navigation?.canGoBack}
               onClick={() => void bridge.goBack(WEB_CHAT_BROWSER_TAB_ID)}
             >
@@ -65,7 +71,7 @@ function WebChatRouteView() {
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label="Go forward"
+              aria-label={translateScienceCopy(msg("Go forward"))}
               disabled={!navigation?.canGoForward}
               onClick={() => void bridge.goForward(WEB_CHAT_BROWSER_TAB_ID)}
             >
@@ -74,7 +80,7 @@ function WebChatRouteView() {
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label={`Reload ${definition.label}`}
+              aria-label={translateScienceCopy(msg("Reload {label}", { label: definition.label }))}
               onClick={() => void bridge.refresh(WEB_CHAT_BROWSER_TAB_ID)}
             >
               <RefreshCwIcon className="size-3.5" />
@@ -87,7 +93,9 @@ function WebChatRouteView() {
           <Button
             size="icon-xs"
             variant="ghost"
-            aria-label={`Open ${definition.label} in default browser`}
+            aria-label={translateScienceCopy(
+              msg("Open {label} in default browser", { label: definition.label }),
+            )}
             onClick={() => void window.desktopBridge?.openExternal(definition.url)}
           >
             <ExternalLinkIcon className="size-3.5" />

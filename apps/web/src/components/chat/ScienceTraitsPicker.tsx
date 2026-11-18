@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import {
   buildTraitsTriggerDisplay,
   getDescriptorStringValue,
@@ -115,7 +117,7 @@ type TraitsPersistence =
 function DefaultBadge() {
   return (
     <Badge variant="outline" size="sm" className="min-w-0">
-      Default
+      <T>Default</T>
     </Badge>
   );
 }
@@ -539,7 +541,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
           modelLabel={
             models.find((entry) => entry.slug === normalizeModelSlug(model, provider))?.name ??
             model ??
-            "Model"
+            translateScienceCopy(msg("Model"))
           }
           effortDisabled={ultrathinkInBodyText}
           onEffortChange={(value) => handleSelectChange(reasoningDescriptor, value)}
@@ -570,8 +572,10 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
               </div>
               {ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id ? (
                 <div className="px-2 pb-1.5 text-muted-foreground/80 text-xs">
-                  Your prompt contains &quot;ultrathink&quot; in the text. Remove it to change this
-                  option.
+                  <T>
+                    Your prompt contains &quot;ultrathink&quot; in the text. Remove it to change
+                    this option.
+                  </T>
                 </div>
               ) : null}
               <MenuRadioGroup
@@ -627,7 +631,11 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                 {(["on", "off"] as const).map((value) => (
                   <MenuRadioItem key={value} value={value} hideIndicator closeOnClick>
                     <span className="flex w-full min-w-0 items-center justify-between gap-3">
-                      <span>{value === "on" ? "On" : "Off"}</span>
+                      <span>
+                        {value === "on"
+                          ? translateScienceCopy(msg("On"))
+                          : translateScienceCopy(msg("Off"))}
+                      </span>
                     </span>
                   </MenuRadioItem>
                 ))}

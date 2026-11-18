@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import { cn } from "~/lib/utils";
 import type { EnvironmentId, ServerProviderUsageLimits } from "@t3tools/contracts";
 import type { MouseEvent as ReactMouseEvent } from "react";
@@ -68,7 +70,9 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
                   size={size}
                   // Mirrors the effort chip's trailing pe-1 so both gaps around the bars match.
                   className="ps-1.5"
-                  aria-label={`Permissions: ${runtimeModeOption.label}`}
+                  aria-label={translateScienceCopy(
+                    msg("Permissions: {label}", { label: runtimeModeOption.label }),
+                  )}
                 />
               }
             />
@@ -134,9 +138,11 @@ export function ComposerPermissionsSection(props: {
   const descriptionId = useId();
   return (
     <div data-composer-permissions className="grid min-w-0 w-72 max-w-full gap-1.5 px-2 py-1.5">
-      <div className="font-medium text-muted-foreground text-xs">Permissions</div>
+      <div className="font-medium text-muted-foreground text-xs">
+        <T>Permissions</T>
+      </div>
       <MenuPrimitive.RadioGroup
-        aria-label="Permissions"
+        aria-label={translateScienceCopy(msg("Permissions"))}
         value={props.runtimeMode}
         onValueChange={(value: RuntimeMode) => {
           if (value !== props.runtimeMode) props.onRuntimeModeChange(value);

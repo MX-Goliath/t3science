@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "../../../i18n/messages";
+import { msg } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import { useRef, useState } from "react";
 import { View } from "react-native";
@@ -54,7 +56,7 @@ export function ProjectConversationStorage(props: {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         Dialog.alert(
-          "Could not update conversation storage",
+          translateScienceCopy(msg("Could not update conversation storage")),
           error instanceof Error ? error.message : String(error),
         );
       }
@@ -70,10 +72,13 @@ export function ProjectConversationStorage(props: {
       return;
     }
     Dialog.confirm({
-      title: "Save conversations in the project?",
-      message:
-        "Existing conversations and attachments will be copied to .t3/conversations on this environment. Conversation text can contain sensitive data.",
-      confirmText: "Enable",
+      title: translateScienceCopy(msg("Save conversations in the project?")),
+      message: translateScienceCopy(
+        msg(
+          "Existing conversations and attachments will be copied to .t3/conversations on this environment. Conversation text can contain sensitive data.",
+        ),
+      ),
+      confirmText: translateScienceCopy(msg("Enable")),
       onConfirm: () => void save(true),
     });
   };
@@ -81,8 +86,16 @@ export function ProjectConversationStorage(props: {
   return (
     <View>
       <SettingsSwitchRow
-        label={`Save conversations · ${props.environmentLabel}`}
-        subtitle="Keep portable conversations in .t3/conversations inside this checkout. Turning this off keeps existing exports."
+        label={translateScienceCopy(
+          msg("Save conversations · {environmentLabel}", {
+            environmentLabel: props.environmentLabel,
+          }),
+        )}
+        subtitle={translateScienceCopy(
+          msg(
+            "Keep portable conversations in .t3/conversations inside this checkout. Turning this off keeps existing exports.",
+          ),
+        )}
         value={confirmed ?? query.data?.enabled ?? false}
         disabled={saving || query.isPending || query.data === null || !canChange}
         onValueChange={change}

@@ -1,7 +1,9 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 const english = {
   images: "Images",
   viewport: "Image viewer",
-  title: "My images",
+  title: translateScienceCopy(msg("My images")),
   directory: "Open directory",
   describe: "Describe an image",
   changes: "Describe changes",
@@ -31,7 +33,7 @@ const english = {
 const russian: typeof english = {
   images: "Изображения",
   viewport: "Область просмотра изображения",
-  title: "Мои изображения",
+  title: translateScienceCopy(msg("Мои изображения")),
   directory: "Открыть директорию",
   describe: "Опишите изображение",
   changes: "Опишите изменения",

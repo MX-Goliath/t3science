@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "../../i18n/messages";
+import { T, msg } from "gt-react-native";
 import { useRef } from "react";
 import { Pressable } from "react-native";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
@@ -14,7 +16,7 @@ import {
 } from "../../state/thread-outbox";
 import { removeThreadOutboxMessage } from "../../state/thread-outbox-removal";
 import {
-  dispatchingQueuedMessageIdAtom,
+  dispatchingQueuedMessageIdsAtom,
   holdEditingQueuedMessage,
   releaseEditingQueuedMessage,
 } from "../../state/use-thread-outbox";
@@ -27,7 +29,7 @@ export function ScheduledMessageActions(props: { readonly message: QueuedThreadM
     if (
       busy.current ||
       !readEnvironmentScope(message.environmentId, AuthOrchestrationOperateScope) ||
-      appAtomRegistry.get(dispatchingQueuedMessageIdAtom) === message.messageId
+      appAtomRegistry.get(dispatchingQueuedMessageIdsAtom)[message.messageId]
     )
       return;
     busy.current = true;
@@ -41,7 +43,7 @@ export function ScheduledMessageActions(props: { readonly message: QueuedThreadM
       }
     } catch (error) {
       Dialog.alert(
-        "Could not change scheduled message",
+        translateScienceCopy(msg("Could not change scheduled message")),
         error instanceof Error ? error.message : String(error),
       );
     }
@@ -51,10 +53,14 @@ export function ScheduledMessageActions(props: { readonly message: QueuedThreadM
   return (
     <Menu
       actions={[
-        { id: "send", title: "Send now", attributes: { disabled: !canOperate } },
+        {
+          id: "send",
+          title: translateScienceCopy(msg("Send now")),
+          attributes: { disabled: !canOperate },
+        },
         {
           id: "cancel",
-          title: "Cancel scheduled send",
+          title: translateScienceCopy(msg("Cancel scheduled send")),
           attributes: { disabled: !canOperate, destructive: true },
         },
       ]}
@@ -62,11 +68,11 @@ export function ScheduledMessageActions(props: { readonly message: QueuedThreadM
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Scheduled message actions"
+        accessibilityLabel={translateScienceCopy(msg("Scheduled message actions"))}
         className="py-1"
       >
         <Text className="font-t3-medium text-xs text-foreground-secondary">
-          Scheduled ·{" "}
+          <T>Scheduled ·</T>{" "}
           {new Date(message.scheduledAt!).toLocaleString([], {
             dateStyle: "short",
             timeStyle: "short",

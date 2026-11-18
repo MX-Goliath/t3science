@@ -1,3 +1,4 @@
+import { T } from "gt-react";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { ModelName } from "./ModelName";
 import "./modelPickerTransition.css";
@@ -439,7 +440,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           {props.triggerSuffix}
           {selectedModel?.isUnavailable && !selectedEntries && props.triggerLabel === undefined ? (
             <Badge variant="outline" size="sm">
-              Unavailable
+              <T>Unavailable</T>
             </Badge>
           ) : null}
         </span>

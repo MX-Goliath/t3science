@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
 
@@ -9,14 +11,16 @@ const labels = {
   done: "Done",
   input: "Input needed",
   approval: "Approval needed",
-  error: "Error",
+  error: translateScienceCopy(msg("Error")),
   limited: "Usage limit reached",
 };
 const fallbacks = {
   done: "The model finished its response.",
   input: "The model is waiting for your answer.",
   approval: "The model needs your permission to continue.",
-  error: "The model could not finish the task. Open the thread for details.",
+  error: translateScienceCopy(
+    msg("The model could not finish the task. Open the thread for details."),
+  ),
   limited: "The provider usage limit was reached.",
 };
 

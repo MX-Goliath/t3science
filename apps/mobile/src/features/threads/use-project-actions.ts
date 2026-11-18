@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "../../i18n/messages";
+import { msg } from "gt-react-native";
 import { useCallback } from "react";
 
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -10,9 +12,11 @@ import {
   type RuntimeMode,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
+import * as Effect from "effect/Effect";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 
+import { uploadComposerAttachmentShared } from "../../state/composer-attachment-uploads";
 import { threadEnvironment } from "../../state/threads";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
 import { prepareTurnAttachments, validateDraftFileAttachments } from "../../lib/attachmentUpload";
@@ -83,19 +87,23 @@ export function useCreateProjectThread() {
       const supportsImageUploads =
         appAtomRegistry.get(serverEnvironment.configValueAtom(input.project.environmentId))
           ?.environment.capabilities.attachmentUploads === true;
-      let prepared: Awaited<ReturnType<typeof prepareTurnAttachments>>;
+      let prepared: Effect.Success<ReturnType<typeof prepareTurnAttachments>>;
       try {
         // If persisting the references into the draft throws, the owner call
         // deletes the pending uploads it minted before rethrowing.
-        prepared = await prepareTurnAttachments({
-          environmentId: input.project.environmentId,
-          attachments: input.initialAttachments,
-          supportsImageUploads,
-          persistUploadedReferences: async (draftAttachments) => {
-            await input.onAttachmentsUploaded(draftAttachments);
-            return "persisted";
-          },
-        });
+        prepared = await Effect.runPromise(
+          prepareTurnAttachments({
+            environmentId: input.project.environmentId,
+            attachments: input.initialAttachments,
+            supportsImageUploads,
+            uploadAttachment: (attachment) =>
+              uploadComposerAttachmentShared(input.project.environmentId, attachment),
+            persistUploadedReferences: (draftAttachments) =>
+              Effect.promise(() => input.onAttachmentsUploaded(draftAttachments)).pipe(
+                Effect.as("persisted" as const),
+              ),
+          }),
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : "An attachment could not upload.";
         setPendingConnectionError(message);
@@ -150,7 +158,9 @@ export function useCreateProjectThread() {
       if (AsyncResult.isFailure(result)) {
         const error = Cause.squash(result.cause);
         setPendingConnectionError(
-          error instanceof Error ? error.message : "The task could not be started.",
+          error instanceof Error
+            ? error.message
+            : translateScienceCopy(msg("The task could not be started.")),
         );
         return AsyncResult.failure(result.cause);
       }

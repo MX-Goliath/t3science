@@ -1,7 +1,10 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import { CheckIcon, CircleDotIcon, CircleIcon, ListTodoIcon } from "lucide-react";
 import { memo, useId, useState } from "react";
 
-import { formatDuration, type ActivePlanState } from "../../session-logic";
+import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
+import type { ActivePlanState } from "../../session-logic";
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
 
@@ -73,7 +76,9 @@ function TaskSummary({
         <ListTodoIcon />
       </ComposerBanner.Icon>
       <ComposerBanner.Content>
-        <span className="shrink-0 text-muted-foreground">Tasks</span>
+        <span className="shrink-0 text-muted-foreground">
+          <T>Tasks</T>
+        </span>
         <span
           className="min-w-0 flex-1 truncate text-left font-medium text-foreground/80"
           data-composer-task-current="true"
@@ -117,7 +122,7 @@ export const ComposerTasksControl = memo(function ComposerTasksControl({
   };
   return (
     <ComposerBanner.Attachment>
-      <ComposerBanner.Root role="region" aria-label="Tasks">
+      <ComposerBanner.Root role="region" aria-label={translateScienceCopy(msg("Tasks"))}>
         <div
           data-chat-composer-collapsed-controls="true"
           data-chat-composer-tasks-drawer={expanded ? "true" : undefined}
@@ -126,7 +131,14 @@ export const ComposerTasksControl = memo(function ComposerTasksControl({
             render={<button type="button" />}
             aria-expanded={expanded}
             aria-controls={listId}
-            aria-label={`${expanded ? "Collapse tasks" : "Tasks"}: ${progress.completedSteps} of ${progress.totalSteps} complete. Current task: ${progress.step}`}
+            aria-label={translateScienceCopy(
+              msg("{value1}: {completedSteps} of {totalSteps} complete. Current task: {step}", {
+                value1: expanded ? "Collapse tasks" : "Tasks",
+                completedSteps: progress.completedSteps,
+                totalSteps: progress.totalSteps,
+                step: progress.step,
+              }),
+            )}
             data-composer-tasks-badge="true"
             onClick={() => setExpanded((value) => !value)}
             onPointerDown={(event) => event.preventDefault()}
@@ -137,7 +149,12 @@ export const ComposerTasksControl = memo(function ComposerTasksControl({
             <ComposerBanner.Scroll data-composer-tasks-scroll="true">
               <ComposerBanner.Children
                 render={<ul role="list" />}
-                aria-label={`Task list. ${progress.completedSteps} of ${progress.totalSteps} complete.`}
+                aria-label={translateScienceCopy(
+                  msg("Task list. {completedSteps} of {totalSteps} complete.", {
+                    completedSteps: progress.completedSteps,
+                    totalSteps: progress.totalSteps,
+                  }),
+                )}
                 data-composer-tasks-list="true"
                 id={listId}
               >

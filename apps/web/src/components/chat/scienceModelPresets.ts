@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import { isReasoningSelect } from "@t3tools/client-runtime/model-traits";
 import type { ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
 import type { ScienceModelPreset } from "@t3tools/contracts/settings";
@@ -61,7 +63,7 @@ export function sciencePresetDisabledReason(
   models: ReadonlyMap<ProviderInstanceId, readonly ModelEsque[]>,
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null,
 ) {
-  if (!selection) return "Configure this preset in Settings → Science";
+  if (!selection) return translateScienceCopy(msg("Configure this preset in Settings → Science"));
   const entry = entries.find((entry) => entry.instanceId === selection.instanceId);
   if (
     !entry?.enabled ||
@@ -70,7 +72,7 @@ export function sciencePresetDisabledReason(
       .get(selection.instanceId)
       ?.some((model) => model.slug === selection.model && !model.isUnavailable)
   ) {
-    return "This model is unavailable in this environment";
+    return translateScienceCopy(msg("This model is unavailable in this environment"));
   }
   return getModelDisabledReason(selection.instanceId, selection.model);
 }

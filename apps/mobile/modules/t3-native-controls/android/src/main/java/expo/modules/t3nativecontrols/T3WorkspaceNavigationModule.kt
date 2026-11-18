@@ -126,7 +126,7 @@ class T3WorkspaceNavigationView(
   private val onTabSelected by EventDispatcher()
   private val onNewThread by EventDispatcher()
   private val onOverlayChange by EventDispatcher()
-  var tabs by mutableStateOf(listOf("threads", "pullRequests", "usage", "settings"))
+  var tabs by mutableStateOf(listOf("threads", "pullRequests", "issues", "usage", "settings"))
   var selectedTab by mutableStateOf("threads")
   var rail by mutableStateOf(false)
   var floating by mutableStateOf(false)
@@ -416,6 +416,7 @@ class T3WorkspaceNavigationView(
     "threads" -> "Chats"
     "pullRequests" -> "Pulls"
     "images" -> if (context.resources.configuration.locales[0].language == "ru") "Изображения" else "Images"
+    "issues" -> "Issues"
     "usage" -> "Usage"
     else -> "Settings"
   }
@@ -429,6 +430,7 @@ class T3WorkspaceNavigationView(
       "threads" -> R.drawable.t3_chats
       "pullRequests" -> R.drawable.t3_pull_requests
       "images" -> R.drawable.t3_images
+      "issues" -> R.drawable.t3_issues
       "usage" -> R.drawable.t3_usage
       else -> R.drawable.t3_settings
     }

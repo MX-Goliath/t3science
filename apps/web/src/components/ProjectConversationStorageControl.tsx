@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -66,8 +68,11 @@ export function useProjectConversationStorage(
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Failed to update local conversation storage",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: translateScienceCopy(msg("Failed to update local conversation storage")),
+            description:
+              error instanceof Error
+                ? error.message
+                : translateScienceCopy(msg("An error occurred.")),
           }),
         );
       }
@@ -79,11 +84,20 @@ export function useProjectConversationStorage(
     toastManager.add({
       type: "success",
       title: result.value.enabled
-        ? "Local conversation storage enabled"
-        : "Local conversation storage disabled",
+        ? translateScienceCopy(msg("Local conversation storage enabled"))
+        : translateScienceCopy(msg("Local conversation storage disabled")),
       description: result.value.enabled
-        ? `${result.value.exportedThreadCount} conversation${result.value.exportedThreadCount === 1 ? "" : "s"} saved to .t3/conversations.`
-        : "Existing exported files were kept, but they will no longer be updated or imported automatically.",
+        ? translateScienceCopy(
+            msg("{exportedThreadCount} conversation{value2} saved to .t3/conversations.", {
+              exportedThreadCount: result.value.exportedThreadCount,
+              value2: result.value.exportedThreadCount === 1 ? "" : "s",
+            }),
+          )
+        : translateScienceCopy(
+            msg(
+              "Existing exported files were kept, but they will no longer be updated or imported automatically.",
+            ),
+          ),
     });
   };
 

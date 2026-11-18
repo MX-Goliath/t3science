@@ -1,7 +1,9 @@
+import { m as translateScienceCopy } from "../../i18n/messages";
+import { msg } from "gt-react-native";
 export function imageLibraryCopy() {
   const ru = Intl.DateTimeFormat().resolvedOptions().locale.startsWith("ru");
   return {
-    title: ru ? "Изображения" : "Images",
+    title: translateScienceCopy(msg("Images", { $context: "navigation tab, image gallery" })),
     mine: ru ? "Мои изображения" : "My images",
     describe: ru ? "Опишите изображение" : "Describe an image",
     changes: ru ? "Опишите изменения" : "Describe changes",

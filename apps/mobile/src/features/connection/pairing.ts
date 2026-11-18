@@ -1,5 +1,8 @@
 import { readHostedPairingRequest, readPairingAppLink } from "@t3tools/shared/remote";
 import * as Schema from "effect/Schema";
+import { msg } from "gt-react-native";
+
+import { m } from "../../i18n/messages";
 
 function isIpLiteral(host: string): boolean {
   try {
@@ -21,7 +24,7 @@ export class PairingQrPayloadEmptyError extends Schema.TaggedError<PairingQrPayl
   {},
 ) {
   override get message(): string {
-    return "Scanned QR code did not contain a pairing URL.";
+    return m(msg("Scanned QR code did not contain a pairing URL."));
   }
 }
 

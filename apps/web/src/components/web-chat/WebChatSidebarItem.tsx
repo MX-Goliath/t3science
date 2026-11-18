@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { isElectron } from "~/env";
@@ -23,7 +25,7 @@ export function WebChatSidebarItem() {
       <SidebarMenuButton
         isActive={pathname === WEB_CHAT_ROUTE}
         onClick={() => void navigate({ to: WEB_CHAT_ROUTE })}
-        aria-label={`Open ${definition.label}`}
+        aria-label={translateScienceCopy(msg("Open {label}", { label: definition.label }))}
       >
         <WebChatProviderIcon provider={provider} className="size-4 shrink-0" />
         <span className="truncate">{definition.label}</span>

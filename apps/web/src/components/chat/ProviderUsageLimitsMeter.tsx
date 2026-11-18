@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import type {
   EnvironmentId,
   ProviderInstanceId,
@@ -5,7 +7,8 @@ import type {
   ServerProviderUsageLimits,
   ServerProviderUsageWindow,
 } from "@t3tools/contracts";
-import { remainingPercent, resetCreditChoices } from "@t3tools/shared/usageLimits";
+import { remainingPercent } from "@t3tools/shared/usageLimits";
+import { resetCreditChoices } from "@t3tools/shared/usageLimitsCopy";
 import { useEffect, useState } from "react";
 
 import { Button } from "../ui/button";
@@ -64,7 +67,13 @@ function UsageWindow(props: {
           <button
             type="button"
             className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-md px-1 text-2xs text-muted-foreground tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-            aria-label={`${props.window.label} ${props.providerLabel} limit: ${remaining}% remaining`}
+            aria-label={translateScienceCopy(
+              msg("{label} {providerLabel} limit: {remaining}% remaining", {
+                label: props.window.label,
+                providerLabel: props.providerLabel,
+                remaining,
+              }),
+            )}
           />
         }
       >
@@ -100,8 +109,15 @@ function UsageWindow(props: {
         tooltipStyle={!showReset}
       >
         <div className="flex flex-col gap-0.5 text-xs">
-          <span>{remaining}% remaining</span>
-          {resetTime ? <span className="text-secondary-label">Resets {resetTime}</span> : null}
+          <span>
+            {remaining}
+            <T>% remaining</T>
+          </span>
+          {resetTime ? (
+            <span className="text-secondary-label">
+              <T>Resets</T> {resetTime}
+            </span>
+          ) : null}
           {showReset && props.credits ? (
             <div className="mt-2 flex flex-col items-start gap-2 border-t border-border/60 pt-2">
               {resetCreditChoices(props.credits, { instanceId: props.instanceId }, now).map(
@@ -118,7 +134,7 @@ function UsageWindow(props: {
                           redeem.confirm(choice);
                         }}
                       >
-                        {redeem.busy ? "Using…" : choice.actionLabel}
+                        {redeem.busy ? translateScienceCopy(msg("Using…")) : choice.actionLabel}
                       </Button>
                     ) : null}
                   </div>

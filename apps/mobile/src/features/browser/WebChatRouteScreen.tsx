@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "../../i18n/messages";
+import { T, msg } from "gt-react-native";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigation } from "@react-navigation/native";
 import { WEB_CHAT_PROVIDERS, getWebChatProviderDefinition } from "@t3tools/shared/webChat";
@@ -37,29 +39,29 @@ export function WebChatRouteScreen() {
     <View className="flex-1 bg-screen">
       <AppBar
         title={definition.label}
-        subtitle="Web chat"
+        subtitle={translateScienceCopy(msg("Web chat"))}
         onBack={() => navigation.goBack()}
         actions={[
           {
-            accessibilityLabel: "Back in web chat",
+            accessibilityLabel: translateScienceCopy(msg("Back in web chat")),
             icon: "chevron.left",
             disabled: !canGoBack,
             onPress: () => webView.current?.goBack(),
           },
           {
-            accessibilityLabel: "Reload web chat",
+            accessibilityLabel: translateScienceCopy(msg("Reload web chat")),
             icon: "arrow.clockwise",
             onPress: () => webView.current?.reload(),
           },
           {
-            accessibilityLabel: "Open in browser",
+            accessibilityLabel: translateScienceCopy(msg("Open in browser")),
             icon: "safari",
             onPress: () => void Linking.openURL(currentUrl),
           },
         ]}
         menus={[
           {
-            title: "Chat provider",
+            title: translateScienceCopy(msg("Chat provider")),
             icon: "bubble.left.and.bubble.right",
             items: (Object.keys(WEB_CHAT_PROVIDERS) as WebChatProvider[]).map((entry) => ({
               id: entry,
@@ -85,10 +87,10 @@ export function WebChatRouteScreen() {
         renderError={() => (
           <View className="flex-1 items-center justify-center gap-3 bg-screen p-6">
             <Text className="text-center text-lg font-t3-medium">
-              Could not load {definition.label}
+              <T>Could not load</T> {definition.label}
             </Text>
             <Text className="text-center text-foreground-muted">
-              Check your Internet connection, then reload or open the site in your browser.
+              <T>Check your Internet connection, then reload or open the site in your browser.</T>
             </Text>
           </View>
         )}

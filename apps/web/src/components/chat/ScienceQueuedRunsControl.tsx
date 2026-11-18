@@ -1,3 +1,13 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T } from "gt-react";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { msg } from "gt-react";
+import { m } from "../../i18n/messages";
+import { toastManager } from "../ui/toast";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { deriveThreadQueueWorkflowState } from "@t3tools/client-runtime/state/thread-workflows";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
@@ -197,19 +207,30 @@ export function QueuedRunsControl({
     if (!canSendRun(freshContext) || steerInFlightRef.current) return;
     steerInFlightRef.current = true;
     setBusyRunId(queuedRunId);
-    if (workflow?.canSendNow) {
-      await resume({
-        environmentId: props.environmentId,
-        input: { threadId: props.threadId, runId: queuedRunId },
-      });
-    } else if (activeRun !== null) {
-      await promote({
-        environmentId: props.environmentId,
-        input: { threadId: props.threadId, queuedRunId, targetRunId: activeRun.id },
-      });
-    }
+    const result = workflow?.canSendNow
+      ? await resume({
+          environmentId: props.environmentId,
+          input: { threadId: props.threadId, runId: queuedRunId },
+        })
+      : activeRun !== null
+        ? await promote({
+            environmentId: props.environmentId,
+            input: { threadId: props.threadId, queuedRunId, targetRunId: activeRun.id },
+          })
+        : null;
     steerInFlightRef.current = false;
     setBusyRunId(null);
+    if (result?._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: m(msg("Could not send queued message")),
+        description:
+          error instanceof Error
+            ? (thrownErrorMessage(error, m) ?? error.message)
+            : m(msg("An error occurred.")),
+      });
+    }
   };
 
   useImperativeHandle(ref, () => ({
@@ -259,7 +280,12 @@ export function QueuedRunsControl({
     <ComposerBanner.Attachment>
       <ComposerBanner.Root
         role="region"
-        aria-label={`${items.length} queued message${items.length === 1 ? "" : "s"}`}
+        aria-label={translateScienceCopy(
+          msg("{length} queued message{value2}", {
+            length: items.length,
+            value2: items.length === 1 ? "" : "s",
+          }),
+        )}
         data-thread-queue="true"
         data-chat-composer-collapsed-controls="true"
         className="relative z-0"
@@ -269,7 +295,11 @@ export function QueuedRunsControl({
         </span>
         <ComposerBanner.Row
           render={<button type="button" />}
-          aria-label={expanded ? "Collapse queued messages" : "Expand queued messages"}
+          aria-label={
+            expanded
+              ? translateScienceCopy(msg("Collapse queued messages"))
+              : translateScienceCopy(msg("Expand queued messages"))
+          }
           aria-expanded={expanded}
           aria-controls={queueListId}
           onPointerDown={(event) => event.preventDefault()}
@@ -278,7 +308,9 @@ export function QueuedRunsControl({
           <ComposerBanner.Icon>
             <ListOrderedIcon />
           </ComposerBanner.Icon>
-          <ComposerBanner.Content className="text-muted-foreground">Queued</ComposerBanner.Content>
+          <ComposerBanner.Content className="text-muted-foreground">
+            <T>Queued</T>
+          </ComposerBanner.Content>
           <ComposerBanner.Actions>
             <ComposerBanner.Count>{items.length}</ComposerBanner.Count>
             <ComposerBanner.ToggleIcon expanded={expanded} />
@@ -301,7 +333,12 @@ export function QueuedRunsControl({
                 <ComposerBanner.Row
                   render={<li />}
                   key={item.key}
-                  aria-label={`Queued message ${position + 1} of ${items.length}, not sent`}
+                  aria-label={translateScienceCopy(
+                    msg("Queued message {value1} of {length}, not sent", {
+                      value1: position + 1,
+                      length: items.length,
+                    }),
+                  )}
                   aria-posinset={position + 1}
                   aria-setsize={items.length}
                   aria-current={isEditing ? "true" : undefined}
@@ -364,7 +401,12 @@ export function QueuedRunsControl({
                       <Button
                         size="icon-xs"
                         variant="ghost-muted"
-                        aria-label={`Reorder queued message ${position + 1} of ${items.length} (drag, or press the arrow keys)`}
+                        aria-label={translateScienceCopy(
+                          msg(
+                            "Reorder queued message {value1} of {length} (drag, or press the arrow keys)",
+                            { value1: position + 1, length: items.length },
+                          ),
+                        )}
                         className="group/grip cursor-grab active:cursor-grabbing"
                         // Not `disabled`: that drops keyboard focus mid-move and breaks repeated arrow presses.
                         aria-disabled={busyRunId !== null || undefined}
@@ -416,7 +458,7 @@ export function QueuedRunsControl({
                               }}
                             >
                               <ArrowUpIcon />
-                              Send now
+                              <T>Send now</T>
                             </Button>
                           </TooltipTrigger>
                           <TooltipPopup>
@@ -428,19 +470,21 @@ export function QueuedRunsControl({
                     {item.pending ? (
                       <span className="flex items-center gap-1 px-1">
                         <Clock3Icon aria-hidden className="size-3" />
-                        Saving
+                        <T>Saving</T>
                       </span>
                     ) : null}
                     {isEditing ? (
                       <>
-                        <span className="sr-only">Editing in the composer</span>
+                        <span className="sr-only">
+                          <T>Editing in the composer</T>
+                        </span>
                         <Button
                           size="xs"
                           variant="ghost"
-                          aria-label="Cancel editing queued message"
+                          aria-label={translateScienceCopy(msg("Cancel editing queued message"))}
                           onClick={props.onCancelEdit}
                         >
-                          Cancel
+                          <T>Cancel</T>
                         </Button>
                       </>
                     ) : (
@@ -451,7 +495,7 @@ export function QueuedRunsControl({
                             <Button
                               size="icon-xs"
                               variant="ghost-muted"
-                              aria-label="Edit queued message"
+                              aria-label={translateScienceCopy(msg("Edit queued message"))}
                               disabled={
                                 item.runId === null ||
                                 !item.editable ||
@@ -474,7 +518,15 @@ export function QueuedRunsControl({
                           </TooltipTrigger>
                           <TooltipPopup>
                             {props.editBlockedReason ??
-                              `Edit in the composer${item.serverIndex === queued.length - 1 && props.editShortcutLabel ? ` (${props.editShortcutLabel})` : ""}`}
+                              translateScienceCopy(
+                                msg("Edit in the composer{value1}", {
+                                  value1:
+                                    item.serverIndex === queued.length - 1 &&
+                                    props.editShortcutLabel
+                                      ? ` (${props.editShortcutLabel})`
+                                      : "",
+                                }),
+                              )}
                           </TooltipPopup>
                         </Tooltip>
                         <Tooltip>
@@ -483,7 +535,7 @@ export function QueuedRunsControl({
                               <Button
                                 size="icon-xs"
                                 variant="ghost-muted"
-                                aria-label="Remove queued message"
+                                aria-label={translateScienceCopy(msg("Remove queued message"))}
                                 disabled={item.runId === null || busyRunId !== null}
                                 onClick={() => {
                                   if (item.runId !== null) void remove(item.runId);
@@ -493,7 +545,9 @@ export function QueuedRunsControl({
                           >
                             <XIcon />
                           </TooltipTrigger>
-                          <TooltipPopup>Remove from queue</TooltipPopup>
+                          <TooltipPopup>
+                            <T>Remove from queue</T>
+                          </TooltipPopup>
                         </Tooltip>
                       </>
                     )}
@@ -537,14 +591,16 @@ function QueuedMessage(props: {
     attribution === "automation"
       ? {
           icon: CalendarClockIcon,
-          label: "Automation",
+          label: translateScienceCopy(msg("Automation")),
           summary: taskTitle ?? props.previewText.split(/\r?\n/, 1)[0] ?? "",
         }
       : attribution === "agent"
         ? {
             icon: MessagesSquareIcon,
             label:
-              senderShell?.title.trim() || props.message?.linkedSender?.title.trim() || "Agent",
+              senderShell?.title.trim() ||
+              props.message?.linkedSender?.title.trim() ||
+              translateScienceCopy(msg("Agent")),
             summary: props.previewText.split(/\r?\n/).find((line) => line.trim()) ?? "",
           }
         : null;
@@ -555,7 +611,9 @@ function QueuedMessage(props: {
       <ComposerBanner.Content className="flex-col items-stretch gap-0 text-foreground/80">
         <div className="flex min-w-0 items-center gap-1">
           {attribution === "t3code" ? (
-            <span className="shrink-0 text-2xs text-muted-foreground">Sent by T3 Code</span>
+            <span className="shrink-0 text-2xs text-muted-foreground">
+              <T>Sent by T3 Code</T>
+            </span>
           ) : null}
           {presentation?.guestName === undefined ? null : (
             <GuestMessageName name={presentation.guestName} />
@@ -578,7 +636,9 @@ function QueuedMessage(props: {
                       <button
                         key={thumbnail.id}
                         type="button"
-                        aria-label={`Preview ${thumbnail.name}`}
+                        aria-label={translateScienceCopy(
+                          msg("Preview {name}", { name: thumbnail.name }),
+                        )}
                         disabled={!thumbnail.previewUrl}
                         className="size-4 overflow-hidden rounded border border-border/70 bg-background enabled:cursor-zoom-in"
                         onPointerDown={(event) => event.preventDefault()}
@@ -626,7 +686,9 @@ function QueuedMessage(props: {
                   <button
                     key={thumbnail.id}
                     type="button"
-                    aria-label={`Preview ${thumbnail.name}`}
+                    aria-label={translateScienceCopy(
+                      msg("Preview {name}", { name: thumbnail.name }),
+                    )}
                     disabled={!thumbnail.previewUrl}
                     className="size-8 overflow-hidden rounded border border-border/70 bg-background enabled:cursor-zoom-in"
                     onPointerDown={(event) => event.preventDefault()}
@@ -665,7 +727,7 @@ function QueuedMessage(props: {
             tone="muted"
             onClick={() => props.onOpenThread(senderRef.threadId, senderRef.environmentId)}
           >
-            Open thread
+            <T>Open thread</T>
           </InlineButton>
         ) : null}
         {scheduledTaskId ? (
@@ -678,7 +740,7 @@ function QueuedMessage(props: {
               />
             }
           >
-            Open automation
+            <T>Open automation</T>
           </InlineButton>
         ) : null}
       </ComposerBanner.Content>

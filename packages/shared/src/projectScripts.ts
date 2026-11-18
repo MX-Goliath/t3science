@@ -81,14 +81,6 @@ export function setupProjectScript(scripts: readonly ProjectScript[]): ProjectCo
   return scripts.find(isProjectCommandActionWithSetup) ?? null;
 }
 
-export function projectScriptMenuLabel(script: ProjectScript): string {
-  const roles = [
-    ...(script.runOnWorktreeCreate ? ["setup"] : []),
-    ...(script.runOnSettle ? ["on settle"] : []),
-  ];
-  return roles.length === 0 ? script.name : `${script.name} (${roles.join(", ")})`;
-}
-
 export function settleProjectScript(
   scripts: readonly ProjectScript[],
 ): ProjectCommandAction | null {

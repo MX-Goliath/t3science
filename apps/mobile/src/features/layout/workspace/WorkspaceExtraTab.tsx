@@ -4,9 +4,7 @@ import { UsageRouteScreen } from "../../usage/UsageRouteScreen";
 
 import { ImagesScreen } from "../../images/ImagesScreen";
 
-export function WorkspaceExtraTab(props: {
-  tab: Exclude<NavigationTab, "threads" | "pullRequests">;
-}) {
+export function WorkspaceExtraTab(props: { tab: Extract<NavigationTab, "usage" | "images"> }) {
   return (
     <>
       <NativeStackScreenOptions options={{ headerSearchBarOptions: undefined }} />

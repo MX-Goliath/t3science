@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import { TimerIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -91,7 +93,7 @@ function ScheduleSendForm(props: {
     event.preventDefault();
     event.stopPropagation();
     if (!selectedDate || selectedDate.getTime() <= Date.now()) {
-      setValidationError("Choose a date and time in the future.");
+      setValidationError(translateScienceCopy(msg("Choose a date and time in the future.")));
       return;
     }
     props.onSchedule(selectedDate.toISOString());
@@ -102,26 +104,33 @@ function ScheduleSendForm(props: {
     <DialogPopup className="max-w-sm overflow-hidden" bottomStickOnMobile={false}>
       <form className="contents" onSubmit={submit}>
         <DialogHeader>
-          <DialogTitle>Schedule message</DialogTitle>
-          <DialogDescription>Choose when this prompt should be sent.</DialogDescription>
+          <DialogTitle>
+            <T>Schedule message</T>
+          </DialogTitle>
+          <DialogDescription>
+            <T>Choose when this prompt should be sent.</T>
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 px-5 pt-1 pb-5">
-          <div className="grid grid-cols-3 gap-2" aria-label="Quick schedule options">
+          <div
+            className="grid grid-cols-3 gap-2"
+            aria-label={translateScienceCopy(msg("Quick schedule options"))}
+          >
             {[
               {
                 id: "thirty-minutes" as const,
-                label: "30 min",
+                label: translateScienceCopy(msg("30 min")),
                 date: () => new Date(Date.now() + 30 * 60_000),
               },
               {
                 id: "one-hour" as const,
-                label: "1 hour",
+                label: translateScienceCopy(msg("1 hour")),
                 date: () => new Date(Date.now() + 60 * 60_000),
               },
               {
                 id: "tomorrow" as const,
-                label: "Tomorrow",
+                label: translateScienceCopy(msg("Tomorrow")),
                 date: () => tomorrowAtNine(new Date()),
               },
             ].map((preset) => (
@@ -140,7 +149,9 @@ function ScheduleSendForm(props: {
 
           <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-3">
             <label className="space-y-1.5 text-sm font-medium" htmlFor="scheduled-send-date">
-              <span className="block">Date</span>
+              <span className="block">
+                <T>Date</T>
+              </span>
               <Input
                 nativeInput
                 id="scheduled-send-date"
@@ -156,7 +167,9 @@ function ScheduleSendForm(props: {
               />
             </label>
             <label className="space-y-1.5 text-sm font-medium" htmlFor="scheduled-send-time">
-              <span className="block">Time</span>
+              <span className="block">
+                <T>Time</T>
+              </span>
               <Input
                 nativeInput
                 id="scheduled-send-time"
@@ -188,18 +201,24 @@ function ScheduleSendForm(props: {
               )}
               aria-hidden="true"
             />
-            <span>{validationError ?? selectedDateLabel ?? "Choose a date and time"}</span>
+            <span>
+              {validationError ??
+                selectedDateLabel ??
+                translateScienceCopy(msg("Choose a date and time"))}
+            </span>
           </div>
           <p className="text-xs text-secondary-label">
-            Runs on this device while T3 Science is open.
+            <T>Runs on this device while T3 Science is open.</T>
           </p>
         </div>
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => props.onOpenChange(false)}>
-            Cancel
+            <T>Cancel</T>
           </Button>
-          <Button type="submit">Schedule</Button>
+          <Button type="submit">
+            <T>Schedule</T>
+          </Button>
         </DialogFooter>
       </form>
     </DialogPopup>

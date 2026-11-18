@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import { RuntimeMode } from "@t3tools/contracts";
 import { memo, type ReactNode, useRef } from "react";
 import { EllipsisIcon } from "lucide-react";
@@ -37,7 +39,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
             ref={triggerRef}
             size={size}
             className="shrink-0"
-            aria-label="More composer controls"
+            aria-label={translateScienceCopy(msg("More composer controls"))}
             data-composer-shortcut={
               [
                 props.showPermissions !== false ? "composer.mode" : null,

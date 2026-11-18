@@ -1,3 +1,6 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
+import { m } from "../i18n/messages";
 import {
   type EnvironmentThreadShell,
   type PendingSubagentRequest,
@@ -155,13 +158,13 @@ export function startThreadNotifications(
     const active = activeThread();
     const title =
       kind === "completion"
-        ? "Thread completed"
+        ? m(msg("Thread completed"))
         : status === "approval"
-          ? "Approval needed"
+          ? m(msg("Approval needed"))
           : status === "limited"
-            ? "Usage limit reached"
+            ? m(msg("Usage limit reached"))
             : status === "failed"
-              ? "Thread failed"
+              ? m(msg("Thread failed"))
               : status === "request"
                 ? "Guest request"
                 : "Input needed";
@@ -200,7 +203,7 @@ export function startThreadNotifications(
             ),
         },
         actionProps: {
-          children: "Open thread",
+          children: m(msg("Open thread")),
           onClick: () => {
             toastManager.close(toastId);
             void router.navigate({
@@ -238,7 +241,7 @@ export function startThreadNotifications(
       const content =
         status === "request"
           ? {
-              title: `Guest request · ${thread.title}`,
+              title: translateScienceCopy(msg("Guest request · {title}", { title: thread.title })),
               body: "A guest is waiting for permission to join this thread.",
             }
           : threadNotificationContent(thread, notificationKind, detail);

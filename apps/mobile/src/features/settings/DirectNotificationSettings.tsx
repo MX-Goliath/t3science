@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "../../i18n/messages";
+import { T, msg } from "gt-react-native";
 import {
   openAndroidLiveUpdateSettings,
   supportsAndroidLiveUpdateSettings,
@@ -64,31 +66,44 @@ export function DirectNotificationSettings() {
   }
 
   return (
-    <SettingsSection title="Direct notifications">
+    <SettingsSection title={translateScienceCopy(msg("Direct notifications"))}>
       <SettingsSwitchRow
         icon="bell.badge"
-        label="Background notifications"
-        subtitle="Connect directly to paired servers. No T3 Connect or Firebase required."
+        label={translateScienceCopy(msg("Background notifications"))}
+        subtitle={translateScienceCopy(
+          msg("Connect directly to paired servers. No T3 Connect or Firebase required."),
+        )}
         value={enabled}
         disabled={!supportsDirectNotifications || requesting || !AsyncResult.isSuccess(preferences)}
         onValueChange={(value) => void toggle(value)}
       />
       {!supportsDirectNotifications ? (
         <Text className="px-4 text-sm text-foreground-muted">
-          Install a newer Android build to enable direct notifications.
+          <T>Install a newer Android build to enable direct notifications.</T>
         </Text>
       ) : null}
       {enabled ? (
         <>
           <Text className="px-4 text-sm text-foreground-muted">
             {status?.enabled
-              ? `${status.connected} of ${status.total} environments connected`
-              : "Starting background connection…"}
-            {"\n"}Uses enabled direct connections, including LAN, Tailscale and bearer-authenticated
-            tunnels. A persistent notification keeps the service visible.
-            {"\n"}For delivery while the phone sleeps, allow unrestricted battery use. Android or
-            your phone manufacturer may still delay delivery. Force-stopping the app stops
-            notifications until you reopen it.
+              ? translateScienceCopy(
+                  msg("{connected} of {total} environments connected", {
+                    connected: status.connected,
+                    total: status.total,
+                  }),
+                )
+              : translateScienceCopy(msg("Starting background connection…"))}
+            {"\n"}
+            <T>
+              Uses enabled direct connections, including LAN, Tailscale and bearer-authenticated
+              tunnels. A persistent notification keeps the service visible.
+            </T>
+            {"\n"}
+            <T>
+              For delivery while the phone sleeps, allow unrestricted battery use. Android or your
+              phone manufacturer may still delay delivery. Force-stopping the app stops
+              notifications until you reopen it.
+            </T>
           </Text>
           {error ? <Text className="px-4 text-sm text-foreground-muted">{error}</Text> : null}
           {status?.errors?.map((entry) => (
@@ -98,7 +113,7 @@ export function DirectNotificationSettings() {
           ))}
           <SettingsRow
             icon="bolt.circle"
-            label="Battery settings"
+            label={translateScienceCopy(msg("Battery settings"))}
             onPress={() => {
               try {
                 openDirectNotificationBatterySettings();
@@ -109,7 +124,7 @@ export function DirectNotificationSettings() {
           />
           <SettingsRow
             icon="bell.badge"
-            label="Android notification settings"
+            label={translateScienceCopy(msg("Android notification settings"))}
             onPress={() => void Linking.openSettings()}
           />
         </>
@@ -117,12 +132,16 @@ export function DirectNotificationSettings() {
       {supportsAndroidLiveUpdateSettings() ? (
         <SettingsRow
           icon="bolt.circle"
-          label="Live Update Settings"
+          label={translateScienceCopy(msg("Live Update Settings"))}
           onPress={() => {
             void openAndroidLiveUpdateSettings().catch(() => {
               Dialog.alert(
-                "Couldn't open Settings",
-                "Open Android Settings, select T3 Science, then enable Live Updates in Notifications.",
+                translateScienceCopy(msg("Couldn't open Settings")),
+                translateScienceCopy(
+                  msg(
+                    "Open Android Settings, select T3 Science, then enable Live Updates in Notifications.",
+                  ),
+                ),
               );
             });
           }}
@@ -141,11 +160,14 @@ async function requestDirectNotificationPermission() {
     const permission = await Notifications.requestPermissionsAsync();
     if (!permission.granted) {
       Dialog.alert(
-        "Notification permission needed",
-        "Allow notifications for T3 Science in Android Settings.",
+        translateScienceCopy(msg("Notification permission needed")),
+        translateScienceCopy(msg("Allow notifications for T3 Science in Android Settings.")),
         [
-          { text: "Cancel", style: "cancel" },
-          { text: "Open Settings", onPress: () => void Linking.openSettings() },
+          { text: translateScienceCopy(msg("Cancel")), style: "cancel" },
+          {
+            text: translateScienceCopy(msg("Open Settings")),
+            onPress: () => void Linking.openSettings(),
+          },
         ],
       );
       return false;
@@ -153,8 +175,10 @@ async function requestDirectNotificationPermission() {
     return true;
   } catch {
     Dialog.alert(
-      "Notifications unavailable",
-      "Could not enable notifications. Check this app's Android notification settings.",
+      translateScienceCopy(msg("Notifications unavailable")),
+      translateScienceCopy(
+        msg("Could not enable notifications. Check this app's Android notification settings."),
+      ),
     );
   }
   return false;

@@ -1,11 +1,18 @@
 import { RegistryContext } from "@effect/atom-react";
 import type { EnvironmentThreadState } from "@t3tools/client-runtime/state/threads";
-import { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  EnvironmentId,
+  MessageId,
+  OrchestrationV2DispatchCommandError,
+  ThreadId,
+} from "@t3tools/contracts";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 import {
   formatComposerContextReference,
   toComposerContextId,
 } from "@t3tools/shared/composerContextReferences";
+import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { AsyncResult, type Atom, AtomRegistry } from "effect/reactivity";
@@ -16,6 +23,7 @@ import { page, userEvent } from "vite-plus/test/browser";
 const state = vi.hoisted(() => ({
   threadState: null as unknown as Atom.Writable<AsyncResult.AsyncResult<EnvironmentThreadState>>,
   workflow: null as unknown,
+  commandResult: undefined as unknown,
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/thread-workflows"), async (importOriginal) => ({
@@ -66,7 +74,7 @@ vi.mock(import("../../state/threads"), async (importOriginal) => {
 
 vi.mock(import("../../state/use-atom-command"), async (importOriginal) => ({
   ...(await importOriginal()),
-  useAtomCommand: (() => async () => undefined) as never,
+  useAtomCommand: (() => async () => state.commandResult) as never,
 }));
 
 vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
@@ -80,12 +88,15 @@ import { EMPTY_ENVIRONMENT_THREAD_STATE } from "@t3tools/client-runtime/state/th
 
 import { act, render as renderUi } from "../../../test/render";
 import { makeStreamingTimelineFixture, makeThreadProjectionFixture } from "../../test-fixtures";
-import { QueuedRunsControl } from "./ScienceQueuedRunsControl";
+import { ToastProvider } from "../ui/toast";
+import { QueuedRunsControl } from "./QueuedRunsControl";
+import { QueuedRunsControl as ScienceQueuedRunsControl } from "./ScienceQueuedRunsControl";
 import { ExpandedImageDialog } from "./ExpandedImageDialog";
 import type { ExpandedImagePreview } from "./ExpandedImagePreview";
 
 function setup() {
   state.workflow = null;
+  state.commandResult = undefined;
 }
 
 const baseProps = {
@@ -291,7 +302,7 @@ it("shows who sent a queued message and folds automation and agent prompts", asy
   const onOpenThread = vi.fn();
   await using _screen = await renderQueue({ onOpenThread });
 
-  const automation = page.getByRole("button", { name: /PR dispatcher/ });
+  const automation = page.getByRole("button", { name: /Automation/ });
   await expect.element(automation).toHaveAttribute("aria-expanded", "false");
   await expect.element(page.getByText(/Follow the runbook/)).not.toBeInTheDocument();
   await automation.click();
@@ -301,6 +312,7 @@ it("shows who sent a queued message and folds automation and agent prompts", asy
   await expect.element(page.getByRole("button", { name: /Release lead/ })).toBeVisible();
   await page.getByRole("button", { name: "Open thread" }).nth(0).click({ force: true });
   expect(onOpenThread).toHaveBeenCalledExactlyOnceWith("thread:lead", "environment:test");
+  await page.getByRole("button", { name: "Show all 4 queued" }).click();
   // A sender in a connected linked environment keeps the title it sent and opens there.
   await expect.element(page.getByRole("button", { name: /Title when sent/ })).toBeVisible();
   await page.getByRole("button", { name: "Open thread" }).nth(1).click({ force: true });
@@ -322,7 +334,7 @@ it("keeps keyboard focus when reordering in the scrollable queue", async () => {
       attachments: [],
     })),
   };
-  await using screen = await renderQueue();
+  await using screen = await renderUi(<ScienceQueuedRunsControl {...baseProps} />);
   const grip = screen.getByRole("button", { name: /Reorder queued message 2 of 4/ });
   await userEvent.click(grip);
   await userEvent.keyboard("{ArrowDown}");
@@ -397,3 +409,40 @@ it("does not re-render while assistant text streams into the thread", async () =
   await act(() => registry.set(state.threadState, thread("Hello there", true)));
   expect(renders).toBeGreaterThan(settled);
 });
+
+it.each([QueuedRunsControl, ScienceQueuedRunsControl])(
+  "tells the user why Send now was rejected (%#)",
+  async (Queue) => {
+    setup();
+    const reason = "Target run run:active is stopping and cannot be steered.";
+    state.workflow = {
+      activeRun: { id: "run:active" },
+      canPromoteToSteer: true,
+      queuedRuns: [
+        {
+          run: { id: "run:queued", userMessageId: "message:queued" },
+          text: "Follow up",
+          attachments: [],
+        },
+      ],
+    };
+    state.commandResult = AsyncResult.failure(
+      Cause.fail(
+        new OrchestrationV2DispatchCommandError({
+          commandId: CommandId.make("command:promote"),
+          commandType: "queued-message.promote-to-steer",
+          message: reason,
+          detail: reason,
+        }),
+      ),
+    );
+    await using _screen = await renderUi(
+      <ToastProvider timeout={0}>
+        <Queue {...baseProps} />
+      </ToastProvider>,
+    );
+
+    await page.getByRole("button", { name: "Send now" }).click();
+    await vi.waitFor(() => expect(page.getByText(reason).element()).toBeVisible());
+  },
+);

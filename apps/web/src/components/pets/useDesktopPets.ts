@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import type {
   DesktopPetImportResult,
   DesktopPetMetadata,
@@ -130,5 +132,7 @@ export function useDesktopPets() {
 }
 
 function toErrorMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : "Desktop pet operation failed.";
+  return cause instanceof Error
+    ? cause.message
+    : translateScienceCopy(msg("Desktop pet operation failed."));
 }

@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import type { DesktopPetAnimationState, ProviderInstanceId } from "@t3tools/contracts";
 import { CheckIcon } from "lucide-react";
 import { useState } from "react";
@@ -29,28 +31,34 @@ export function ProviderPetSettings({
   return (
     <div className="grid gap-2">
       <div className="grid gap-0.5">
-        <span className="text-xs font-medium text-foreground">Companion pet</span>
+        <span className="text-xs font-medium text-foreground">
+          <T>Companion pet</T>
+        </span>
         <span className="text-xs text-muted-foreground">
-          Shown in the Working row while {displayName} runs a turn. This setting only affects the
-          Desktop app on this device.
+          <T>Shown in the Working row while</T> {displayName}{" "}
+          <T>runs a turn. This setting only affects the Desktop app on this device.</T>
         </span>
       </div>
 
       {!state.enabled ? (
         <p className="text-xs text-muted-foreground">
-          Desktop pets are turned off in Desktop pets settings, so nothing is shown while this
-          provider works.
+          <T>
+            Desktop pets are turned off in Desktop pets settings, so nothing is shown while this
+            provider works.
+          </T>
         </p>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
         <PetChoiceTile
           selected={assignedPet === null}
-          label="No pet"
+          label={translateScienceCopy(msg("No pet"))}
           disabled={pets.busy}
           onSelect={() => assign(null)}
         >
-          <span className="text-3xs text-muted-foreground">None</span>
+          <span className="text-3xs text-muted-foreground">
+            <T>None</T>
+          </span>
         </PetChoiceTile>
         {state.pets.map((pet) => (
           <PetChoiceTile
@@ -67,14 +75,16 @@ export function ProviderPetSettings({
 
       {state.pets.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No pet is installed. Import an OpenPets ZIP from General settings first.
+          <T>No pet is installed. Import an OpenPets ZIP from General settings first.</T>
         </p>
       ) : null}
 
       {assignedPet ? (
         <div className="grid gap-2 rounded-lg border border-border/60 p-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-foreground">Animation preview</span>
+            <span className="text-xs font-medium text-foreground">
+              <T>Animation preview</T>
+            </span>
             <Select
               value={previewAnimation}
               onValueChange={(value) => {
@@ -84,7 +94,9 @@ export function ProviderPetSettings({
               <SelectTrigger
                 size="sm"
                 className="w-36"
-                aria-label={`Preview animation for ${displayName}`}
+                aria-label={translateScienceCopy(
+                  msg("Preview animation for {displayName}", { displayName }),
+                )}
               >
                 <SelectValue />
               </SelectTrigger>

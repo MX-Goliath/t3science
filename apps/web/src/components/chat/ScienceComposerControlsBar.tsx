@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { msg } from "gt-react";
 import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { useComposerDraftStore } from "../../composerDraftStore";
@@ -216,7 +218,7 @@ export function ComposerControlsBar(props: {
         customTriggerLabel={
           presetsActive
             ? (scienceModelEffortLabel(selectedModelSelection, providerInstanceEntries) ?? "")
-            : "Model"
+            : translateScienceCopy(msg("Model"))
         }
       />
     ) : (
@@ -385,7 +387,9 @@ export function ComposerControlsBar(props: {
       className="shrink-0"
     >
       <CircleAlertIcon className="size-4" />
-      {providerSetupInstanceId ? "Open provider settings" : "No provider available"}
+      {providerSetupInstanceId
+        ? translateScienceCopy(msg("Open provider settings"))
+        : translateScienceCopy(msg("No provider available"))}
     </ComposerControl>
   ) : (
     <>

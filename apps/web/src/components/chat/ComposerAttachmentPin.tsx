@@ -1,3 +1,5 @@
+import { m as translateScienceCopy } from "~/i18n/messages";
+import { T, msg } from "gt-react";
 import { PinIcon } from "lucide-react";
 import type { MouseEvent } from "react";
 
@@ -32,7 +34,14 @@ export async function showComposerAttachmentPinMenu(
       : { x: event.clientX, y: event.clientY };
   try {
     const selected = await api.contextMenu.show(
-      [{ id: "toggle-pin", label: pinned ? "Unpin attachment" : "Pin attachment" }],
+      [
+        {
+          id: "toggle-pin",
+          label: pinned
+            ? translateScienceCopy(msg("Unpin attachment"))
+            : translateScienceCopy(msg("Pin attachment")),
+        },
+      ],
       position,
     );
     if (selected === "toggle-pin") {
@@ -40,7 +49,10 @@ export async function showComposerAttachmentPinMenu(
     }
   } catch {
     toastManager.add(
-      stackedThreadToast({ type: "error", title: "Could not open attachment menu" }),
+      stackedThreadToast({
+        type: "error",
+        title: translateScienceCopy(msg("Could not open attachment menu")),
+      }),
     );
   }
 }
@@ -52,7 +64,7 @@ export function ComposerAttachmentPin({ small = false }: { readonly small?: bool
         render={
           <span
             role="img"
-            aria-label="Pinned attachment"
+            aria-label={translateScienceCopy(msg("Pinned attachment"))}
             className={
               small
                 ? "absolute left-0.5 top-0.5 z-10 inline-flex rounded-sm bg-background/90 p-px text-foreground shadow-sm"
@@ -63,7 +75,9 @@ export function ComposerAttachmentPin({ small = false }: { readonly small?: bool
       >
         <PinIcon aria-hidden="true" className={small ? "size-2" : "size-3"} />
       </TooltipTrigger>
-      <TooltipPopup>Sent with every message until unpinned</TooltipPopup>
+      <TooltipPopup>
+        <T>Sent with every message until unpinned</T>
+      </TooltipPopup>
     </Tooltip>
   );
 }
