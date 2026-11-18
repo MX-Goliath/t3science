@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("gt-react", () => ({ msg: (message: string) => message }));
+vi.mock("./lib/utils", () => ({ isWindowsPlatform: () => false }));
 
 const SOUND_SECONDS = 0.6;
 
