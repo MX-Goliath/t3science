@@ -1,6 +1,6 @@
 import { m as translateScienceCopy } from "../../i18n/messages";
 import { T, msg } from "gt-react-native";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { useNavigation } from "@react-navigation/native";
 import { WEB_CHAT_PROVIDERS, getWebChatProviderDefinition } from "@t3tools/shared/webChat";
 import type { WebChatProvider } from "@t3tools/contracts/settings";
@@ -12,12 +12,13 @@ import { WebView } from "react-native-webview";
 import { AppBar } from "../../components/ui/AppBar";
 import { AppText as Text } from "../../components/ui/AppText";
 import { useHardwareBack } from "../../lib/backHandler";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
+import { useAtomCommand } from "../../state/use-atom-command";
 
 export function WebChatRouteScreen() {
   const navigation = useNavigation();
   const preferences = useAtomValue(mobilePreferencesAtom);
-  const updatePreferences = useAtomSet(updateMobilePreferencesAtom, { mode: "promise" });
+  const updatePreferences = useAtomCommand(saveMobilePreferences);
   const provider =
     (AsyncResult.isSuccess(preferences) ? preferences.value.webChatProvider : undefined) ??
     "chatgpt";

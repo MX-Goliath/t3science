@@ -394,6 +394,7 @@ it.each([
 ] as const)(
   "loads relay models using the server tier $tier (legacy: $legacy)",
   async ({ tier, legacy }) => {
+    using _languages = vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US"]);
     const target = new RelayConnectionTarget({
       environmentId: EnvironmentId.make("voice-relay"),
       label: "MacBook Pro",

@@ -72,7 +72,12 @@ const configurationAtom = connectionAtomRuntime
       const connections = [];
       for (const route of routes) {
         const saved = yield* credentials.get(route.connectionId);
-        if (Option.isNone(saved) || saved.value.token.trim() === "") continue;
+        if (
+          Option.isNone(saved) ||
+          saved.value._tag !== "BearerConnectionCredential" ||
+          saved.value.token.trim() === ""
+        )
+          continue;
         const { connectionId: _connectionId, ...connection } = route;
         connections.push({
           ...connection,

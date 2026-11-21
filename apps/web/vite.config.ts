@@ -96,6 +96,7 @@ const unitTestProject = {
     setupFiles: [
       "../../packages/shared/src/testing/longTempDir.ts",
       "../../packages/shared/src/testing/providerEnv.ts",
+      "../../packages/shared/src/testing/gitEnv.ts",
     ],
   },
 } satisfies TestProjectInlineConfiguration;
@@ -110,7 +111,9 @@ const browserTestProject = {
   optimizeDeps: {
     include: [
       "vite-plus/test/browser",
+      "@effect/vitest",
       "effect/reactivity/Atom",
+      "effect/testing",
       "@base-ui/react/autocomplete",
       "@base-ui/react/toolbar",
       "saxes",

@@ -2,7 +2,7 @@ import { requireOptionalNativeModule } from "expo";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-import type { AppUpdateClient } from "./app-updates";
+import type { AppUpdateClient } from "./app-update-client";
 
 interface AndroidAppUpdates {
   check: () => Promise<boolean>;

@@ -12,8 +12,11 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 
+import type { AppUpdateClient } from "./app-update-client";
 import { createAndroidAppUpdateClient } from "./android-app-update-client";
 import { m } from "../../i18n/messages";
+
+export type { AppUpdateClient } from "./app-update-client";
 
 export type AppUpdateCheckState =
   | "idle"
@@ -22,21 +25,6 @@ export type AppUpdateCheckState =
   | "ready"
   | "restarting"
   | "current";
-
-export interface AppUpdateClient {
-  readonly isEnabled: boolean;
-  readonly installOnNextLaunch?: boolean;
-  readonly installPendingOnLaunch?: () => Promise<void>;
-  readonly checkForUpdateAsync: () => Promise<{
-    readonly isAvailable: boolean;
-    readonly isRollBackToEmbedded: boolean;
-  }>;
-  readonly fetchUpdateAsync: () => Promise<{
-    readonly isNew: boolean;
-    readonly isRollBackToEmbedded: boolean;
-  }>;
-  readonly reloadAsync: () => Promise<void>;
-}
 
 export interface AppUpdateEnvironment {
   readonly confirmInstallNow: () => Promise<boolean>;

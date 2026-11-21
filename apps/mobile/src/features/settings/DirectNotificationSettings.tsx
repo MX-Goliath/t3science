@@ -4,7 +4,7 @@ import {
   openAndroidLiveUpdateSettings,
   supportsAndroidLiveUpdateSettings,
 } from "../agent-awareness/androidNotifications";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useState } from "react";
 import { AppState, Linking } from "react-native";
@@ -12,7 +12,8 @@ import * as Notifications from "expo-notifications";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { AppText as Text } from "../../components/ui/AppText";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
+import { useAtomCommand } from "../../state/use-atom-command";
 import {
   directNotificationsErrorAtom,
   openDirectNotificationBatterySettings,
@@ -25,7 +26,7 @@ import { SettingsRow } from "./components/SettingsRow";
 
 export function DirectNotificationSettings() {
   const preferences = useAtomValue(mobilePreferencesAtom);
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const savePreferences = useAtomCommand(saveMobilePreferences);
   const error = useAtomValue(directNotificationsErrorAtom);
   const enabled =
     AsyncResult.isSuccess(preferences) && preferences.value.directNotificationsEnabled === true;
