@@ -1417,7 +1417,28 @@ export const CloudSpeechCredentials = Schema.Struct({
   openrouter: CloudSpeechCredential,
 });
 
+export const SystemResourceDisplaySettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  cpu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  cpuTemperature: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  cpuFrequency: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  cpuCoreCount: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  memory: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  gpu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  gpuTemperature: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  gpuMemory: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  disks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  hiddenDiskIds: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  hiddenGpuIds: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+});
+export type SystemResourceDisplaySettings = typeof SystemResourceDisplaySettings.Type;
+
 export const ServerSettings = Schema.Struct({
+  systemResourceDisplay: SystemResourceDisplaySettings.pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed(Schema.decodeSync(SystemResourceDisplaySettings)({})),
+    ),
+  ),
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   providerModelPreferences: Schema.NullOr(ProviderModelPreferences).pipe(
@@ -1855,6 +1876,7 @@ const ModelSelectionPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  systemResourceDisplay: Schema.optionalKey(SystemResourceDisplaySettings),
   setModelFavorites: Schema.optionalKey(
     Schema.Array(Schema.Struct({ ...ModelFavorite.fields, favorite: Schema.Boolean })),
   ),

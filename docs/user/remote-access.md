@@ -193,6 +193,19 @@ on that machine. Existing threads stay where they started. If resource checks ar
 unavailable or all eligible machines are full, choose a machine manually to continue.
 Mobile keeps its manual environment selection.
 
+### Monitor a remote machine
+
+On web and desktop, open **Thread details** to see a remote Linux environment's
+CPU, RAM, local disks, and supported AMD or NVIDIA GPUs. Readings refresh every
+two seconds while the panel is open; closing it stops monitoring from that client.
+CPU and GPU graphs show the last minute. Network filesystems are excluded.
+
+In **Settings → Environments**, open the machine's menu and choose **Resource
+display** to select metrics and individual disks or GPUs. You can also configure
+them for the selected environment in **Settings → Sharing & access**. Preferences
+apply to every client of that environment. Temperatures and GPU readings depend
+on the host's drivers and available sensors; NVIDIA readings require `nvidia-smi`.
+
 ### Tailscale HTTPS
 
 Join both devices to the same tailnet. In the desktop app, enable **Tailscale

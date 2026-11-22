@@ -111,6 +111,7 @@ import {
   usePrimaryEnvironment,
 } from "~/state/environments";
 import { requestConfirmDialog } from "~/confirmDialog";
+import { SystemResourceDisplaySettings } from "./SystemResourceDisplaySettings";
 import { useUpdateEnvironmentSettings } from "~/hooks/useSettings";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { environmentIdsKey } from "~/state/environmentAtomList";
@@ -268,6 +269,7 @@ function ConnectionsSettingsContent({
   const desktopBridge = window.desktopBridge;
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
+  const [resourceDisplayOpen, setResourceDisplayOpen] = useState(false);
   const peerLinkHosts = usePeerLinkHosts();
   const removeEnvironment = useAtomCommand(environmentCatalog.remove, { reportFailure: false });
   const setEnvironmentEnabled = useAtomCommand(environmentCatalog.setEnabled, {
@@ -1304,6 +1306,32 @@ function ConnectionsSettingsContent({
               <div className="px-3 py-2 sm:px-4">
                 <ManagedByOrganization policy={accessServerConfig.managedPolicy} />
               </div>
+            ) : null}
+            {accessServerConfig?.environment.capabilities.systemResources === true ? (
+              <SettingsRow
+                title={gt("Resource display")}
+                description={gt(
+                  "Choose the resources shown in Thread details for this environment.",
+                )}
+                control={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-expanded={resourceDisplayOpen}
+                    onClick={() => setResourceDisplayOpen((open) => !open)}
+                  >
+                    {resourceDisplayOpen ? gt("Hide") : gt("Configure")}
+                  </Button>
+                }
+              >
+                {resourceDisplayOpen ? (
+                  <SystemResourceDisplaySettings
+                    key={accessEnvironmentId}
+                    environmentId={accessEnvironmentId}
+                    connected={accessEnvironment?.connection.phase === "connected"}
+                  />
+                ) : null}
+              </SettingsRow>
             ) : null}
             {canManageLocalBackend ? (
               <SettingsRow
