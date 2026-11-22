@@ -131,7 +131,6 @@ function getSelectedTraits(
   allowPromptInjectedEffort: boolean,
   includePlanAgent?: boolean | undefined,
   descriptorIds?: ReadonlyArray<string>,
-  hideCyberAccess = false,
 ) {
   const caps = getProviderModelCapabilities(models, model, provider, includePlanAgent);
   const modelIsUnavailable =
@@ -147,14 +146,11 @@ function getSelectedTraits(
         caps,
         selections: modelOptions,
       });
-  const visibleDescriptors =
-    descriptorIds || hideCyberAccess
-      ? descriptors.filter(
-          (descriptor) =>
-            (!descriptorIds || descriptorIds.includes(descriptor.id)) &&
-            (!hideCyberAccess || descriptor.id !== "cyberAccessProgram"),
-        )
-      : descriptors;
+  const visibleDescriptors = descriptors.filter(
+    (descriptor) =>
+      descriptor.id !== "cyberAccessProgram" &&
+      (!descriptorIds || descriptorIds.includes(descriptor.id)),
+  );
   const selectDescriptors = visibleDescriptors.filter(
     (descriptor): descriptor is Extract<ProviderOptionDescriptor, { type: "select" }> =>
       descriptor.type === "select",
@@ -220,7 +216,6 @@ function getTraitsSectionVisibility(input: {
   allowPromptInjectedEffort?: boolean;
   includePlanAgent?: boolean | undefined;
   descriptorIds?: ReadonlyArray<string>;
-  hideCyberAccess?: boolean | undefined;
 }) {
   const selected = getSelectedTraits(
     input.provider,
@@ -231,7 +226,6 @@ function getTraitsSectionVisibility(input: {
     input.allowPromptInjectedEffort ?? true,
     input.includePlanAgent,
     input.descriptorIds,
-    input.hideCyberAccess,
   );
 
   const showEffort = selected.primarySelectDescriptor !== null;
@@ -413,6 +407,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   });
   const {
     descriptors,
+    visibleDescriptors,
     selectDescriptors,
     booleanDescriptors,
     primarySelectDescriptor,
@@ -502,7 +497,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   if (modelIsUnavailable) {
     return (
       <>
-        {descriptors.map((descriptor, index) => {
+        {visibleDescriptors.map((descriptor, index) => {
           const value = getProviderOptionCurrentLabel(
             descriptor,
             modelSelection,
@@ -726,7 +721,6 @@ export const TraitsPicker = memo(function TraitsPicker({
     allowPromptInjectedEffort,
     includePlanAgent,
     ...(descriptorIds ? { descriptorIds } : {}),
-    hideCyberAccess: isComposerOwned,
   });
   if (!customReasoningContent && !hasAnyControls) {
     return null;

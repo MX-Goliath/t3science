@@ -254,7 +254,6 @@ function renderTraitsControl(
       modelOptions: resolvedModelOptions,
       promptUltrathink,
       includePlanAgent,
-      hideCyberAccess: true,
       ...(descriptorIds ? { descriptorIds } : {}),
     })
   ) {
