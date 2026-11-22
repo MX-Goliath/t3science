@@ -471,10 +471,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           viewTransitionName:
             props.isComposerOwned && isMenuOpen ? "composer-model-picker" : "none",
         }}
-        // Docked, the popup opens above the composer and slides over it when that space is short,
-        // so a short window gets its full height (Floating UI sizes to the viewport) instead of a sliver.
-        {...(docked
-          ? { side: "top" as const, collisionAvoidance: { side: "shift", align: "shift" } as const }
+        // In short windows, let the list overlap the composer and keep its horizontal alignment.
+        {...(props.isComposerOwned || docked
+          ? ({
+              side: "top",
+              collisionAvoidance: { side: "shift", align: "shift", fallbackAxisSide: "none" },
+            } as const)
           : {})}
         className="before:hidden"
         padding="none"
