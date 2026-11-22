@@ -422,7 +422,7 @@ export interface ChatComposerProps {
   isPreparingWorktree: boolean;
   queuedRunsControl?: React.ReactNode;
   tasksControl?: React.ReactNode;
-  backgroundWorkControl?: React.ReactNode;
+  activityControl?: React.ReactNode;
   canSteer: boolean;
   bannerItems: readonly ComposerBannerStackItem[];
   resumeCompactionTokens: number | null;
@@ -3792,7 +3792,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           {props.queuedRunsControl}
-          {props.backgroundWorkControl}
+          {props.activityControl}
           <ComposerBannerStack items={shelfItems} />
           {!hasBlockingComposerTopDrawer ? props.tasksControl : null}
           {showComposerTopDrawer ? (

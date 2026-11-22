@@ -3328,9 +3328,19 @@ export default function ChatView(props: ChatViewProps) {
     workLocallyResendReady,
   ]);
 
+  const showGoalInComposer = settings.scienceComposer && composerMounted;
+  const composerGoalBanner: ComposerBannerStackItem | null =
+    showGoalInComposer && goalNow !== null ? { ...goalNow, variant: "default" } : null;
+  const composerActivityBanners = [composerGoalBanner, backgroundWorkBanner].filter(
+    (item) => item !== null,
+  );
+  const timelineGoal = showGoalInComposer ? null : goalNow;
   const shownThreadSyncPhase = activeEnvironmentUnavailable ? null : delayedThreadSyncPhase;
   const hasThreadNow =
-    attentionNow !== null || workNow !== null || goalNow !== null || shownThreadSyncPhase !== null;
+    attentionNow !== null ||
+    workNow !== null ||
+    timelineGoal !== null ||
+    shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
   const hasQueuedTurns =
     queuedRunCount > 0 ||
@@ -3374,7 +3384,7 @@ export default function ChatView(props: ChatViewProps) {
           attention={attentionNow}
           work={workNow}
           syncPhase={shownThreadSyncPhase}
-          goal={goalNow}
+          goal={timelineGoal}
         />
         {threadStatusLine}
         {pendingGuestMessageCount > 0 && isServerThread && activeThread ? (
@@ -3923,9 +3933,9 @@ export default function ChatView(props: ChatViewProps) {
                                 queuedRunsControl={
                                   settings.scienceComposer ? queuedRunsControl : null
                                 }
-                                backgroundWorkControl={
-                                  backgroundWorkBanner !== null ? (
-                                    <ComposerBannerStack items={[backgroundWorkBanner]} />
+                                activityControl={
+                                  composerActivityBanners.length > 0 ? (
+                                    <ComposerBannerStack items={composerActivityBanners} />
                                   ) : null
                                 }
                                 tasksControl={

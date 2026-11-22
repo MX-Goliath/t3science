@@ -92,7 +92,6 @@ export function childInputNowItem(
   };
 }
 
-/** The thread's goal, for the end of the timeline. */
 export function goalNowItem(
   input: {
     readonly threadId: ThreadId;

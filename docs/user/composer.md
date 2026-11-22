@@ -352,9 +352,9 @@ Claude instances can also compact idle threads for you. See
 
 With Codex, Claude, and OpenCode 2.2.5 or later, send `/goal` followed by what "done" means, for example
 `/goal all tests in packages/api pass`. The agent keeps working across turns
-until it judges the goal met. The thread shows **Goal** while it works, and a
-line at the end of the thread (above the composer on mobile) shows the goal and
-its progress.
+until it judges the goal met. The thread shows **Goal** while it works. The goal
+and its progress appear above the composer in Science mode and on mobile, and
+at the end of the thread in the standard web and desktop interface.
 
 - `/goal` alone shows the current goal. `/goal clear` removes it.
 - Codex and OpenCode also support `/goal pause` and `/goal resume`. Stopping
