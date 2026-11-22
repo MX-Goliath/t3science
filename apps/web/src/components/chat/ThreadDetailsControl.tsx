@@ -1,7 +1,7 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { T, Var } from "gt-react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
@@ -11,6 +11,7 @@ import {
   THREAD_DETAILS_PANEL_SPLIT_PRIMARY_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SECONDARY_CLASS,
   THREAD_DETAILS_PANEL_ICON_ACTION_CLASS,
+  THREAD_DETAILS_PANEL_LABEL_CLASS,
   THREAD_DETAILS_PANEL_META_ACTION_CLASS,
   THREAD_DETAILS_PANEL_CHEVRON_CLASS,
   THREAD_DETAILS_PANEL_SELECT_LABEL_CLASS,
@@ -107,6 +108,38 @@ export function ThreadDetailsControl({
     );
   }
   return control;
+}
+
+export function ThreadDetailsDisclosure({
+  label,
+  icon,
+  expanded,
+  onToggle,
+  children,
+}: {
+  readonly label: string;
+  readonly icon: ReactNode;
+  readonly expanded: boolean;
+  readonly onToggle: () => void;
+  readonly children?: ReactNode;
+}) {
+  return (
+    <ThreadDetailsControl aria-expanded={expanded} onClick={onToggle}>
+      {icon}
+      <span className={cn(THREAD_DETAILS_PANEL_LABEL_CLASS, "min-w-0 flex-1 truncate")}>
+        {label}
+      </span>
+      {children}
+      <ChevronDownIcon
+        aria-hidden
+        className={cn(
+          THREAD_DETAILS_PANEL_CHEVRON_CLASS,
+          "transition-transform motion-reduce:transition-none",
+          !expanded && "-rotate-90",
+        )}
+      />
+    </ThreadDetailsControl>
+  );
 }
 
 export function ThreadDetailsMoreButton({

@@ -102,7 +102,7 @@ function setup() {
   };
 }
 
-it("fits and scrolls remote resources in the details card and polls only while open", async () => {
+it("fits and scrolls remote resources and polls only while both the card and section are open", async () => {
   using fixture = setup();
   const container = { width: 1200, height: 800 };
   const placement = { x: 908, y: 0, right: 12, width: 280, height: 400 } as const;
@@ -159,13 +159,29 @@ it("fits and scrolls remote resources in the details card and polls only while o
   expect(fixture.reads()).toBe(1);
   await act(() => vi.advanceTimersByTime(2_000));
   expect(fixture.reads()).toBe(2);
+
+  const disclosure = page.getByRole("button", { name: "Remote status" });
+  await disclosure.click();
+  await expect.element(disclosure).toHaveAttribute("aria-expanded", "false");
+  await expect.element(page.getByText("AMD Radeon RX 7900 XTX")).not.toBeInTheDocument();
+  fixture.flush();
+  expect(fixture.activeReads()).toBe(0);
+  await act(() => vi.advanceTimersByTime(10_000));
+  expect(fixture.reads()).toBe(2);
+
+  await disclosure.click();
+  await expect.element(disclosure).toHaveAttribute("aria-expanded", "true");
+  await expect.element(page.getByText("AMD Radeon RX 7900 XTX")).toBeVisible();
+  expect(fixture.reads()).toBe(3);
+  await act(() => vi.advanceTimersByTime(2_000));
+  expect(fixture.reads()).toBe(4);
   await act(() =>
     useRightPanelStore.getState().setThreadPanelOpen(fixture.threadRef, "popover", false),
   );
   fixture.flush();
   expect(fixture.activeReads()).toBe(0);
   await act(() => vi.advanceTimersByTime(10_000));
-  expect(fixture.reads()).toBe(2);
+  expect(fixture.reads()).toBe(4);
   await expect.element(page.getByRole("region", { name: "Remote status" })).not.toBeInTheDocument();
   await screen.unmount();
 });

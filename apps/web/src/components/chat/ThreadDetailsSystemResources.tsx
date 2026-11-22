@@ -11,8 +11,9 @@ import {
   HardDriveIcon,
   LayersIcon,
   MemoryStickIcon,
+  MonitorIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
@@ -21,13 +22,17 @@ import { useEnvironment } from "../../state/environments";
 import { systemResourceHistoryAtom } from "../../state/systemResources";
 import { ScrollArea } from "../ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { ThreadDetailsDisclosure } from "./ThreadDetailsControl";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
+import { THREAD_DETAILS_PANEL_ICON_CLASS } from "./threadDetailsPanelStyles";
 
 export function ThreadDetailsSystemResources({
   environmentId,
 }: {
   readonly environmentId: EnvironmentId;
 }) {
+  const gt = useGT();
+  const [expanded, setExpanded] = useState(true);
   const environment = useEnvironment(environmentId);
   const isClientHost = useAtomValue(clientHostEnvironmentAtom(environmentId));
   const settings = useEnvironmentSettings(environmentId, (value) => value.systemResourceDisplay);
@@ -49,7 +54,22 @@ export function ThreadDetailsSystemResources({
     environment.serverConfig?.environment.capabilities.systemResources !== true
   )
     return null;
-  return <ResourceReadings environmentId={environmentId} settings={settings} />;
+  const title = gt("Remote status");
+  return (
+    <ThreadDetailsSection
+      headingId="thread-details-resources-heading"
+      title={title}
+      showHeading={false}
+    >
+      <ThreadDetailsDisclosure
+        label={title}
+        icon={<MonitorIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />}
+        expanded={expanded}
+        onToggle={() => setExpanded((open) => !open)}
+      />
+      {expanded ? <ResourceReadings environmentId={environmentId} settings={settings} /> : null}
+    </ThreadDetailsSection>
+  );
 }
 
 function ResourceReadings({
@@ -83,132 +103,130 @@ function ResourceReadings({
     (settings.disks && diskRows.length > 0);
 
   return (
-    <ThreadDetailsSection headingId="thread-details-resources-heading" title={gt("Remote status")}>
-      <ScrollArea scrollFade className="max-h-56" data-thread-details-resource-list>
-        {!snapshot || !snapshot.supported ? (
-          <p className="px-2.5 py-1 text-xs text-muted-foreground">
-            {failed
-              ? gt("Resources unavailable. Retrying…")
-              : snapshot
-                ? gt("Resource monitoring is unavailable on this environment.")
-                : gt("Reading system resources…")}
-          </p>
-        ) : !hasReadings ? (
-          <p className="px-2.5 py-1 text-xs text-muted-foreground">
-            {gt("No selected resources are available.")}
-          </p>
-        ) : (
-          <div className="grid grid-cols-[minmax(0,5.25rem)_minmax(2rem,1fr)_2.75rem] gap-x-2 text-xs">
-            {settings.cpu ? (
-              <ResourceRow
-                icon={<CpuIcon />}
-                label="CPU"
-                value={percent(snapshot.cpu.utilization)}
-                color="text-sky-400"
-                tooltip={gt("CPU usage over the last minute")}
-              >
-                <ResourceSparkline history={history} read={(sample) => sample.cpu.utilization} />
-              </ResourceRow>
-            ) : null}
-            {settings.cpuTemperature ? (
-              <ResourceDetail
-                label={gt("CPU temperature")}
-                value={temperature(snapshot.cpu.temperatureCelsius)}
-              />
-            ) : null}
-            {settings.cpuFrequency ? (
-              <ResourceDetail
-                label={gt("CPU frequency")}
-                value={
-                  snapshot.cpu.frequencyMhz === null
-                    ? "-"
-                    : `${decimal(snapshot.cpu.frequencyMhz / 1000)} GHz`
-                }
-              />
-            ) : null}
-            {settings.cpuCoreCount ? (
-              <ResourceDetail label={gt("CPU cores")} value={String(snapshot.cpu.coreCount)} />
-            ) : null}
-            {settings.memory ? (
-              <ResourceRow
-                icon={<MemoryStickIcon />}
-                label="RAM"
-                value={percent(
-                  snapshot.memory.totalBytes > 0
-                    ? snapshot.memory.usedBytes / snapshot.memory.totalBytes
-                    : null,
-                )}
-                color="text-violet-400"
-                tooltip={capacity(snapshot.memory.usedBytes, snapshot.memory.totalBytes)}
-              >
-                <ResourceBar used={snapshot.memory.usedBytes} total={snapshot.memory.totalBytes} />
-              </ResourceRow>
-            ) : null}
-            {gpuRows.map((gpu) => (
-              <div key={gpu.id} className="col-span-3 grid grid-cols-subgrid">
-                {settings.gpu ? (
-                  <ResourceRow
-                    icon={<CircuitBoardIcon />}
-                    label={gpuRows.length > 1 ? gpu.name : "GPU"}
-                    value={percent(gpu.utilization)}
-                    color="text-emerald-400"
-                    tooltip={`${gpu.name} (${gpu.id}) · ${gt("GPU usage over the last minute")}`}
-                  >
-                    <ResourceSparkline
-                      history={history}
-                      read={(sample) =>
-                        sample.gpus.find((entry) => entry.id === gpu.id)?.utilization ?? null
-                      }
-                    />
-                  </ResourceRow>
-                ) : null}
-                {settings.gpuTemperature ? (
-                  <ResourceDetail
-                    label={
-                      gpuRows.length > 1
-                        ? gt("{name} temperature", { name: gpu.name })
-                        : gt("GPU temperature")
+    <ScrollArea scrollFade className="max-h-56" data-thread-details-resource-list>
+      {!snapshot || !snapshot.supported ? (
+        <p className="px-2.5 py-1 text-xs text-muted-foreground">
+          {failed
+            ? gt("Resources unavailable. Retrying…")
+            : snapshot
+              ? gt("Resource monitoring is unavailable on this environment.")
+              : gt("Reading system resources…")}
+        </p>
+      ) : !hasReadings ? (
+        <p className="px-2.5 py-1 text-xs text-muted-foreground">
+          {gt("No selected resources are available.")}
+        </p>
+      ) : (
+        <div className="grid grid-cols-[minmax(0,5.25rem)_minmax(2rem,1fr)_2.75rem] gap-x-2 text-xs">
+          {settings.cpu ? (
+            <ResourceRow
+              icon={<CpuIcon />}
+              label="CPU"
+              value={percent(snapshot.cpu.utilization)}
+              color="text-sky-400"
+              tooltip={gt("CPU usage over the last minute")}
+            >
+              <ResourceSparkline history={history} read={(sample) => sample.cpu.utilization} />
+            </ResourceRow>
+          ) : null}
+          {settings.cpuTemperature ? (
+            <ResourceDetail
+              label={gt("CPU temperature")}
+              value={temperature(snapshot.cpu.temperatureCelsius)}
+            />
+          ) : null}
+          {settings.cpuFrequency ? (
+            <ResourceDetail
+              label={gt("CPU frequency")}
+              value={
+                snapshot.cpu.frequencyMhz === null
+                  ? "-"
+                  : `${decimal(snapshot.cpu.frequencyMhz / 1000)} GHz`
+              }
+            />
+          ) : null}
+          {settings.cpuCoreCount ? (
+            <ResourceDetail label={gt("CPU cores")} value={String(snapshot.cpu.coreCount)} />
+          ) : null}
+          {settings.memory ? (
+            <ResourceRow
+              icon={<MemoryStickIcon />}
+              label="RAM"
+              value={percent(
+                snapshot.memory.totalBytes > 0
+                  ? snapshot.memory.usedBytes / snapshot.memory.totalBytes
+                  : null,
+              )}
+              color="text-violet-400"
+              tooltip={capacity(snapshot.memory.usedBytes, snapshot.memory.totalBytes)}
+            >
+              <ResourceBar used={snapshot.memory.usedBytes} total={snapshot.memory.totalBytes} />
+            </ResourceRow>
+          ) : null}
+          {gpuRows.map((gpu) => (
+            <div key={gpu.id} className="col-span-3 grid grid-cols-subgrid">
+              {settings.gpu ? (
+                <ResourceRow
+                  icon={<CircuitBoardIcon />}
+                  label={gpuRows.length > 1 ? gpu.name : "GPU"}
+                  value={percent(gpu.utilization)}
+                  color="text-emerald-400"
+                  tooltip={`${gpu.name} (${gpu.id}) · ${gt("GPU usage over the last minute")}`}
+                >
+                  <ResourceSparkline
+                    history={history}
+                    read={(sample) =>
+                      sample.gpus.find((entry) => entry.id === gpu.id)?.utilization ?? null
                     }
-                    value={temperature(gpu.temperatureCelsius)}
                   />
-                ) : null}
-                {settings.gpuMemory ? (
-                  <ResourceRow
-                    icon={<LayersIcon />}
-                    label="VRAM"
-                    value={percent(
-                      gpu.memoryUsedBytes !== null &&
-                        gpu.memoryTotalBytes !== null &&
-                        gpu.memoryTotalBytes > 0
-                        ? gpu.memoryUsedBytes / gpu.memoryTotalBytes
-                        : null,
-                    )}
-                    color="text-amber-400"
-                    tooltip={`${gpu.name} (${gpu.id}) · ${gpu.memoryUsedBytes !== null && gpu.memoryTotalBytes !== null ? capacity(gpu.memoryUsedBytes, gpu.memoryTotalBytes) : gt("Unavailable")}`}
-                  >
-                    <ResourceBar used={gpu.memoryUsedBytes} total={gpu.memoryTotalBytes} />
-                  </ResourceRow>
-                ) : null}
-              </div>
-            ))}
-            {settings.disks
-              ? diskRows.map((disk) => (
-                  <ResourceRow
-                    key={disk.id}
-                    icon={<HardDriveIcon />}
-                    label={disk.mountPath}
-                    value={percent(disk.totalBytes > 0 ? disk.usedBytes / disk.totalBytes : null)}
-                    color="text-teal-400"
-                    tooltip={`${disk.label} · ${disk.mountPath}\n${capacity(disk.usedBytes, disk.totalBytes)}`}
-                  >
-                    <ResourceBar used={disk.usedBytes} total={disk.totalBytes} />
-                  </ResourceRow>
-                ))
-              : null}
-          </div>
-        )}
-      </ScrollArea>
-    </ThreadDetailsSection>
+                </ResourceRow>
+              ) : null}
+              {settings.gpuTemperature ? (
+                <ResourceDetail
+                  label={
+                    gpuRows.length > 1
+                      ? gt("{name} temperature", { name: gpu.name })
+                      : gt("GPU temperature")
+                  }
+                  value={temperature(gpu.temperatureCelsius)}
+                />
+              ) : null}
+              {settings.gpuMemory ? (
+                <ResourceRow
+                  icon={<LayersIcon />}
+                  label="VRAM"
+                  value={percent(
+                    gpu.memoryUsedBytes !== null &&
+                      gpu.memoryTotalBytes !== null &&
+                      gpu.memoryTotalBytes > 0
+                      ? gpu.memoryUsedBytes / gpu.memoryTotalBytes
+                      : null,
+                  )}
+                  color="text-amber-400"
+                  tooltip={`${gpu.name} (${gpu.id}) · ${gpu.memoryUsedBytes !== null && gpu.memoryTotalBytes !== null ? capacity(gpu.memoryUsedBytes, gpu.memoryTotalBytes) : gt("Unavailable")}`}
+                >
+                  <ResourceBar used={gpu.memoryUsedBytes} total={gpu.memoryTotalBytes} />
+                </ResourceRow>
+              ) : null}
+            </div>
+          ))}
+          {settings.disks
+            ? diskRows.map((disk) => (
+                <ResourceRow
+                  key={disk.id}
+                  icon={<HardDriveIcon />}
+                  label={disk.mountPath}
+                  value={percent(disk.totalBytes > 0 ? disk.usedBytes / disk.totalBytes : null)}
+                  color="text-teal-400"
+                  tooltip={`${disk.label} · ${disk.mountPath}\n${capacity(disk.usedBytes, disk.totalBytes)}`}
+                >
+                  <ResourceBar used={disk.usedBytes} total={disk.totalBytes} />
+                </ResourceRow>
+              ))
+            : null}
+        </div>
+      )}
+    </ScrollArea>
   );
 }
 
