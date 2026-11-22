@@ -15,6 +15,39 @@ export const HostResourcesSnapshot = Schema.Struct({
 });
 export type HostResourcesSnapshot = typeof HostResourcesSnapshot.Type;
 
+export const SystemResourcesSnapshot = Schema.Struct({
+  supported: Schema.Boolean,
+  sampledAt: NonNegativeInt,
+  cpu: Schema.Struct({
+    utilization: Schema.NullOr(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 }))),
+    coreCount: NonNegativeInt,
+    frequencyMhz: Schema.NullOr(Schema.Number),
+    temperatureCelsius: Schema.NullOr(Schema.Number),
+  }),
+  memory: Schema.Struct({ usedBytes: NonNegativeInt, totalBytes: NonNegativeInt }),
+  disks: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      label: Schema.String,
+      mountPath: Schema.String,
+      usedBytes: NonNegativeInt,
+      totalBytes: NonNegativeInt,
+    }),
+  ),
+  gpus: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      vendor: Schema.Literals(["amd", "nvidia"]),
+      utilization: Schema.NullOr(Schema.Number),
+      temperatureCelsius: Schema.NullOr(Schema.Number),
+      memoryUsedBytes: Schema.NullOr(NonNegativeInt),
+      memoryTotalBytes: Schema.NullOr(NonNegativeInt),
+    }),
+  ),
+});
+export type SystemResourcesSnapshot = typeof SystemResourcesSnapshot.Type;
+
 export const ResourceTelemetryIoSemantics = Schema.Literals([
   "storage",
   "logical",

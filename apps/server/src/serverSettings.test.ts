@@ -179,6 +179,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         const fs = yield* FileSystem.FileSystem;
         const provider = ProviderInstanceId.make("codex_work");
         const patch = {
+          systemResourceDisplay: {
+            ...DEFAULT_SERVER_SETTINGS.systemResourceDisplay,
+            cpuTemperature: true,
+            hiddenDiskIds: ["/mnt/data"],
+            hiddenGpuIds: ["pci:0000:03:00.0"],
+          },
           favorites: [{ provider, model: "sol" }],
           providerModelPreferences: {
             [provider]: { hiddenModels: ["astra"], modelOrder: ["sol"] },
@@ -187,11 +193,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         const changes = yield* service.subscribeChanges;
         yield* service.updateSettings(patch);
         const received = Option.getOrThrow(yield* Stream.runHead(changes));
+        assert.deepEqual(received.systemResourceDisplay, patch.systemResourceDisplay);
         assert.deepEqual(received.favorites, patch.favorites);
         assert.deepEqual(received.providerModelPreferences, patch.providerModelPreferences);
         const saved = yield* decodeServerSettingsJson(
           yield* fs.readFileString(config.settingsPath),
         );
+        assert.deepEqual(saved.systemResourceDisplay, patch.systemResourceDisplay);
         assert.deepEqual(saved.favorites, patch.favorites);
         assert.deepEqual(saved.providerModelPreferences, patch.providerModelPreferences);
         const hidden = yield* service.updateSettings({

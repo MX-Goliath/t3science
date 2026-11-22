@@ -5,7 +5,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 
-import { filterSharedServerPatch } from "./sharedSettings.ts";
+import { filterSharedServerPatch, splitSharedServerPatch } from "./sharedSettings.ts";
 
 describe("filterSharedServerPatch", () => {
   it("holds the restart preference until the target's config loads", () => {
@@ -79,4 +79,12 @@ describe("filterSharedServerPatch", () => {
       );
     },
   );
+});
+
+it("keeps resource display preferences on their own environment", () => {
+  const systemResourceDisplay = { ...DEFAULT_SERVER_SETTINGS.systemResourceDisplay, cpu: false };
+  expect(splitSharedServerPatch({ systemResourceDisplay, sidebarAutoSettleAfterDays: 7 })).toEqual({
+    localPatch: { systemResourceDisplay },
+    sharedPatch: { sidebarAutoSettleAfterDays: 7 },
+  });
 });

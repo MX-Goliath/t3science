@@ -4,6 +4,7 @@ import {
   ChevronRightIcon,
   ChevronsLeftRightEllipsisIcon,
   EllipsisIcon,
+  GaugeIcon,
   RouteIcon,
 } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
@@ -31,6 +32,7 @@ import { cn } from "../../lib/utils";
 import { SettingsRow } from "./settingsLayout";
 import { useSearchableSetting } from "./settingsSearch";
 import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
+import { SystemResourceDisplaySettings } from "./SystemResourceDisplaySettings";
 import { EnvironmentRoutesList } from "./EnvironmentRoutesList";
 import {
   ConnectionDiagnosisPanel,
@@ -135,6 +137,7 @@ export function SavedBackendListRow({
   const messages = useMessages();
   const gt = useGT();
   const [routesOpen, setRoutesOpen] = useState(initialRoutesOpen);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [diagnosisOpen, setDiagnosisOpen] = useState(false);
   const environmentId = environment.environmentId;
@@ -367,6 +370,10 @@ export function SavedBackendListRow({
               onAddRoute={() => onAddRoute(environment)}
             />
           )}
+          {resourcesOpen &&
+          environment.serverConfig?.environment.capabilities.systemResources === true ? (
+            <SystemResourceDisplaySettings environmentId={environmentId} connected={isConnected} />
+          ) : null}
           {permissionsOpen && (
             <div
               id={`remote-permissions-${environmentId}`}
@@ -446,6 +453,12 @@ export function SavedBackendListRow({
           <EllipsisIcon className="size-3.5" />
         </MenuTrigger>
         <MenuPopup align="end">
+          {environment.serverConfig?.environment.capabilities.systemResources === true ? (
+            <MenuItem onClick={() => setResourcesOpen((open) => !open)}>
+              <GaugeIcon />
+              <T>Resource display</T>
+            </MenuItem>
+          ) : null}
           <EnvironmentIconMenu
             environmentId={environmentId}
             serverConfig={environment.serverConfig}

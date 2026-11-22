@@ -1576,6 +1576,13 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:process-diagnostics",
       tag: WS_METHODS.serverGetProcessDiagnostics,
     }),
+    systemResources: createEnvironmentQueryAtomFamily(runtime, {
+      label: "environment-data:server:system-resources",
+      idleTtlMs: 0,
+      staleTimeMs: 0,
+      execute: (input: EnvironmentRpcInput<typeof WS_METHODS.serverGetSystemResources>) =>
+        request(WS_METHODS.serverGetSystemResources, input).pipe(Effect.timeout("5 seconds")),
+    }),
     hostResources: createEnvironmentQueryAtomFamily(runtime, {
       label: "environment-data:server:host-resources",
       idleTtlMs: 0,
