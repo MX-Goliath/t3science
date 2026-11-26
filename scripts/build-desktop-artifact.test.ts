@@ -67,7 +67,6 @@ import {
   WindowsDesktopBuildPrerequisitesMissingError,
   WindowsPackagedPayloadValidationError,
   stageCursorSdkPlatformPackages,
-  WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT,
   WINDOWS_SERVER_ASAR_IGNORE_GLOBS,
   WINDOWS_SERVER_ASAR_RESOURCE,
   WSL_RUNTIME_ARCHIVE_EXTRA_RESOURCE,
@@ -1033,11 +1032,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         const path = yield* Path.Path;
         const fs = yield* FileSystem.FileSystem;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+        const cache = path.join(fixture.packagedAppDir, "resources", "server-compile-cache");
+        yield* fs.makeDirectory(cache);
+        yield* fs.writeFileString(path.join(cache, "0c61a779"), "bytecode");
         const result = yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
           targetArch: "x64",
           appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
+          fileLimit: 5,
         });
 
         const secondAsarPath = path.join(path.dirname(fixture.generatedAsarPath), "second.asar");
@@ -1053,7 +1056,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
         assert.equal(result.packagedAppDir, fixture.packagedAppDir);
         assert.deepStrictEqual(result.unpackedFiles, ["node_modules/native/addon.node"]);
-        assert.isBelow(result.fileCount, WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT);
+        assert.equal(result.fileCount, 5);
         assert.deepStrictEqual(secondAsar, firstAsar);
       }),
     ).pipe(Effect.provideService(HostProcess.Platform, "linux")),

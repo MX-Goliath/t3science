@@ -55,6 +55,7 @@ import {
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
+import { SERVER_COMPILE_CACHE_DIRECTORY } from "./lib/server-compile-cache.ts";
 import { selectDesktopRuntimeExternalDependencies } from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import { resolveTaggedSourceVersion } from "./lib/tagged-source-version.ts";
@@ -3372,6 +3373,8 @@ function collectUnpackedAsarFiles(
 const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  // The afterPack hook adds portable V8 cache entries to speed up the first server start.
+  const preparedCache = path.join(root, "resources", SERVER_COMPILE_CACHE_DIRECTORY);
   const pendingDirectories = [root];
   let count = 0;
 
@@ -3381,6 +3384,7 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
     const entries = yield* fs.readDirectory(directory);
     for (const entry of entries) {
       const entryPath = path.join(directory, entry);
+      if (entryPath === preparedCache) continue;
       const stat = yield* fs.stat(entryPath);
       if (stat.type === "Directory") {
         pendingDirectories.push(entryPath);
@@ -3718,7 +3722,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
   });
 
   yield* Effect.log(
-    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files, ${String(unpackedFiles.length)} sidecar natives).`,
+    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files excluding the prepared server cache, ${String(unpackedFiles.length)} sidecar natives).`,
   );
   return { packagedAppDir, fileCount, unpackedFiles } as const;
 });
