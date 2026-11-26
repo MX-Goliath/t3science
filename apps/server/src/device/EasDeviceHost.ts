@@ -12,6 +12,7 @@ import {
   type DevicePlatform,
   type EasDeviceHostConfig,
   type SettingsSecretValue,
+  type ThreadId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -95,6 +96,7 @@ const CATALOG: ReadonlyArray<DeviceHost.HostDevice> = [
 ];
 
 interface RunningSession {
+  readonly projectThreadId: ThreadId | undefined;
   readonly sessionId: string;
   readonly name: string;
   readonly platform: DevicePlatform;
@@ -557,7 +559,7 @@ export const make = Effect.fn("EasDeviceHost.make")(function* (config: EasDevice
                   Effect.mapError((error) => unavailable(error.message, error)),
                 );
               return yield* restore(
-                trackSession(expo, sessionId, name, device.platform, startedIn),
+                trackSession(expo, sessionId, name, device.platform, startedIn, context?.threadId),
               ).pipe(
                 Effect.onError(() =>
                   stopSession(expo, sessionId, name).pipe(
@@ -580,6 +582,7 @@ export const make = Effect.fn("EasDeviceHost.make")(function* (config: EasDevice
     name: string,
     platform: DevicePlatform,
     startedIn: number,
+    projectThreadId: ThreadId | undefined,
   ) {
     const endpoints = yield* awaitRunning(expo, sessionId);
     if (!endpoints.preview) {
@@ -607,6 +610,7 @@ export const make = Effect.fn("EasDeviceHost.make")(function* (config: EasDevice
     }
     sessions.set(sessionId, {
       sessionId,
+      projectThreadId,
       name,
       platform,
       remoteDeviceId,
@@ -710,6 +714,7 @@ export const make = Effect.fn("EasDeviceHost.make")(function* (config: EasDevice
             ...CATALOG,
             ...[...sessions.values()].map((session): DeviceHost.HostDevice => ({
               id: session.sessionId,
+              projectThreadId: session.projectThreadId,
               platform: session.platform,
               name: PLATFORMS[session.platform].name,
               version: "Cloud",
@@ -829,6 +834,7 @@ export const make = Effect.fn("EasDeviceHost.make")(function* (config: EasDevice
         url: `${session.preview.origin}${path}${query}`,
         headers: { authorization: `Bearer ${token}` },
         protocols: [`${protocol}.token.${token}`],
+        projectThreadId: session.projectThreadId,
       };
     });
 
@@ -845,6 +851,7 @@ export const make = Effect.fn("EasDeviceHost.make")(function* (config: EasDevice
       nodePath,
       hub: { origin: "https://api.expo.dev" },
       devices,
+      projectThreadId: (deviceId) => sessions.get(deviceId)?.projectThreadId,
       upstream,
       // Each session runs its own daemon, so one that has ended holds no agent sessions.
       releaseAgentSession: (session, deviceId) =>

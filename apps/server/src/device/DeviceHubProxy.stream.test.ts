@@ -16,6 +16,9 @@ import {
 } from "@t3tools/contracts";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as SessionStore from "../auth/SessionStore.ts";
+import { EventSinkV2 } from "../orchestration-v2/EventSink.ts";
+import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as DeviceService from "./DeviceService.ts";
 import * as DeviceHubProxy from "./DeviceHubProxy.ts";
 
@@ -46,6 +49,13 @@ it.effect("preserves binary input and admission frames through the real socket p
     const services = yield* Layer.build(
       HttpRouter.serve(DeviceHubProxy.layer, { disableListenLog: true }).pipe(
         Layer.provideMerge(NodeHttpServer.layerTest),
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.mock(EventSinkV2)({}),
+            Layer.mock(ThreadManagementService)({}),
+            ServerSettings.layerTest({}),
+          ),
+        ),
         Layer.provide(
           Layer.mock(SessionStore.SessionStore, {
             cookieName: "test",

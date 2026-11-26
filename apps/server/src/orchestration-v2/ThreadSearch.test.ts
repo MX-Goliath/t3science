@@ -1291,6 +1291,32 @@ it.layer(layerTest)("ThreadSearch.searchThreadsWithOlderSettledRows", (it) => {
           latestSequence: Effect.succeed(7),
         })).threads,
       );
+      const privateProject = ProjectId.make("private");
+      yield* createProject(privateProject);
+      const moved = thread(old, privateProject, { title: "Private plover", settledAt: at(10) });
+      if (moved.type !== "thread.created") throw new Error("Expected a created thread fixture");
+      const raced = yield* ThreadSearch.searchThreadsWithOlderSettledRows({
+        request: {
+          query: "plover",
+          olderSettledBefore: DateTime.formatIso(at(30)),
+          projectIds: [project],
+          titlesOnly: true,
+        },
+        search: search.search,
+        searchOlderSettled: () =>
+          projections
+            .apply({
+              ...moved,
+              id: EventId.make("plover-moved"),
+              type: "thread.metadata-updated",
+            })
+            .pipe(Effect.as([old])),
+        sql,
+        readThreads: (threadIds) =>
+          projections.readShellSnapshot({ location: "active", threadIds }),
+        latestSequence: Effect.succeed(8),
+      });
+      assert.deepEqual(raced.threads, []);
     }),
   );
 });

@@ -77,6 +77,7 @@ const SearchRequest = Schema.Struct({
   /** For each short word outside ASCII, the spellings a hit must contain one of. */
   shortSpellings: Schema.fromJsonString(Schema.Array(Schema.Array(Schema.String))),
   projectId: Schema.NullOr(ProjectId),
+  projectIds: Schema.optionalKey(Schema.NullOr(TokenList)),
   /** Threads the caller already lists, left out before the hit limit. */
   excludedThreadIds: TokenList,
 });
@@ -219,7 +220,14 @@ export function buildSearchSnippet(text: string, matchStart: number): string {
 // accented queries and non-Latin case can still miss: "fermée"/"fermee", "ОШИБКА"/"ошибка".
 export const messageHitsQuery = (
   sql: SqlClient.SqlClient,
-  { match, substrings, shortSpellings, projectId, excludedThreadIds }: typeof SearchRequest.Encoded,
+  {
+    match,
+    substrings,
+    shortSpellings,
+    projectId,
+    projectIds = null,
+    excludedThreadIds,
+  }: typeof SearchRequest.Encoded,
 ) => sql`
     WITH eligible AS MATERIALIZED (
       SELECT threads.thread_id, threads.project_id
@@ -230,6 +238,7 @@ export const messageHitsQuery = (
         AND threads.archived_at IS NULL
         AND projects.deleted_at IS NULL
         AND (${projectId} IS NULL OR threads.project_id = ${projectId})
+        AND (${projectIds} IS NULL OR threads.project_id IN (SELECT value FROM json_each(${projectIds})))
         AND threads.thread_id NOT IN (SELECT value FROM json_each(${excludedThreadIds}))
         AND json_extract(threads.payload_json, '$.lineage.relationshipToParent')
           IS NOT 'subagent'
@@ -341,7 +350,7 @@ export class ThreadSearch extends Context.Service<
   {
     /** Message text matches, for clients that rank their own thread list. */
     readonly search: (
-      input: OrchestrationSearchThreadsInput,
+      input: OrchestrationSearchThreadsInput & { readonly projectIds?: ReadonlyArray<ProjectId> },
     ) => Effect.Effect<OrchestrationSearchThreadsResult, ThreadSearchError>;
     /**
      * Title, branch, pull request, and project matches ranked as the command
@@ -502,6 +511,7 @@ export const make = Effect.gen(function* () {
   const searchMessages = Effect.fn("ThreadSearch.search")(function* (
     input: OrchestrationSearchThreadsInput & {
       readonly projectId: ProjectId | null;
+      readonly projectIds?: ReadonlyArray<ProjectId>;
       /** Threads the caller already lists, which must not use up the limit. */
       readonly excludedThreadIds?: ReadonlySet<ThreadId>;
       /** Off for an agent's search, which has no use for the user's picks. */
@@ -536,6 +546,7 @@ export const make = Effect.gen(function* () {
           : yield* searchRows({
               ...messageSearch,
               projectId: input.projectId,
+              projectIds: input.projectIds ?? null,
               excludedThreadIds: [...(input.excludedThreadIds ?? [])],
             });
       }),
@@ -758,5 +769,10 @@ export const searchThreadsWithOlderSettledRows = Effect.fn(
     readThreads: input.readThreads,
     latestSequence: input.latestSequence,
   });
-  return { ...messages, snapshotSequence: older.snapshotSequence, threads: older.threads };
+  const allowedProjects = projectIds === undefined ? undefined : new Set(projectIds);
+  const threads =
+    allowedProjects === undefined
+      ? older.threads
+      : older.threads.filter(({ projectId }) => allowedProjects.has(projectId));
+  return { ...messages, snapshotSequence: older.snapshotSequence, threads };
 });

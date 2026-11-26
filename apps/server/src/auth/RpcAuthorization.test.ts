@@ -6,6 +6,7 @@ import {
   AuthSettingsWriteScope,
   AuthAccessWriteScope,
   DEFAULT_SERVER_SETTINGS,
+  EnvironmentAuthorizationError,
   EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -31,6 +32,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/rpc/RpcTest";
+import * as ConnectProjectAccess from "../cloud/ConnectProjectAccess.ts";
 
 import {
   RPC_REQUIRED_SCOPES,
@@ -512,6 +514,11 @@ describe("settings mutation authorization", () => {
             patch: { requireConnectDeviceApproval: false },
           }).pipe(Effect.flip),
         ).toMatchObject({ requiredPermission: AuthAccessWriteScope });
+        expect(
+          yield* client[WS_METHODS.serverUpdateSettings]({
+            patch: { connectSharedProjects: { [ProjectId.make("private")]: true } },
+          }).pipe(Effect.flip),
+        ).toMatchObject({ requiredPermission: AuthAccessWriteScope });
         // A reference names any secret the store holds, and the host entry names where it goes.
         expect(
           yield* client[WS_METHODS.serverUpdateSettings]({
@@ -621,6 +628,115 @@ it.effect("requires task permission before attaching a prepared worktree to a th
     ).toMatchObject({ requiredPermission: AuthOrchestrationOperateScope });
     expect(handled).toBe(false);
   }),
+);
+
+it.effect("applies Connect project access before a terminal command reaches its handler", () =>
+  Effect.gen(function* () {
+    const method = WS_METHODS.terminalWrite;
+    const group = WsRpcGroup.omit(
+      ...[...WsRpcGroup.requests.keys()].filter(
+        (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, typeof method> => tag !== method,
+      ),
+    );
+    const shared = ProjectId.make("shared");
+    const privateProject = ProjectId.make("private");
+    const sharedThread = ThreadId.make("shared-thread");
+    const privateThread = ThreadId.make("private-thread");
+    const handled: string[] = [];
+    const client = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          group.toLayerHandler(method, ({ threadId }) =>
+            Effect.sync(() => {
+              handled.push(threadId);
+            }),
+          ),
+          RpcAuthorization.layer([AuthTerminalOperateScope], undefined, (tag, input) =>
+            ConnectProjectAccess.authorizeRpc(
+              tag,
+              input,
+              new Set([shared]),
+              (id) =>
+                Effect.succeed({
+                  projectId: id === sharedThread ? shared : privateProject,
+                  deletedAt: null,
+                }),
+              () => Effect.succeed({ tasks: [] }),
+            ),
+          ),
+        ),
+      ),
+    );
+    yield* client[method]({ threadId: sharedThread, terminalId: "default", data: "hello" });
+    const error = yield* client[method]({
+      threadId: privateThread,
+      terminalId: "default",
+      data: "hello",
+    }).pipe(Effect.flip);
+    expect(error._tag).toBe("EnvironmentAuthorizationError");
+    expect(handled).toEqual([sharedThread]);
+  }),
+);
+
+it.effect("checks the project root before allowing Connect draft terminals", () =>
+  Effect.gen(function* () {
+    const shared = ProjectId.make("shared");
+    const draft = ThreadId.make("draft");
+    const input = { threadId: draft, terminalId: "term-1" };
+    const watched = new Set<ThreadId>();
+    let boundRoot: string | undefined;
+    const check = (method: string, payload: unknown) =>
+      ConnectProjectAccess.authorizeRpc(
+        method,
+        payload,
+        new Set([shared]),
+        (id) =>
+          Effect.sync(() => {
+            expect(watched.delete(id)).toBe(true);
+            return null;
+          }),
+        () => Effect.succeed({ tasks: [] }),
+        {
+          onThreadAccess: (id) => watched.add(id),
+          draftTerminalProject: (_threadId, _terminalId, launchRoot) =>
+            Effect.succeed((boundRoot ?? launchRoot) === "/shared" ? shared : undefined),
+        },
+      );
+    expect(yield* check(WS_METHODS.terminalWrite, input).pipe(Effect.flip)).toBeInstanceOf(
+      EnvironmentAuthorizationError,
+    );
+    expect(
+      yield* check(WS_METHODS.terminalOpen, { ...input, cwd: "/private" }).pipe(Effect.flip),
+    ).toBeInstanceOf(EnvironmentAuthorizationError);
+    yield* check(WS_METHODS.terminalAttach, {
+      ...input,
+      cwd: "/shared-worktree",
+      env: { T3CODE_PROJECT_ROOT: "/shared" },
+    });
+    boundRoot = "/shared";
+    yield* check(WS_METHODS.terminalWrite, input);
+  }),
+);
+
+it.effect(
+  "authorizes provider discussions by project even when their IDs are not T3 thread IDs",
+  () =>
+    Effect.gen(function* () {
+      const shared = ProjectId.make("shared");
+      for (const method of [
+        WS_METHODS.pullRequestsThreadComments,
+        WS_METHODS.pullRequestsReplyToThread,
+        WS_METHODS.pullRequestsSetThreadResolution,
+      ] as const) {
+        yield* ConnectProjectAccess.authorizeRpc(
+          method,
+          { projectId: shared, threadId: "provider-discussion" },
+          new Set([shared]),
+          () => Effect.succeed(null),
+          () => Effect.succeed({ tasks: [] }),
+        );
+      }
+    }),
 );
 
 describe("thread context authorization", () => {

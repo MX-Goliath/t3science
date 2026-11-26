@@ -3518,6 +3518,7 @@
   "28ae8b1fd9db40de": "Deletes the selected machine's checkout entries and their threads. Other machines and files on disk are not touched.",
   "e3332e8a849ddce3": "{count, plural, other {Deletes all {count} checkout entries and their threads on every machine. Files on disk are not touched.}}",
   "5ddf3891266c3c9e": "Deletes the project entry and its threads. Files on disk are not touched.",
+  "14bdeec9030b88e4": "Share project through T3 Connect",
   "3f01a81eaf73280c": "Remove checkout {path}",
   "82c158f932fbb0db": "Choose a project with the filter above to manage its name, checkouts and removal.",
   "fa38c677c3af4f00": "This project has no checkout on the selected connected environments. Change the filter above.",

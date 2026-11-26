@@ -23,6 +23,9 @@ import { HttpRouter, HttpServer } from "effect/http";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as SessionStore from "../auth/SessionStore.ts";
+import { EventSinkV2 } from "../orchestration-v2/EventSink.ts";
+import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as PreviewBrowserHost from "./PreviewBrowserHost.ts";
 import * as ServerBrowser from "./ServerBrowser.ts";
 import { routeLayer } from "./ServerBrowserStream.ts";
@@ -49,13 +52,16 @@ const makeAuth = (
     },
   });
   return {
-    layer: Layer.merge(
+    layer: Layer.mergeAll(
       layer,
       Layer.mock(SessionStore.SessionStore, {
         cookieName: "test",
         legacyCookieName: undefined,
         awaitInvalidation,
       }),
+      Layer.mock(ThreadManagement.ThreadManagementService)({}),
+      Layer.mock(EventSinkV2)({}),
+      ServerSettings.layerTest({}),
     ),
     requests,
   };

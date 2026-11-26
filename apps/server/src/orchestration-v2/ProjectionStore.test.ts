@@ -2160,8 +2160,11 @@ const threadWorktreePathsIncludeArchivedOnRequest = Effect.gen(function* () {
       })
       .pipe(Effect.as(thread));
   };
-  yield* create("thread:active", { worktreePath: "/worktrees/active" });
-  yield* create("thread:archived", { worktreePath: "/worktrees/archived", archived: true });
+  const active = yield* create("thread:active", { worktreePath: "/worktrees/active" });
+  const archived = yield* create("thread:archived", {
+    worktreePath: "/worktrees/archived",
+    archived: true,
+  });
   yield* create("thread:local", { worktreePath: null });
   const deleted = yield* create("thread:deleted", { worktreePath: "/worktrees/deleted" });
   yield* store.apply({
@@ -2208,6 +2211,19 @@ const threadWorktreePathsIncludeArchivedOnRequest = Effect.gen(function* () {
       [ThreadId.make("thread:archived")]: "Title for thread:archived",
     },
   );
+  const shared = new Set([active.projectId]);
+  const ids = [active.id, archived.id];
+  yield* store.apply({
+    id: EventId.make("event:thread:active:move-to-private"),
+    type: "thread.metadata-updated",
+    threadId: active.id,
+    occurredAt: now,
+    payload: { ...active, projectId: ProjectId.make("private"), title: "Private title" },
+  });
+  assert.deepEqual(yield* store.getThreadLinkMetadata(ids, shared), {
+    [archived.id]: { title: archived.title, projectId: archived.projectId },
+  });
+  assert.deepEqual(yield* store.getThreadTitles(ids, shared), { [archived.id]: archived.title });
 });
 
 const commandReadsSkipSettledLeafNodes = Effect.gen(function* () {

@@ -285,10 +285,14 @@ const make = Effect.gen(function* () {
     Effect.map((facts) => facts?.hostname ?? null),
   );
   // A beta: while it is off, no link opens and every guest request is refused.
-  const sharingEnabled = serverSettings.getSettings.pipe(
-    Effect.map((settings) => settings.guestSharingEnabled),
-    Effect.orElseSucceed(() => false),
-  );
+  const sharingEnabled = (projectId: OrchestrationV2AppThread["projectId"]) =>
+    serverSettings.getSettings.pipe(
+      Effect.map(
+        (settings) =>
+          settings.guestSharingEnabled && settings.connectSharedProjects[projectId] === true,
+      ),
+      Effect.orElseSucceed(() => false),
+    );
 
   const dispatchGuestCommand = (
     command: Parameters<Orchestrator.OrchestratorV2["Service"]["dispatch"]>[0],
@@ -323,7 +327,7 @@ const make = Effect.gen(function* () {
     const share = thread.guestShare;
     const now = yield* DateTime.now;
     if (
-      !(yield* sharingEnabled) ||
+      !(yield* sharingEnabled(thread.projectId)) ||
       !share ||
       share.id !== claims.value.shareId ||
       thread.archivedAt !== null ||
@@ -338,7 +342,10 @@ const make = Effect.gen(function* () {
   });
 
   const create = Effect.fn("GuestShareService.create")(function* (input: GuestShareCreateInput) {
-    if (!(yield* sharingEnabled)) {
+    const { thread: owner } = yield* orchestrator
+      .getThreadRecords(input.threadId, [])
+      .pipe(Effect.mapError(() => new GuestShareCreateError({ reason: "thread_unavailable" })));
+    if (!(yield* sharingEnabled(owner.projectId))) {
       return yield* new GuestShareCreateError({ reason: "disabled" });
     }
     const host = yield* connectHostname;
@@ -538,7 +545,8 @@ const make = Effect.gen(function* () {
     if (
       snapshot.projection.thread.guestShare?.id !== share.id ||
       snapshot.projection.thread.archivedAt !== null ||
-      snapshot.projection.thread.deletedAt !== null
+      snapshot.projection.thread.deletedAt !== null ||
+      !(yield* sharingEnabled(snapshot.projection.thread.projectId))
     ) {
       return yield* inactive;
     }
@@ -559,6 +567,11 @@ const make = Effect.gen(function* () {
       .streamStoredEventsFrom({ threadId: thread.id, afterSequence: snapshot.snapshotSequence })
       .pipe(
         Stream.map(threadStreamEventItem),
+        Stream.takeWhileEffect((item) =>
+          item.event.type === "thread.metadata-updated"
+            ? sharingEnabled(item.event.payload.projectId)
+            : Effect.succeed(true),
+        ),
         // Ending the source here flushes what the coalescer holds, so `ended` is not held back.
         Stream.takeUntil((item) => endsShare(item.event)),
         coalesceThreadLiveStream,
@@ -576,6 +589,7 @@ const make = Effect.gen(function* () {
               ];
         }),
         Stream.flattenIterable,
+        Stream.concat(Stream.make(ended)),
         // A failed read closes the response without `ended`: the browser reconnects, and
         // `authorize` decides whether the link still works.
         Stream.catchCause(() => Stream.empty),
@@ -602,7 +616,11 @@ const make = Effect.gen(function* () {
       // keeps the guest in. Turning the beta off closes it the same way. Closing and expiry end
       // it above, with `ended`.
       Stream.interruptWhen(
-        Effect.all([connectHostname, sharingEnabled]).pipe(
+        orchestrator.getThreadRecords(thread.id, []).pipe(
+          Effect.flatMap(({ thread: current }) =>
+            Effect.all([connectHostname, sharingEnabled(current.projectId)]),
+          ),
+          Effect.orElseSucceed(() => [null, false] as const),
           Effect.repeat({
             schedule: Schedule.spaced(ACCESS_RECHECK_INTERVAL),
             until: ([host, enabled]) => host !== share.host || !enabled,

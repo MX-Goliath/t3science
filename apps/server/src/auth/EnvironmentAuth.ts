@@ -3,6 +3,7 @@ import {
   AuthAccessWriteScope,
   AuthMcpClientAccess,
   AuthOrchestrationOperateScope,
+  AuthRelayConfigureScope,
   AuthAdministrativeClientScopes,
   AuthStandardClientScopes,
   type AuthAccessTokenResult,
@@ -61,6 +62,17 @@ const DEFAULT_SESSION_SUBJECT = "cli-issued-session";
 export const INTERNAL_ADMINISTRATIVE_BOOTSTRAP_SUBJECT = "administrative-bootstrap";
 /** Sessions and pairing links T3 Connect minted for a device signed in to the linked account. */
 export const CLOUD_CONNECT_SUBJECT = "cloud-connect";
+
+function connectSessionScopes(session: {
+  readonly subject: string;
+  readonly scopes: readonly AuthEnvironmentScope[];
+}) {
+  return session.subject === CLOUD_CONNECT_SUBJECT
+    ? session.scopes.filter(
+        (scope) => scope !== AuthAccessWriteScope && scope !== AuthRelayConfigureScope,
+      )
+    : session.scopes;
+}
 
 export interface IssuedPairingLink {
   readonly id: string;
@@ -834,7 +846,7 @@ export const make = Effect.gen(function* () {
         sessionId: session.sessionId,
         subject: session.subject,
         method: session.method,
-        scopes: session.scopes,
+        scopes: connectSessionScopes(session),
         ...(session.proofKeyThumbprint ? { proofKeyThumbprint: session.proofKeyThumbprint } : {}),
         ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
       })),
@@ -1118,10 +1130,11 @@ export const make = Effect.gen(function* () {
         ),
         Effect.flatMap((grant) =>
           Effect.gen(function* () {
+            const allowedScopes = connectSessionScopes(grant);
             const grantedScopes =
               requestedScopes === undefined
-                ? grant.scopes
-                : [...new Set(requestedScopes)].filter((scope) => grant.scopes.includes(scope));
+                ? allowedScopes
+                : [...new Set(requestedScopes)].filter((scope) => allowedScopes.includes(scope));
             if (grantedScopes.length === 0) {
               return yield* new ServerAuthScopeNotGrantedError({});
             }
@@ -1269,8 +1282,11 @@ export const make = Effect.gen(function* () {
       }
     }
     const issued = yield* createPairingLink({
-      scopes: AuthStandardClientScopes,
       subject: CLOUD_CONNECT_SUBJECT,
+      scopes: connectSessionScopes({
+        subject: CLOUD_CONNECT_SUBJECT,
+        scopes: AuthStandardClientScopes,
+      }),
       // Long enough for someone to notice the request and approve it.
       ttl: mustWait ? Duration.minutes(10) : Duration.minutes(2),
       label: "T3 Connect",
@@ -1570,7 +1586,7 @@ export const make = Effect.gen(function* () {
             sessionId: session.sessionId,
             subject: session.subject,
             method: session.method,
-            scopes: session.scopes,
+            scopes: connectSessionScopes(session),
             ...(session.proofKeyThumbprint
               ? { proofKeyThumbprint: session.proofKeyThumbprint }
               : {}),

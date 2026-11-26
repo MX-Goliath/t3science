@@ -16,6 +16,7 @@ import {
   TurnItemId,
 } from "@t3tools/contracts";
 import { RelayAgentActivityState } from "@t3tools/contracts/relay";
+import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -28,6 +29,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import * as EnvironmentKeys from "../cloud/environmentKeys.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
@@ -43,6 +45,7 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as AgentAwarenessRelay from "./AgentAwarenessRelay.ts";
+import * as ServerSettings from "../serverSettings.ts";
 
 const THREAD_ID = ThreadId.make("relay-thread");
 const SECOND_THREAD_ID = ThreadId.make("relay-thread-2");
@@ -169,16 +172,22 @@ const makeTestRelay = Effect.fnUntraced(function* (
     readonly respond?: (attempt: number) => Response;
     readonly failSecretRead?: (name: string) => boolean;
     readonly linked?: boolean;
+    readonly publishEnabled?: boolean;
+    readonly privateProject?: boolean;
     readonly readShell?: (threadId: ThreadId) => Effect.Effect<OrchestrationV2ThreadShell | null>;
     readonly domainEvents?: Stream.Stream<OrchestrationV2DomainEvent>;
     readonly catchUpThreads?: ReadonlyArray<OrchestrationV2ThreadShell>;
+    readonly sql?: SqlClient.SqlClient;
   } = {},
 ) {
   const values = new Map<string, Uint8Array>(
     options.linked === false
       ? []
       : [
-          [PUBLISH_AGENT_ACTIVITY_SECRET, new TextEncoder().encode("true")],
+          [
+            PUBLISH_AGENT_ACTIVITY_SECRET,
+            new TextEncoder().encode(String(options.publishEnabled ?? true)),
+          ],
           [RELAY_URL_SECRET, new TextEncoder().encode("https://relay.example.test")],
           [RELAY_ISSUER_SECRET, new TextEncoder().encode("https://relay.example.test")],
           [RELAY_ENVIRONMENT_CREDENTIAL_SECRET, new TextEncoder().encode("credential-1")],
@@ -312,7 +321,11 @@ const makeTestRelay = Effect.fnUntraced(function* (
     updatedAt: NOW,
     deletedAt: null,
   };
+  const sql =
+    options.sql ??
+    Context.get(yield* Layer.build(SqlitePersistence.layerMemory), SqlClient.SqlClient);
   const relay = yield* AgentAwarenessRelay.make.pipe(
+    Effect.provideService(SqlClient.SqlClient, sql),
     Effect.provide(EnvironmentKeys.layer),
     Effect.provideService(ServerSecretStore.ServerSecretStore, secrets),
     Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
@@ -334,7 +347,14 @@ const makeTestRelay = Effect.fnUntraced(function* (
       getById: () => Effect.succeedSome(project),
     }),
     Effect.provideService(FetchHttpClient.Fetch, fetch),
-    Effect.provide(NodeCrypto.layer),
+    Effect.provide(
+      Layer.mergeAll(
+        NodeCrypto.layer,
+        ServerSettings.layerTest({
+          connectSharedProjects: options.privateProject === true ? {} : { [PROJECT_ID]: true },
+        }),
+      ),
+    ),
   );
   return { relay, secrets, secretReads, currentShell, shellReads, publications, catchUp };
 });
@@ -662,6 +682,55 @@ describe("AgentAwarenessRelay", () => {
       assert.equal(publications.length, 2);
       assert.equal(publications[1]?.state?.threadTitle, "Renamed thread");
     }),
+  );
+
+  it.effect("does not publish activity for private projects", () =>
+    Effect.gen(function* () {
+      const { relay, publications } = yield* makeTestRelay({ privateProject: true });
+      yield* relay.publishThread(THREAD_ID);
+      assert.deepEqual(publications, []);
+    }),
+  );
+
+  it.effect.each([true, false])(
+    "clears old archived private activity once across restarts (publishing enabled: %s)",
+    (publishEnabled) =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const archived = shell({ archivedAt: DateTime.makeUnsafe(NOW) });
+        if (!publishEnabled) {
+          const original = yield* makeTestRelay({ sql });
+          yield* original.relay.publishThread(THREAD_ID);
+          assert.equal(original.publications[0]?.state?.threadId, THREAD_ID);
+        }
+        // A pre-ledger server could leave a card for this thread when it stopped.
+        yield* sql`
+        INSERT INTO orchestration_v2_projection_threads (
+          thread_id, project_id, title, default_provider, runtime_mode, interaction_mode,
+          created_at, updated_at, archived_at, payload_json
+        ) VALUES (${THREAD_ID}, ${PROJECT_ID}, 'Thread', 'codex', 'full-access', 'default',
+          ${NOW}, ${NOW}, ${NOW}, '{}')
+      `;
+        const options = {
+          privateProject: true,
+          publishEnabled,
+          readShell: () => Effect.succeed(archived),
+          sql,
+        };
+        const { relay, publications } = yield* makeTestRelay(options);
+        yield* relay.start();
+        yield* TestClock.adjust("1 second");
+        yield* relay.drain;
+        assert.deepEqual(
+          publications.map(({ state }) => state),
+          [null],
+        );
+        const restarted = yield* makeTestRelay(options);
+        yield* restarted.relay.start();
+        yield* TestClock.adjust("1 second");
+        yield* restarted.relay.drain;
+        assert.deepEqual(restarted.publications, []);
+      }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
   );
 
   it.effect("republishes unchanged state with fresh credentials after relinking", () =>

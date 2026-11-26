@@ -1,6 +1,7 @@
 import type { AgentAwarenessThread } from "../orchestration-v2/ProjectionStore.ts";
 import {
   isListedThreadLineage,
+  ProjectId,
   type EnvironmentId,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2TurnItem,
@@ -39,6 +40,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpApiClient from "effect/http-api/HttpApiClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import {
@@ -54,6 +56,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import { forkParked } from "../serverActivation.ts";
+import * as ServerSettings from "../serverSettings.ts";
 
 export class AgentAwarenessRelay extends Context.Service<
   AgentAwarenessRelay,
@@ -429,6 +432,8 @@ export const make = Effect.gen(function* () {
   const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
   const threads = yield* ThreadManagement.ThreadManagementService;
   const projects = yield* ProjectService.ProjectService;
+  const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const sql = yield* SqlClient.SqlClient;
   const random = yield* SecureRandom.SecureRandom;
   const signingKey = yield* EnvironmentSigningKey;
   const scope = yield* Effect.scope;
@@ -463,6 +468,41 @@ export const make = Effect.gen(function* () {
   const readPublishAgentActivityEnabled = readSecretString(PUBLISH_AGENT_ACTIVITY_SECRET).pipe(
     Effect.map(isAgentActivityPublishingEnabledValue),
   );
+
+  const outstandingClears = Effect.fn("AgentAwarenessRelay.outstandingClears")(function* (
+    issuer: string,
+    projects: ReadonlyArray<Project["id"]>,
+    seedLegacy: boolean,
+  ) {
+    if (seedLegacy) {
+      yield* sql.withTransaction(
+        Effect.gen(function* () {
+          // Before this ledger existed, listed threads could have relay cards without a local record.
+          const seeded = yield* sql`
+        INSERT OR IGNORE INTO relay_activity_publications VALUES (${issuer}, '')
+        RETURNING thread_id
+      `;
+          if (seeded.length > 0) {
+            yield* sql`
+          INSERT OR IGNORE INTO relay_activity_publications
+          SELECT ${issuer}, thread_id
+          FROM orchestration_v2_projection_threads
+          WHERE json_extract(payload_json, '$.lineage.relationshipToParent') IS NOT 'subagent'
+            AND json_extract(payload_json, '$.lineage.sideChat') IS NOT 1
+        `;
+          }
+        }),
+      );
+    }
+    return yield* sql<{ thread_id: ThreadId }>`
+        SELECT publication.thread_id
+        FROM relay_activity_publications AS publication
+        LEFT JOIN orchestration_v2_projection_threads AS thread USING (thread_id)
+        WHERE publication.relay_issuer = ${issuer} AND publication.thread_id <> ''
+          AND (thread.thread_id IS NULL OR thread.deleted_at IS NOT NULL OR thread.archived_at IS NOT NULL
+            OR ${projects.length === 0 ? sql`1` : sql`thread.project_id NOT IN ${sql.in(projects)}`})
+    `;
+  });
 
   const makeRelayClient = (relayConfig: {
     readonly url: string;
@@ -505,14 +545,6 @@ export const make = Effect.gen(function* () {
 
   const publishThreadUnsafe = Effect.fn("publishThreadUnsafe")(function* (threadId: ThreadId) {
     const publishAgentActivity = yield* readPublishAgentActivityEnabled;
-    if (!publishAgentActivity) {
-      yield* cancelPublishRetries;
-      yield* resetPublishedConnection;
-      yield* Effect.logDebug("agent activity publish skipped; publication disabled", {
-        threadId,
-      });
-      return;
-    }
     const relayConfig = yield* readRelayConfig;
     if (!relayConfig) {
       yield* cancelPublishRetries;
@@ -531,6 +563,10 @@ export const make = Effect.gen(function* () {
       publishedRelayConfig = relayConfig;
     }
     const environmentId = yield* serverEnvironment.getEnvironmentId;
+    const issuer = normalizeRelayIssuer(relayConfig.issuer);
+    const lookupPublication = sql`SELECT 1 FROM relay_activity_publications WHERE relay_issuer = ${issuer} AND thread_id = ${threadId}`;
+    const existingPublication = publishAgentActivity ? undefined : yield* lookupPublication;
+    if (existingPublication?.length === 0) return;
 
     const publishState = Effect.fn("relay.agent_activity.publish")(function* (input: {
       readonly projectId: string | null;
@@ -541,6 +577,13 @@ export const make = Effect.gen(function* () {
         cachedRelayClient = yield* makeRelayClient(relayConfig);
       }
       const relayClient = cachedRelayClient;
+      // Record possible delivery before sending, so a crash cannot orphan a card.
+      if (
+        input.state !== null &&
+        !hasLivePublishedState(yield* Ref.get(publishedStateByThreadRef), threadId)
+      ) {
+        yield* sql`INSERT OR IGNORE INTO relay_activity_publications VALUES (${issuer}, ${threadId})`;
+      }
       const proof = yield* makePublishProof({
         relayIssuer: relayConfig.issuer,
         environmentId,
@@ -570,6 +613,11 @@ export const make = Effect.gen(function* () {
           },
         })
         .pipe(Effect.timeout("10 seconds"));
+      if (!response.ok)
+        return yield* Effect.fail({ _tag: "RelayActivityPublishRejected" as const, threadId });
+      if (input.state === null) {
+        yield* sql`DELETE FROM relay_activity_publications WHERE relay_issuer = ${issuer} AND thread_id = ${threadId}`;
+      }
 
       yield* Effect.logInfo("agent activity publish completed", {
         environmentId,
@@ -581,6 +629,25 @@ export const make = Effect.gen(function* () {
 
     // Read only this thread; full shell reads would make each activity event scale with all threads.
     const threadShell = yield* readAwarenessThread(threadId);
+    const settings = yield* serverSettings.getSettings;
+    const privateProject =
+      threadShell !== null && settings.connectSharedProjects[threadShell.projectId] !== true;
+    if (
+      privateProject ||
+      (!publishAgentActivity && (threadShell === null || threadShell.archivedAt !== null))
+    ) {
+      const recorded = existingPublication ?? (yield* lookupPublication);
+      if (recorded.length > 0) {
+        yield* publishState({ projectId: null, state: null, reason: "project-private" }).pipe(
+          withRelayClientTracing,
+        );
+        yield* Ref.update(publishedStateByThreadRef, (states) =>
+          new Map(states).set(threadId, CLEARED_PUBLISH_IDENTITY),
+        );
+      }
+      return;
+    }
+    if (!publishAgentActivity) return;
     yield* trackSubagentRequest(threadId, threadShell);
     if (
       threadShell !== null &&
@@ -855,6 +922,27 @@ export const make = Effect.gen(function* () {
     }
   });
 
+  const findActiveSharedThreads = Effect.fnUntraced(function* (
+    sharedProjects: ReadonlySet<ProjectId>,
+  ) {
+    const environmentId = yield* serverEnvironment.getEnvironmentId;
+    const projectSnapshot = yield* projects.snapshot;
+    const activitySnapshot = yield* threads.getAgentAwarenessSnapshot();
+    // Live children aren't listed, but a waiting one makes its top-level thread wait.
+    const liveChildren = yield* Effect.forEach(
+      (yield* threads.listActiveShellIndex()).filter(
+        (thread) => thread.lineage.relationshipToParent === "subagent" && thread.mayBeLive,
+      ),
+      (thread) => readAwarenessThread(thread.id),
+    );
+    return resolveAgentAwarenessRelayActiveThreadIds({
+      environmentId,
+      startedAt,
+      projects: projectSnapshot.projects.filter((project) => sharedProjects.has(project.id)),
+      threads: [...activitySnapshot.threads, ...liveChildren.filter((thread) => thread !== null)],
+    });
+  });
+
   const publishActiveThreadsUnsafe = Effect.gen(function* () {
     const relayUrl = yield* readSecretString(RELAY_URL_SECRET).pipe(
       Effect.orElseSucceed(() => null),
@@ -866,41 +954,34 @@ export const make = Effect.gen(function* () {
     const publishAgentActivity = yield* readPublishAgentActivityEnabled.pipe(
       Effect.orElseSucceed(() => false),
     );
-    if (!publishAgentActivity) {
-      yield* Effect.logDebug("agent activity snapshot skipped; publication disabled");
-      return "disabled" as const;
-    }
     const relayConfig = yield* readRelayConfig.pipe(Effect.orElseSucceed(() => null));
     if (!relayConfig) {
       yield* Effect.logDebug("agent activity snapshot skipped; relay link credentials unavailable");
       return "unlinked" as const;
     }
-    const environmentId = yield* serverEnvironment.getEnvironmentId;
-    const projectSnapshot = yield* projects.snapshot;
-    const activitySnapshot = yield* threads.getAgentAwarenessSnapshot();
-    // Live children aren't listed, but a waiting one makes its top-level thread wait.
-    const liveChildren = yield* Effect.forEach(
-      (yield* threads.listActiveShellIndex()).filter(
-        (thread) => thread.lineage.relationshipToParent === "subagent" && thread.mayBeLive,
-      ),
-      (thread) => readAwarenessThread(thread.id),
+    const settings = yield* serverSettings.getSettings;
+    const sharedProjects = Object.keys(settings.connectSharedProjects).map((id) =>
+      ProjectId.make(id),
     );
-    const activeThreadIds = resolveAgentAwarenessRelayActiveThreadIds({
-      environmentId,
-      startedAt,
-      projects: projectSnapshot.projects,
-      threads: [...activitySnapshot.threads, ...liveChildren.filter((thread) => thread !== null)],
-    });
-    if (activeThreadIds.length === 0) {
+    const activeThreadIds = publishAgentActivity
+      ? yield* findActiveSharedThreads(new Set(sharedProjects))
+      : [];
+    const clears = yield* outstandingClears(
+      normalizeRelayIssuer(relayConfig.issuer),
+      sharedProjects,
+      publishAgentActivity,
+    );
+    const publishIds = new Set([...activeThreadIds, ...clears.map(({ thread_id }) => thread_id)]);
+    if (publishIds.size === 0) {
       yield* Effect.logDebug("agent activity snapshot has no publishable threads");
-      return "published" as const;
+      return publishAgentActivity ? ("published" as const) : ("disabled" as const);
     }
     yield* Effect.logInfo("publishing active agent activity snapshot", {
-      count: activeThreadIds.length,
+      count: publishIds.size,
     });
-    yield* Effect.forEach(activeThreadIds, enqueueThreadPublish, { discard: true });
+    yield* Effect.forEach(publishIds, enqueueThreadPublish, { discard: true });
     yield* worker.drain;
-    return "published" as const;
+    return publishAgentActivity ? ("published" as const) : ("disabled" as const);
   });
 
   // Many environments never link, so while unlinked the retry backs off from 5
@@ -990,6 +1071,25 @@ export const make = Effect.gen(function* () {
             threadId,
           }).pipe(Effect.andThen(enqueueThreadPublish(threadId)));
         }),
+      );
+      yield* forkParked(
+        Stream.concat(
+          Stream.fromEffect(serverSettings.getSettings.pipe(Effect.orElseSucceed(() => null))),
+          serverSettings.streamChanges,
+        ).pipe(
+          Stream.map((settings) =>
+            JSON.stringify(Object.keys(settings?.connectSharedProjects ?? {}).sort()),
+          ),
+          Stream.changes,
+          Stream.drop(1),
+          Stream.runForEach(() =>
+            Effect.gen(function* () {
+              const published = yield* Ref.get(publishedStateByThreadRef);
+              yield* Effect.forEach(published.keys(), enqueueThreadPublish, { discard: true });
+              yield* Queue.offer(catchUpRequests, undefined);
+            }),
+          ),
+        ),
       );
     },
   );

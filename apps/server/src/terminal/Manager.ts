@@ -182,6 +182,10 @@ export class TerminalManager extends Context.Service<
     ) => Effect.Effect<TerminalSessionSnapshot, TerminalError>;
 
     readonly getShell: (input: TerminalObserveInput) => Effect.Effect<string, TerminalError>;
+    readonly getLaunchRoot: (
+      threadId: string,
+      terminalId: string,
+    ) => Effect.Effect<string | undefined>;
 
     /**
      * Attached viewers share one PTY sized to the smallest of them, so a narrow client
@@ -3990,6 +3994,16 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   return TerminalManager.of({
     open,
     getShell,
+    getLaunchRoot: Effect.fn("TerminalManager.getLaunchRoot")((threadId, terminalId) =>
+      getSession(threadId, terminalId).pipe(
+        Effect.map(
+          Option.match({
+            onNone: () => undefined,
+            onSome: (session) => session.runtimeEnv?.T3CODE_PROJECT_ROOT ?? session.cwd,
+          }),
+        ),
+      ),
+    ),
     attachStream,
     attachOutputStream,
     observeStream,

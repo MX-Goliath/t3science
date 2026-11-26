@@ -55,6 +55,7 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as ConnectProjectAccess from "../cloud/ConnectProjectAccess.ts";
 
 import { createAttachmentId } from "../attachmentStore.ts";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
@@ -501,7 +502,7 @@ const layerProjectDeletionTest = Layer.mergeAll(
   Layer.provideMerge(layerResourceCleanupTest),
   Layer.provide(McpSessionRegistryTestkit.layer),
   Layer.provide(McpProviderSessions.layer),
-  Layer.provide(SqlitePersistence.layerMemory),
+  Layer.provideMerge(SqlitePersistence.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   // Exposed so tests can reach the attachments directory that resource cleanup removes from.
   Layer.provideMerge(layerServerConfig),
@@ -1263,6 +1264,17 @@ it.layer(layerProjectDeletionTest)("project deletion during thread commands", (i
       yield* deleteThread(forkThreadId);
       yield* deleteThread(sourceThreadId);
       assert.deepEqual(yield* pagesOnDisk, [true, true, false]);
+      const sql = yield* SqlClient.SqlClient;
+      const shared = new Set([projectId]);
+      assert.isTrue(
+        yield* ConnectProjectAccess.canReadAttachment(sql, shared, inherited.attachmentId),
+      );
+      assert.isTrue(
+        yield* ConnectProjectAccess.canReadAttachment(sql, shared, forkPage.attachmentId),
+      );
+      assert.isFalse(
+        yield* ConnectProjectAccess.canReadAttachment(sql, shared, later.attachmentId),
+      );
 
       // `first`'s delete pauses after reading what to free. A fork of it and the project delete,
       // which reaches `second`, must each wait on a lock it holds rather than decide on the same
@@ -3552,7 +3564,7 @@ const writeHtmlRenderRun = Effect.fn("test.writeHtmlRenderRun")(function* (input
       },
     ],
   });
-  return { runId, pagePath };
+  return { runId, pagePath, attachmentId };
 });
 
 it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {

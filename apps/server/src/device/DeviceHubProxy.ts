@@ -19,7 +19,9 @@ import * as NodeHttpServerRequest from "@effect/platform-node/NodeHttpServerRequ
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 
 import { authenticateMediaRequest, failEnvironmentInternal } from "../auth/http.ts";
+import { CLOUD_CONNECT_SUBJECT } from "../auth/EnvironmentAuth.ts";
 import * as SessionStore from "../auth/SessionStore.ts";
+import * as ConnectProjectAccess from "../cloud/ConnectProjectAccess.ts";
 import * as DeviceService from "./DeviceService.ts";
 import { repeatStillFrame } from "./mjpegStillFrame.ts";
 
@@ -229,10 +231,20 @@ const handler = Effect.gen(function* () {
   upstreamSearch.delete("hostId");
   const search = upstreamSearch.size > 0 ? `?${upstreamSearch.toString()}` : "";
   const screenshotDevice = upstreamSearch.get("device");
+  const scoped = session.subject === CLOUD_CONNECT_SUBJECT && ready.upstream !== undefined;
   if (
     screenshotDevice &&
     ["/vendor/serve-sim/api/screenshot", "/vendor/serve-emu/api/screenshot"].includes(hubPath)
   ) {
+    if (scoped) {
+      const threadId = ready.projectThreadId?.(screenshotDevice);
+      if (
+        threadId === undefined ||
+        (yield* ConnectProjectAccess.watchThreadAccess(threadId)) === null
+      ) {
+        return HttpServerResponse.text("Not Found", { status: 404 });
+      }
+    }
     const { png } = yield* devices.screenshot({ hostId: ready.hostId, deviceId: screenshotDevice });
     return HttpServerResponse.uint8Array(png, {
       contentType: "image/png",
@@ -244,6 +256,14 @@ const handler = Effect.gen(function* () {
   if (routed === null) {
     return HttpServerResponse.text("Not Found", { status: 404 });
   }
+  let revoked = invalidated;
+  if (scoped) {
+    if (routed?.projectThreadId === undefined)
+      return HttpServerResponse.text("Not Found", { status: 404 });
+    const access = yield* ConnectProjectAccess.watchThreadAccess(routed.projectThreadId);
+    if (access === null) return HttpServerResponse.text("Not Found", { status: 404 });
+    revoked = Effect.raceFirst(invalidated, access.revoked);
+  }
   const upstreamUrl = routed?.url ?? `${ready.hub.origin}${hubPath}${search}`;
   if (upgrade) {
     return yield* Effect.raceFirst(
@@ -253,10 +273,10 @@ const handler = Effect.gen(function* () {
         routed?.protocols,
         routed?.headers,
       ),
-      invalidated.pipe(Effect.as(HttpServerResponse.empty())),
+      revoked.pipe(Effect.as(HttpServerResponse.empty())),
     );
   }
-  return yield* proxyHttp(request, upstreamUrl, invalidated, routed?.headers);
+  return yield* proxyHttp(request, upstreamUrl, revoked, routed?.headers);
 });
 
 export const layer = HttpRouter.add("*", `${DeviceService.DEVICE_HUB_ROUTE_PREFIX}/*`, handler);

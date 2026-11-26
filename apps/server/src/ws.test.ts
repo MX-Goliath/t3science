@@ -32,6 +32,7 @@ import {
   WsServerRefreshProvidersRpc,
   WsSubscribeServerConfigRpc,
   type AuthAccessStreamEvent,
+  type DiscoveredLocalServer,
   type OrchestrationV2AppThread,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2StoredEvent,
@@ -171,6 +172,7 @@ import * as ManagedPolicy from "./policy/ManagedPolicy.ts";
 
 import * as EventStore from "./orchestration-v2/EventStore.ts";
 import * as ThreadManagement from "./orchestration-v2/ThreadManagementService.ts";
+import { EventSinkV2 } from "./orchestration-v2/EventSink.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
 import * as EventSink from "./orchestration-v2/EventSink.ts";
@@ -180,6 +182,7 @@ import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { projectIdentitiesDigest } from "./orchestration-v2/ShellStream.ts";
 import * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
 import * as SqlitePersistence from "./persistence/Sqlite.ts";
+import * as ConnectProjectAccess from "./cloud/ConnectProjectAccess.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as ProjectEnrichment from "./project/ProjectEnrichmentService.ts";
 import * as ProjectService from "./project/ProjectService.ts";
@@ -294,6 +297,42 @@ it.effect("runs editor, remote open target and direct endpoint discovery side by
       remoteOpenTargets: [],
       directEndpoints: [],
     });
+  }),
+);
+
+it.effect("filters private local-server owners on the initial scan and live refresh", () =>
+  Effect.gen(function* () {
+    const shared = ThreadId.make("shared");
+    const privateThread = ThreadId.make("private");
+    const server: DiscoveredLocalServer = {
+      host: "127.0.0.1",
+      port: 3000,
+      url: "http://127.0.0.1:3000",
+      processName: "node",
+      pid: 234,
+      terminal: null,
+    };
+    const snapshot = { scannedAt: "2026-11-26T00:00:00.000Z", configuredUrlProbing: true as const };
+    const openTerminal = { threadId: shared, terminalId: "term-1" };
+    const initial = { ...server, agent: { threadId: privateThread } };
+    const mixed = { ...initial, terminal: openTerminal };
+    const hiddenTerminal = {
+      ...server,
+      terminal: { threadId: privateThread, terminalId: "term-1" },
+    };
+    const updates = Stream.make(
+      { ...snapshot, servers: [server, initial] },
+      { ...snapshot, servers: [mixed, hiddenTerminal] },
+    );
+    const visible = yield* ConnectProjectAccess.filterDiscoveredLocalServerStream(
+      updates,
+      (id) => Effect.succeed(id === shared),
+      ({ threadId }) => Effect.succeed(threadId === shared),
+    ).pipe(Stream.runCollect);
+    assert.deepEqual(
+      visible.map(({ servers }) => servers),
+      [[server], [{ ...server, agent: null, terminal: openTerminal }]],
+    );
   }),
 );
 
@@ -968,6 +1007,10 @@ it.live.each([
         Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
         Layer.mock(DirectEndpoints.DirectEndpoints)({}),
         Layer.mock(ServerEnvironment.ServerEnvironment)({}),
+        Layer.mock(EventSinkV2)({
+          latestSequence: () => Effect.succeed(0),
+          stream: () => Stream.never,
+        }),
         Layer.mock(VcsProcess.VcsProcess)({
           run: (input) =>
             Effect.fail(

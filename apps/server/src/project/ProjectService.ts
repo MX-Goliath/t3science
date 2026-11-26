@@ -744,6 +744,7 @@ export const make = Effect.gen(function* () {
     serverSettings.getSettings.pipe(
       Effect.flatMap(({ projectSettingsOverrides }) =>
         serverSettings.updateSettings({
+          connectSharedProjects: { [projectId]: null },
           projectSettingsOverrides: {
             [projectId]: deletedProjectOverridePatch(projectSettingsOverrides[projectId]),
           },

@@ -564,6 +564,7 @@ export interface ProjectionStoreV2Shape {
     throughEntryId?: string,
     conversationOnly?: boolean,
     workMode?: "deferred" | "work",
+    allowedProjects?: ReadonlySet<ProjectId>,
   ) => Effect.Effect<OrchestrationV2ThreadHistoryPage, ProjectionStoreV2Error>;
   readonly getTimelinePage: (
     threadId: ThreadId,
@@ -688,9 +689,11 @@ export interface ProjectionStoreV2Shape {
   /** Titles of the given threads that exist, archived ones included. */
   readonly getThreadLinkMetadata: (
     threadIds: ReadonlyArray<ThreadId>,
+    projects?: ReadonlySet<ProjectId>,
   ) => Effect.Effect<Record<ThreadId, OrchestrationV2ThreadLinkMetadata>, ProjectionStoreV2Error>;
   readonly getThreadTitles: (
     threadIds: ReadonlyArray<ThreadId>,
+    projects?: ReadonlySet<ProjectId>,
   ) => Effect.Effect<Record<ThreadId, string>, ProjectionStoreV2Error>;
   readonly getThreadWorktreePaths: (options?: {
     readonly includeArchived?: boolean;
@@ -7713,6 +7716,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       throughEntryId,
       conversationOnly,
       workMode,
+      allowedProjects,
     ) =>
       sql
         .withTransaction(
@@ -7725,7 +7729,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 : null;
             const full =
               local === null ? yield* readSnapshotTimelineIndex(threadId, withWork) : null;
-            if ((local ?? full)?.records.thread.deletedAt !== null)
+            const thread = (local ?? full)?.records.thread;
+            if (
+              thread?.deletedAt !== null ||
+              (allowedProjects !== undefined && !allowedProjects.has(thread.projectId))
+            )
               return yield* new ProjectionStoreThreadNotFoundError({ threadId });
             const revisions = yield* sql<{
               sequence: number;
@@ -9640,8 +9648,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
 
     const getThreadLinkMetadata = Effect.fn("ProjectionStore.getThreadLinkMetadata")(function* (
       threadIds: ReadonlyArray<ThreadId>,
+      projects?: ReadonlySet<ProjectId>,
     ) {
-      if (threadIds.length === 0) return {};
+      if (threadIds.length === 0 || projects?.size === 0) return {};
       const rows = yield* sql<{
         readonly thread_id: ThreadId;
         readonly title: string;
@@ -9650,6 +9659,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         SELECT thread_id, title, project_id
         FROM orchestration_v2_projection_threads
         WHERE deleted_at IS NULL AND thread_id IN ${sql.in(threadIds)}
+        ${projects === undefined ? sql`` : sql`AND project_id IN ${sql.in([...projects])}`}
       `;
       return Object.fromEntries(
         rows.map((row) => [row.thread_id, { title: row.title, projectId: row.project_id }]),
@@ -9658,15 +9668,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
 
     const getThreadTitles = Effect.fn("ProjectionStore.getThreadTitles")(function* (
       threadIds: ReadonlyArray<ThreadId>,
+      projects?: ReadonlySet<ProjectId>,
     ) {
-      if (threadIds.length === 0) return {};
-      const rows = yield* sql<{ readonly thread_id: ThreadId; readonly title: string }>`
-        SELECT thread_id, title
-        FROM orchestration_v2_projection_threads
-        WHERE deleted_at IS NULL AND thread_id IN ${sql.in(threadIds)}
-      `;
-      return Object.fromEntries(rows.map((row) => [row.thread_id, row.title]));
-    }, Effect.mapError(shellSnapshotReadError));
+      const metadata = yield* getThreadLinkMetadata(threadIds, projects);
+      return Object.fromEntries(Object.entries(metadata).map(([id, { title }]) => [id, title]));
+    });
 
     const findGuestShareThreadId = Effect.fn("ProjectionStore.findGuestShareThreadId")(function* (
       shareId: GuestShareId,

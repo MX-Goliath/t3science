@@ -1,5 +1,6 @@
 import {
   AuthOrchestrationReadScope,
+  EnvironmentAuthenticatedPrincipal,
   EnvironmentHttpApi,
   requiredScopesForProjectMutation,
 } from "@t3tools/contracts";
@@ -13,6 +14,9 @@ import {
   requireEnvironmentScope,
 } from "../auth/http.ts";
 import { traceLocalHandlerWork } from "../cloud/traceRelayRequest.ts";
+import { sharedProjectIds } from "../cloud/ConnectProjectAccess.ts";
+import { CLOUD_CONNECT_SUBJECT } from "../auth/EnvironmentAuth.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as ServerRuntimeStartup from "../serverRuntimeStartup.ts";
 import * as ProjectCloneTracker from "./ProjectCloneTracker.ts";
 import * as ProjectService from "./ProjectService.ts";
@@ -39,14 +43,32 @@ export const layer = HttpApiBuilder.group(
     const projects = yield* ProjectService.ProjectService;
     const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
     const projectClones = yield* ProjectCloneTracker.ProjectCloneTracker;
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
 
     return handlers
       .handle(
         "snapshot",
         Effect.fn("environment.projects.snapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
-          yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+          const principal = yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+          const allowed =
+            principal.subject !== CLOUD_CONNECT_SUBJECT
+              ? undefined
+              : yield* serverSettings.getSettings.pipe(
+                  Effect.map(sharedProjectIds),
+                  Effect.catch((cause) =>
+                    failEnvironmentInternal("project_snapshot_failed", cause),
+                  ),
+                );
           return yield* projects.snapshot.pipe(
+            Effect.map((snapshot) =>
+              allowed === undefined
+                ? snapshot
+                : {
+                    ...snapshot,
+                    projects: snapshot.projects.filter((project) => allowed.has(project.id)),
+                  },
+            ),
             traceLocalHandlerWork,
             Effect.catch((cause) => failEnvironmentInternal("project_snapshot_failed", cause)),
           );
@@ -58,6 +80,15 @@ export const layer = HttpApiBuilder.group(
           yield* annotateEnvironmentRequest(args.endpoint.name);
           for (const scope of requiredScopesForProjectMutation(args.payload)) {
             yield* requireEnvironmentScope(scope);
+          }
+          const principal = yield* EnvironmentAuthenticatedPrincipal;
+          if (principal.subject === CLOUD_CONNECT_SUBJECT) {
+            const allowed = yield* serverSettings.getSettings.pipe(
+              Effect.map(sharedProjectIds),
+              Effect.catch((error) => failEnvironmentInternal("internal_error", error)),
+            );
+            if (!allowed.has(args.payload.projectId))
+              return yield* failEnvironmentInvalidRequest("invalid_command");
           }
           const operation = mutateProjectWithClone(projects, projectClones, args.payload);
           return yield* startup

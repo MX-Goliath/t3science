@@ -4,13 +4,20 @@ import {
   AuthOrchestrationOperateScope,
   AuthSessionId,
   LOCAL_DEVICE_HOST_ID,
+  ProjectId,
+  ThreadId,
   type AuthEnvironmentScope,
+  type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientResponse, HttpRouter } from "effect/http";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as SessionStore from "../auth/SessionStore.ts";
+import { EventSinkV2 } from "../orchestration-v2/EventSink.ts";
+import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import type * as DeviceHost from "./DeviceHost.ts";
 import * as DeviceService from "./DeviceService.ts";
 import * as DeviceHubProxy from "./DeviceHubProxy.ts";
@@ -27,6 +34,7 @@ const fixture = (
   upstream?: DeviceHost.DeviceHostReady["upstream"],
   stream?: ReadableStream<Uint8Array>,
   invalidated?: Promise<void>,
+  connect?: { readonly shared: boolean },
 ) => {
   let finalized = 0;
   const requests: string[] = [];
@@ -34,6 +42,7 @@ const fixture = (
     [];
   const headers: Array<Readonly<Record<string, string>>> = [];
   const unexpectedOperation = Effect.die("Unexpected device operation");
+  const projectId = ProjectId.make("hosted-project");
   const client = HttpClient.make((request, _url, signal) =>
     Effect.gen(function* () {
       requests.push(request.url);
@@ -57,7 +66,7 @@ const fixture = (
               ? Effect.fail(authError)
               : Effect.succeed({
                   sessionId: AuthSessionId.make("test"),
-                  subject: "test",
+                  subject: connect === undefined ? "test" : EnvironmentAuth.CLOUD_CONNECT_SUBJECT,
                   method: "bearer-access-token",
                   scopes,
                 }),
@@ -101,6 +110,21 @@ const fixture = (
       ),
       Layer.provideMerge(Layer.succeed(HttpClient.HttpClient, client)),
       Layer.provideMerge(
+        Layer.mergeAll(
+          Layer.mock(EventSinkV2)({
+            latestSequence: () => Effect.succeed(1),
+            stream: () => Stream.never,
+          }),
+          Layer.mock(ThreadManagementService)({
+            getThreadShell: () =>
+              Effect.succeed({ projectId, deletedAt: null } as OrchestrationV2ThreadShell),
+          }),
+          ServerSettings.layerTest({
+            connectSharedProjects: connect?.shared === true ? { [projectId]: true } : {},
+          }),
+        ),
+      ),
+      Layer.provideMerge(
         Layer.mock(SessionStore.SessionStore, {
           cookieName: "test",
           legacyCookieName: undefined,
@@ -115,6 +139,32 @@ const fixture = (
 };
 
 describe("device hub proxy", () => {
+  it("checks the owner of the hosted device selected by the upstream", async () => {
+    const upstream = () =>
+      Effect.succeed({
+        url: "http://hub.test/hosted",
+        headers: {},
+        protocols: [],
+        projectThreadId: ThreadId.make("hosted-device-thread"),
+      });
+    for (const shared of [false, true]) {
+      const { handler, requests } = fixture(
+        [AuthOrchestrationReadScope],
+        false,
+        undefined,
+        upstream,
+        undefined,
+        undefined,
+        { shared },
+      );
+      const result = await handler(
+        new Request("http://t3.test/api/device-hub/vendor/serve-sim/api"),
+      );
+      expect(result.status).toBe(shared ? 200 : 404);
+      expect(requests).toEqual(shared ? ["http://hub.test/hosted"] : []);
+      await result.text();
+    }
+  });
   it("releases the upstream response after forwarding its body and strips tickets", async () => {
     const { handler, requests, finalized } = fixture([AuthOrchestrationReadScope]);
     const response = await handler(

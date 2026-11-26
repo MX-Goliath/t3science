@@ -3516,6 +3516,7 @@
   "28ae8b1fd9db40de": "Löscht die Checkout-Einträge des ausgewählten Rechners und ihre Threads. Andere Rechner und Dateien auf der Festplatte bleiben unberührt.",
   "e3332e8a849ddce3": "{count, plural, one {Löscht {count} Checkout-Eintrag und seine Threads auf jedem Rechner. Dateien auf der Festplatte bleiben unberührt.} other {Löscht alle {count} Checkout-Einträge und ihre Threads auf jedem Rechner. Dateien auf der Festplatte bleiben unberührt.}}",
   "5ddf3891266c3c9e": "Löscht den Projekteintrag und seine Threads. Dateien auf der Festplatte bleiben unberührt.",
+  "14bdeec9030b88e4": "Projekt über T3 Connect freigeben",
   "3f01a81eaf73280c": "Checkout {path} entfernen",
   "82c158f932fbb0db": "Wähle mit dem Filter oben ein Projekt, um Name, Checkouts und Entfernen zu verwalten.",
   "fa38c677c3af4f00": "Dieses Projekt hat keinen Checkout in den ausgewählten verbundenen Umgebungen. Ändere den Filter oben.",

@@ -173,6 +173,7 @@ export const DeviceId = TrimmedNonEmptyString.check(Schema.isMaxLength(256));
 export type DeviceId = typeof DeviceId.Type;
 
 export const DeviceSummary = Schema.Struct({
+  projectThreadId: Schema.optional(ThreadId),
   hostId: DeviceHostId,
   id: DeviceId,
   platform: DevicePlatform,

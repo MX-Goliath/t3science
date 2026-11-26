@@ -13,6 +13,7 @@ import {
   type DevicePlatformAvailability,
   type SettingsSecretValue,
   type SimlockDeviceHostConfig,
+  type ThreadId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -92,6 +93,7 @@ const describeCliFailure = ({ error }: typeof CliFailure.Type) => {
 };
 
 interface Lease {
+  readonly projectThreadId: ThreadId | undefined;
   readonly leaseId: string;
   readonly platform: DevicePlatform;
   readonly name: string;
@@ -504,6 +506,7 @@ export const make = Effect.fn("SimlockDeviceHost.make")(function* (
         );
       const opened: Lease = {
         leaseId: record.leaseId,
+        projectThreadId: context?.threadId,
         platform: target.platform,
         name: target.model,
         version: device.version,
@@ -568,6 +571,7 @@ export const make = Effect.fn("SimlockDeviceHost.make")(function* (
           ...available,
           ...[...leases.values()].map((lease): DeviceHost.HostDevice => ({
             id: lease.leaseId,
+            projectThreadId: lease.projectThreadId,
             platform: lease.platform,
             name: lease.name,
             version: lease.version,
@@ -638,6 +642,7 @@ export const make = Effect.fn("SimlockDeviceHost.make")(function* (
         url: `${gateway}/v1/leases/${encodeURIComponent(lease.leaseId)}/${stream ? "stream" : "input"}`,
         headers: { authorization: `Bearer ${lease.token}` },
         protocols: [],
+        projectThreadId: lease.projectThreadId,
       };
     });
 
@@ -654,6 +659,7 @@ export const make = Effect.fn("SimlockDeviceHost.make")(function* (
       nodePath,
       hub: { origin: gateway },
       devices,
+      projectThreadId: (deviceId) => leases.get(deviceId)?.projectThreadId,
       upstream,
       // Simlock relays only simctl, adb, and devicectl, and only to a lease's owner.
       run: () =>

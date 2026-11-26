@@ -15,6 +15,7 @@ import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as ConnectProjectAccess from "../cloud/ConnectProjectAccess.ts";
 
 import {
   activeShellRowsForSubscriber,
@@ -36,6 +37,45 @@ const emptyShellSnapshot = {
   threads: [],
   archivedThreads: [],
 } as OrchestrationV2ShellSnapshot;
+
+it.effect("keeps private project threads out of Connect snapshots and live updates", () =>
+  Effect.gen(function* () {
+    const shared = ProjectId.make("shared");
+    const other = ProjectId.make("private");
+    const sharedThread = shellFixture({ id: ThreadId.make("shared-thread"), projectId: shared });
+    const privateThread = shellFixture({ id: ThreadId.make("private-thread"), projectId: other });
+    const allowed = new Set([shared]);
+    const snapshot = ConnectProjectAccess.filterShellSnapshot(
+      {
+        ...emptyShellSnapshot,
+        threads: [privateThread, sharedThread],
+        archivedThreads: [privateThread],
+      },
+      allowed,
+    );
+    expect(snapshot.threads).toEqual([sharedThread]);
+    expect(snapshot.archivedThreads).toEqual([]);
+    const source = Stream.make<readonly OrchestrationV2ShellStreamItem[]>(
+      { kind: "snapshot", snapshot },
+      { kind: "thread.updated", sequence: 1, thread: privateThread, location: "active" },
+      { kind: "thread.removed", sequence: 2, threadId: privateThread.id, location: "active" },
+      {
+        kind: "thread.updated",
+        sequence: 3,
+        thread: { ...sharedThread, projectId: other },
+        location: "active",
+      },
+      { kind: "thread.removed", sequence: 4, threadId: sharedThread.id, location: "active" },
+    );
+    const received = yield* Stream.runCollect(
+      ConnectProjectAccess.filterShellStream(source, allowed),
+    );
+    expect(received).toEqual([
+      { kind: "snapshot", snapshot },
+      { kind: "thread.removed", sequence: 3, threadId: sharedThread.id, location: "active" },
+    ]);
+  }),
+);
 
 describe("subagent shell events", () => {
   const stored = (threadId: string, type: string, itemType = "command_execution") =>

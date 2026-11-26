@@ -4,8 +4,8 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useComposerMenuState } from "../chat/useComposerMenuState";
 import { m as resolveMessage } from "../../i18n/messages";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
-import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
-import { useEnvironmentsWithScope } from "../../state/session";
+import { AuthAccessWriteScope, AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { useEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
 import {
   PORTABLE_CONVERSATIONS_SWITCH_LABEL,
   useProjectConversationStorage,
@@ -27,7 +27,11 @@ import { T, useGT, useMessages } from "gt-react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { releaseProjectDraftUploads } from "../../lib/composerDraftUploads";
-import { persistClientSettingsUpdate, useClientSettings } from "../../hooks/useSettings";
+import {
+  persistClientSettingsUpdate,
+  useClientSettings,
+  useUpdateEnvironmentSettings,
+} from "../../hooks/useSettings";
 import { readLocalApi } from "../../localApi";
 import { derivePhysicalProjectKey } from "@t3tools/client-runtime/state/project-grouping";
 import {
@@ -37,7 +41,7 @@ import {
   type SidebarProjectSnapshot,
 } from "../../sidebarProjectGrouping";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
-import { useThreadShells, waitForProjectRemoval } from "../../state/entities";
+import { useServerConfigs, useThreadShells, waitForProjectRemoval } from "../../state/entities";
 import { refreshProjectFaviconUrl } from "../../state/assets";
 import { projectEnvironment } from "../../state/projects";
 import { ProjectFavicon } from "../ProjectFavicon";
@@ -299,6 +303,37 @@ function ProjectConversationStorageRow({
               : PORTABLE_CONVERSATIONS_SWITCH_LABEL
           }
           onCheckedChange={(checked) => setEnabled(Boolean(checked))}
+        />
+      }
+    />
+  );
+}
+
+function ProjectConnectSharingRow({ member }: { member: SidebarProjectGroupMember }) {
+  const gt = useGT();
+  const config = useServerConfigs().get(member.environmentId);
+  const canShare = useEnvironmentScope(member.environmentId, AuthAccessWriteScope);
+  const updateSettings = useUpdateEnvironmentSettings(member.environmentId);
+  const [saving, setSaving] = useState(false);
+  if (!canShare || config?.environment.capabilities.projectConnectSharing !== true) return null;
+
+  const title = gt("Share project through T3 Connect");
+  return (
+    <SettingsRow
+      title={title}
+      description={member.workspaceRoot}
+      control={
+        <Switch
+          checked={config.settings.connectSharedProjects[member.id] === true}
+          disabled={saving}
+          aria-label={title}
+          onCheckedChange={(checked) => {
+            setSaving(true);
+            updateSettings(
+              { connectSharedProjects: { [member.id]: checked ? true : null } },
+              { onSaved: () => setSaving(false), onFailed: () => setSaving(false) },
+            );
+          }}
         />
       }
     />
@@ -746,6 +781,9 @@ function ProjectDetail({
               member={member}
               showCheckout={group.memberProjects.length > 1}
             />
+          ))}
+          {group.memberProjects.map((member) => (
+            <ProjectConnectSharingRow key={member.physicalProjectKey} member={member} />
           ))}
         </SettingsSection>
         <ProjectRepositoriesSettings members={group.memberProjects} />

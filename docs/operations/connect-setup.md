@@ -87,6 +87,16 @@ Clerk's native Android SDK uses `clerk://<applicationId>.callback`. In the Clerk
 
 Preserve existing entries. These callbacks are separate from the `t3code-dev` / `t3code-preview` / `t3code` navigation schemes. A private development build using the production Clerk key still needs its development callback allowed by that instance's administrator; rebuilding the same package does not change the allowlist.
 
+### T3 Science native clients
+
+Science release builds use the public production configuration in `.env.example`.
+Native sign-in requires the Clerk administrator to allow `t3science://app/` and
+`t3science-dev://app/` for desktop and the matching origins without the trailing
+slash. Android uses `clerk://com.t3tools.t3science.callback` for production and
+`clerk://com.t3tools.t3science.dev.callback` or
+`clerk://com.t3tools.t3science.preview.callback` for development or preview.
+The CLI device sign-in flow uses the hosted web app.
+
 ## Desktop passkeys
 
 For a production macOS app with bundle ID `com.t3tools.t3code`:

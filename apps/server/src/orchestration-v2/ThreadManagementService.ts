@@ -9,6 +9,7 @@ import type {
   ProjectionRecords,
   ShellSnapshotOptions,
 } from "./ProjectionStore.ts";
+import { ProjectionStoreThreadNotFoundError } from "./ProjectionStore.ts";
 import {
   type ChatAttachment,
   CommandId,
@@ -444,6 +445,7 @@ export interface ThreadManagementServiceShape {
   readonly getThreadSnapshot: Orchestrator.OrchestratorV2["Service"]["getThreadSnapshot"];
   readonly getThreadTranscript: (
     threadId: ThreadId,
+    allowedProjects?: ReadonlySet<ProjectId>,
   ) => Effect.Effect<
     OrchestrationV2ThreadTranscript,
     Orchestrator.OrchestratorV2Error | ThreadTranscriptTooLargeError,
@@ -743,7 +745,7 @@ const make = Effect.gen(function* () {
   // Full-thread exports can otherwise hold every SQLite reader and stall ordinary thread opens.
   const transcriptExportPermits = yield* Semaphore.make(2);
   const getThreadTranscript = Effect.fn("orchestrationV2.threadManagement.getThreadTranscript")(
-    function* (threadId: ThreadId) {
+    function* (threadId: ThreadId, allowedProjects?: ReadonlySet<ProjectId>) {
       yield* ensureProjectionTranscript(threadId);
       const byteFloor = yield* orchestrator.getTranscriptByteFloor(
         threadId,
@@ -753,6 +755,12 @@ const make = Effect.gen(function* () {
         return yield* new ThreadTranscriptTooLargeError({ threadId });
       }
       const { projection } = yield* orchestrator.getThreadSnapshot(threadId);
+      if (allowedProjects !== undefined && !allowedProjects.has(projection.thread.projectId)) {
+        return yield* new Orchestrator.OrchestratorProjectionError({
+          threadId,
+          cause: new ProjectionStoreThreadNotFoundError({ threadId }),
+        });
+      }
       const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
       const transcript = {
         threadId: projection.thread.id,
@@ -1789,7 +1797,7 @@ const make = Effect.gen(function* () {
     }),
     dispatch,
     getThreadHistoryPage: Effect.fn("ThreadManagementService.getThreadHistoryPage")(
-      function (threadId, cursor, throughEntryId, conversationOnly, workMode) {
+      function (threadId, cursor, throughEntryId, conversationOnly, workMode, allowedProjects) {
         return ensureProjectionTranscript(threadId).pipe(
           Effect.andThen(
             orchestrator.getThreadHistoryPage(
@@ -1798,6 +1806,7 @@ const make = Effect.gen(function* () {
               throughEntryId,
               conversationOnly,
               workMode,
+              allowedProjects,
             ),
           ),
         );

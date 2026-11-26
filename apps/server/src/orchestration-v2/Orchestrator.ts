@@ -443,6 +443,7 @@ export interface OrchestratorV2Shape {
     throughEntryId?: string,
     conversationOnly?: boolean,
     workMode?: "deferred" | "work",
+    allowedProjects?: ReadonlySet<ProjectId>,
   ) => Effect.Effect<OrchestrationV2ThreadHistoryPage, OrchestratorV2Error>;
   readonly getTimelinePage: (
     threadId: ThreadId,
@@ -543,9 +544,11 @@ export interface OrchestratorV2Shape {
   /** Titles of the given threads that exist, archived ones included. */
   readonly getThreadLinkMetadata: (
     threadIds: ReadonlyArray<ThreadId>,
+    projects?: ReadonlySet<ProjectId>,
   ) => Effect.Effect<Record<ThreadId, OrchestrationV2ThreadLinkMetadata>, OrchestratorV2Error>;
   readonly getThreadTitles: (
     threadIds: ReadonlyArray<ThreadId>,
+    projects?: ReadonlySet<ProjectId>,
   ) => Effect.Effect<Record<ThreadId, string>, OrchestratorV2Error>;
   readonly getThreadEventSequence: (
     threadId: ThreadId,
@@ -17006,9 +17009,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         );
     }),
     getThreadHistoryPage: Effect.fn("OrchestratorV2.getThreadHistoryPage")(
-      function (threadId, cursor, throughEntryId, conversationOnly, workMode) {
+      function (threadId, cursor, throughEntryId, conversationOnly, workMode, allowedProjects) {
         return projectionStore
-          .getThreadHistoryPage(threadId, cursor, throughEntryId, conversationOnly, workMode)
+          .getThreadHistoryPage(
+            threadId,
+            cursor,
+            throughEntryId,
+            conversationOnly,
+            workMode,
+            allowedProjects,
+          )
           .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })));
       },
     ),
@@ -17140,13 +17150,17 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         .findGuestShareThreadId(shareId)
         .pipe(Effect.mapError(shellProjectionError));
     }),
-    getThreadLinkMetadata: Effect.fn("OrchestratorV2.getThreadLinkMetadata")(function (threadIds) {
+    getThreadLinkMetadata: Effect.fn("OrchestratorV2.getThreadLinkMetadata")(
+      function (threadIds, projects) {
+        return projectionStore
+          .getThreadLinkMetadata(threadIds, projects)
+          .pipe(Effect.mapError(shellProjectionError));
+      },
+    ),
+    getThreadTitles: Effect.fn("OrchestratorV2.getThreadTitles")(function (threadIds, projects) {
       return projectionStore
-        .getThreadLinkMetadata(threadIds)
+        .getThreadTitles(threadIds, projects)
         .pipe(Effect.mapError(shellProjectionError));
-    }),
-    getThreadTitles: Effect.fn("OrchestratorV2.getThreadTitles")(function (threadIds) {
-      return projectionStore.getThreadTitles(threadIds).pipe(Effect.mapError(shellProjectionError));
     }),
     getThreadEventSequence: Effect.fn("OrchestratorV2.getThreadEventSequence")(function (threadId) {
       return eventSink

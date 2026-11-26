@@ -400,6 +400,7 @@ export function applyServerSettingsPatch(
     backgroundActivityProfile,
     backgroundActivity,
     worktreeCleanup: worktreeCleanupPatch,
+    connectSharedProjects: connectSharedProjectsPatch,
     // Merged per entry below; its `null` removals must not reach deepMerge.
     usageLimitSources: usageLimitSourcesPatch,
     textGenerators: textGeneratorsPatch,
@@ -588,6 +589,14 @@ export function applyServerSettingsPatch(
           },
         }
       : {}),
+    ...(connectSharedProjectsPatch === undefined
+      ? {}
+      : {
+          connectSharedProjects: mergeSettingsEntries(
+            current.connectSharedProjects,
+            connectSharedProjectsPatch,
+          ),
+        }),
     ...(projectSettingsOverridesPatch !== undefined
       ? {
           projectSettingsOverrides: Object.fromEntries(

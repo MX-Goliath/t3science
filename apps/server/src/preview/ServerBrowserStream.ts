@@ -4,6 +4,7 @@ import {
   AuthPreviewOperateScope,
   PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE,
   PreviewStreamHostSetup,
+  ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -21,7 +22,9 @@ import {
 import * as Socket from "effect/socket/Socket";
 
 import { authenticateMediaRequest, failEnvironmentInternal } from "../auth/http.ts";
+import { CLOUD_CONNECT_SUBJECT } from "../auth/EnvironmentAuth.ts";
 import * as SessionStore from "../auth/SessionStore.ts";
+import * as ConnectProjectAccess from "../cloud/ConnectProjectAccess.ts";
 import { assetResponseHeaders } from "../http.ts";
 import * as PreviewBrowserHost from "./PreviewBrowserHost.ts";
 import * as ServerBrowser from "./ServerBrowser.ts";
@@ -52,6 +55,18 @@ const parseMessage = (chunk: Uint8Array | string): unknown => {
   }
 };
 
+const previewThreadAccess = Effect.fn("ServerBrowserStream.previewThreadAccess")(function* (
+  subject: string,
+  threadId: string,
+) {
+  if (subject !== CLOUD_CONNECT_SUBJECT) return { allowed: true, revoked: Effect.never };
+  if (!threadId) return { allowed: false, revoked: Effect.void };
+  const access = yield* ConnectProjectAccess.watchThreadAccess(ThreadId.make(threadId));
+  return access === null
+    ? { allowed: false, revoked: Effect.void }
+    : { allowed: true, revoked: access.revoked };
+});
+
 // Request middleware owns tracing, including long-lived WebSocket sessions.
 const makeHandler = Effect.fnUntraced(function* (browser: ServerBrowser.ServerBrowser["Service"]) {
   const request = yield* HttpServerRequest.HttpServerRequest;
@@ -80,6 +95,8 @@ const makeHandler = Effect.fnUntraced(function* (browser: ServerBrowser.ServerBr
   if (threadId.length === 0 || tabId.length === 0) {
     return HttpServerResponse.text("Not Found", { status: 404 });
   }
+  const access = yield* previewThreadAccess(session.subject, threadId);
+  if (!access.allowed) return HttpServerResponse.text("Not Found", { status: 404 });
   const sessions = yield* SessionStore.SessionStore;
   const stream = Effect.scoped(
     Effect.gen(function* () {
@@ -215,7 +232,7 @@ const makeHandler = Effect.fnUntraced(function* (browser: ServerBrowser.ServerBr
   );
   return yield* Effect.raceFirst(
     stream,
-    sessions.awaitInvalidation(session.sessionId).pipe(
+    Effect.raceFirst(sessions.awaitInvalidation(session.sessionId), access.revoked).pipe(
       Effect.as(HttpServerResponse.empty()),
       Effect.catchTags({
         SessionCredentialVerificationError: (error) =>
@@ -240,7 +257,9 @@ const serveDownload = Effect.fnUntraced(function* (
   browser: ServerBrowser.ServerBrowser["Service"],
   params: URLSearchParams,
 ) {
-  yield* authenticateMediaRequest(AuthOrchestrationReadScope);
+  const session = yield* authenticateMediaRequest(AuthOrchestrationReadScope);
+  const access = yield* previewThreadAccess(session.subject, params.get("threadId") ?? "");
+  if (!access.allowed) return HttpServerResponse.text("Not Found", { status: 404 });
   const download = yield* browser.openDownload({
     threadId: params.get("threadId") ?? "",
     tabId: params.get("tabId") ?? "",
@@ -261,7 +280,9 @@ const UPLOAD_MAX_FILES = 20;
 // The request span already covers this upload route.
 const receiveUpload = Effect.fnUntraced(
   function* (browser: ServerBrowser.ServerBrowser["Service"], params: URLSearchParams) {
-    yield* authenticateMediaRequest(AuthPreviewOperateScope);
+    const session = yield* authenticateMediaRequest(AuthPreviewOperateScope);
+    const access = yield* previewThreadAccess(session.subject, params.get("threadId") ?? "");
+    if (!access.allowed) return HttpServerResponse.text("Not Found", { status: 404 });
     const request = yield* HttpServerRequest.HttpServerRequest;
     const fs = yield* FileSystem.FileSystem;
     const parts = yield* request.multipart.pipe(

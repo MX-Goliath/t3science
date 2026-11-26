@@ -1,5 +1,12 @@
 # T3 Connect
 
+In T3 Science, the host's project allowlist limits the T3 project and thread data
+available to Connect sessions. The server applies it to snapshots, live streams,
+and requests for individual threads. Changing the allowlist closes Connect sockets
+so their next snapshot uses the new selection. The session's Connect origin is
+retained if a client learns a direct address. Agents and terminals still have their
+usual host permissions.
+
 T3 Connect uses Clerk for cloud identity. The relay manages environment links,
 credentials for reaching environments, and managed tunnel allocations. After
 bootstrap, clients send application traffic through the environment's tunnel

@@ -819,16 +819,18 @@ export const makeWithHosts = Effect.fn("DeviceService.makeWithHosts")(function* 
             booting,
           ],
         }));
-        const bootedId = yield* ready.devices.boot(device, context).pipe(
-          Effect.ensuring(
-            publish((current) => ({
-              ...current,
-              bootingDevices: (current.bootingDevices ?? []).filter(
-                (entry) => entry.hostId !== booting.hostId || entry.id !== booting.id,
-              ),
-            })),
-          ),
-        );
+        const bootedId = yield* ready.devices
+          .boot(device, { ...context, threadId: input.threadId })
+          .pipe(
+            Effect.ensuring(
+              publish((current) => ({
+                ...current,
+                bootingDevices: (current.bootingDevices ?? []).filter(
+                  (entry) => entry.hostId !== booting.hostId || entry.id !== booting.id,
+                ),
+              })),
+            ),
+          );
         state = yield* refresh(ready);
         // Retained entries predate the boot, so only a complete listing confirms the booted device.
         device = state.hostStatuses[host.id]?.incompletePlatforms?.includes(device.platform)

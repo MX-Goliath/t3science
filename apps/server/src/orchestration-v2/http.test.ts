@@ -1,18 +1,22 @@
 import {
   AuthSessionId,
+  ChatAttachmentId,
   type AuthEnvironmentScope,
   EnvironmentAuthenticatedAuth,
   EnvironmentAuthenticatedPrincipal,
   EnvironmentHttpApi,
   EnvironmentId,
   EventId,
+  MessageId,
   ORCHESTRATION_PROTOCOL_HEADER,
   ORCHESTRATION_PROTOCOL_VERSION_TEXT,
+  ORCHESTRATION_V2_WS_METHODS,
   OrchestrationV2AppThread,
   OrchestrationV2Run,
   OrchestrationV2TurnItem,
   OrchestrationV2ThreadTranscript,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  ProjectId,
   ThreadId,
 } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
@@ -33,6 +37,9 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { CLOUD_CONNECT_SUBJECT } from "../auth/EnvironmentAuth.ts";
+import { createAttachmentId, createPendingAttachmentId } from "../attachmentStore.ts";
+import * as ConnectProjectAccess from "../cloud/ConnectProjectAccess.ts";
 
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
 import { ProjectEnrichmentService } from "../project/ProjectEnrichmentService.ts";
@@ -41,6 +48,7 @@ import { EventSinkV2 } from "./EventSink.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
+import { encodeThreadHistoryCursor } from "./threadHistoryPaging.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 
@@ -118,20 +126,24 @@ const rolledBackRun = Schema.decodeSync(OrchestrationV2Run)({
 });
 
 // Serves the orchestration HTTP routes over real stores; `allowed` gates the read scope.
-const serveOrchestrationHttp = (allowed: () => boolean) =>
+const serveOrchestrationHttp = (
+  allowed: () => boolean,
+  subject = "test",
+  onThreadShellRead?: (sink: EventSinkV2["Service"]) => Effect.Effect<void>,
+) =>
   Effect.gen(function* () {
     const runtime = ProviderReplayHarness.layerWithRegistry(
       { name: "thread-transcript" },
       ProviderAdapterRegistry.layerFromAdapters([]),
       { runEffectWorker: false },
     );
+    const settings = ServerSettings.layerTest({});
     const services = yield* Layer.build(
       Layer.mergeAll(
         runtime,
+        settings,
         ThreadManagementService.layer.pipe(
-          Layer.provide(
-            Layer.mergeAll(runtime, CommandReceiptStore.layer, ServerSettings.layerTest({})),
-          ),
+          Layer.provide(Layer.mergeAll(runtime, CommandReceiptStore.layer, settings)),
         ),
         OrchestrationEventStore.layer,
         ProjectStore.layer,
@@ -149,6 +161,15 @@ const serveOrchestrationHttp = (allowed: () => boolean) =>
         },
       ],
     });
+    const threads = Context.get(services, ThreadManagementService.ThreadManagementService);
+    const routeServices =
+      onThreadShellRead === undefined
+        ? services
+        : Context.add(services, ThreadManagementService.ThreadManagementService, {
+            ...threads,
+            getThreadShell: (id) =>
+              threads.getThreadShell(id).pipe(Effect.tap(() => onThreadShellRead(eventSink))),
+          });
     const routes = HttpApiBuilder.layer(TranscriptTestApi).pipe(
       Layer.provide(OrchestrationHttp.layer),
       Layer.provide(
@@ -162,7 +183,7 @@ const serveOrchestrationHttp = (allowed: () => boolean) =>
             effect.pipe(
               Effect.provideService(EnvironmentAuthenticatedPrincipal, {
                 sessionId: AuthSessionId.make("test-session"),
-                subject: "test",
+                subject,
                 method: "bearer-access-token",
                 scopes: new Set<AuthEnvironmentScope>(allowed() ? ["orchestration:read"] : []),
               }),
@@ -170,7 +191,7 @@ const serveOrchestrationHttp = (allowed: () => boolean) =>
           ),
         ),
       ),
-      Layer.provide(Layer.succeedContext(services)),
+      Layer.provide(Layer.succeedContext(routeServices)),
       Layer.provide(Layer.mock(ProjectEnrichmentService)({})),
       Layer.provide(HttpPlatform.layer),
       Layer.provide(Etag.layerWeak),
@@ -180,6 +201,211 @@ const serveOrchestrationHttp = (allowed: () => boolean) =>
     yield* Effect.addFinalizer(() => Effect.promise(dispose));
     return { services, eventSink, handler };
   });
+
+it.effect("exposes a Connect transcript only while its project is shared", () =>
+  Effect.gen(function* () {
+    const { services, handler } = yield* serveOrchestrationHttp(() => true, CLOUD_CONNECT_SUBJECT);
+    const settings = Context.get(services, ServerSettings.ServerSettingsService);
+    const read = () =>
+      Effect.promise(() =>
+        handler(
+          new Request(`http://localhost/api/orchestration/threads/${thread.id}/transcript`, {
+            headers: { [ORCHESTRATION_PROTOCOL_HEADER]: ORCHESTRATION_PROTOCOL_VERSION_TEXT },
+          }),
+        ),
+      );
+    expect((yield* read()).status).toBe(404);
+    yield* settings.updateSettings({ connectSharedProjects: { [thread.projectId]: true } });
+    expect((yield* read()).status).toBe(200);
+    yield* settings.updateSettings({ connectSharedProjects: { [thread.projectId]: null } });
+    expect((yield* read()).status).toBe(404);
+  }),
+);
+
+it.effect("revokes an authorized media stream after a move before its watcher starts", () =>
+  Effect.gen(function* () {
+    const { services, eventSink } = yield* serveOrchestrationHttp(() => true);
+    yield* Context.get(services, ServerSettings.ServerSettingsService).updateSettings({
+      connectSharedProjects: { [thread.projectId]: true },
+    });
+    const access = yield* ConnectProjectAccess.watchThreadAccess(thread.id).pipe(
+      Effect.provide(services),
+    );
+    expect(access).not.toBeNull();
+    yield* eventSink.write({
+      events: [
+        {
+          id: EventId.make("move-before-media-start"),
+          type: "thread.metadata-updated",
+          threadId: thread.id,
+          occurredAt: now,
+          payload: { ...thread, projectId: ProjectId.make("private") },
+        },
+      ],
+    });
+    yield* access!.revoked;
+  }),
+);
+
+it.effect.each(["", "/bounded", "/transcript", "/history"] as const)(
+  "checks the project in the HTTP %s snapshot after a concurrent move",
+  (path) =>
+    Effect.gen(function* () {
+      const { services, handler } = yield* serveOrchestrationHttp(
+        () => true,
+        CLOUD_CONNECT_SUBJECT,
+        (sink) =>
+          sink
+            .write({
+              events: [
+                {
+                  id: EventId.make("move-before-http-snapshot"),
+                  type: "thread.metadata-updated",
+                  threadId: thread.id,
+                  occurredAt: now,
+                  payload: { ...thread, projectId: ProjectId.make("private") },
+                },
+              ],
+            })
+            .pipe(Effect.asVoid, Effect.orDie),
+      );
+      yield* Context.get(services, ServerSettings.ServerSettingsService).updateSettings({
+        connectSharedProjects: { [thread.projectId]: true },
+      });
+      const url = new URL(`http://localhost/api/orchestration/threads/${thread.id}${path}`);
+      if (path === "/history") {
+        url.searchParams.set(
+          "cursor",
+          encodeThreadHistoryCursor({
+            snapshotSequence: 1,
+            sourceThreadId: thread.id,
+            sourceItemId: "item-99",
+            position: 0,
+          }),
+        );
+      }
+      const response = yield* Effect.promise(() =>
+        handler(
+          new Request(url, {
+            headers: { [ORCHESTRATION_PROTOCOL_HEADER]: ORCHESTRATION_PROTOCOL_VERSION_TEXT },
+          }),
+        ),
+      );
+      expect(response.status).toBe(404);
+    }),
+);
+
+it.effect("authorizes saved asset URLs only for attachments belonging to a shared thread", () =>
+  Effect.gen(function* () {
+    const { services, eventSink } = yield* serveOrchestrationHttp(() => true);
+    const attachmentId = ChatAttachmentId.make(createAttachmentId(thread.id)!);
+    const renderId = createAttachmentId(thread.id, "html")!;
+    yield* eventSink.write({
+      events: [
+        {
+          id: EventId.make("attach-image"),
+          type: "message.updated",
+          threadId: thread.id,
+          occurredAt: now,
+          payload: {
+            id: MessageId.make("message:image"),
+            threadId: thread.id,
+            runId: null,
+            nodeId: null,
+            role: "user",
+            text: "Image",
+            createdBy: "user",
+            creationSource: "web",
+            attachments: [
+              {
+                type: "image",
+                id: attachmentId,
+                name: "img.png",
+                mimeType: "image/png",
+                sizeBytes: 8,
+              },
+            ],
+            streaming: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+        {
+          id: EventId.make("attach-render"),
+          type: "turn-item.updated",
+          threadId: thread.id,
+          occurredAt: now,
+          payload: {
+            ...items.find((item) => item.type === "command_execution")!,
+            type: "dynamic_tool",
+            toolName: "mcp__t3-code__html_render",
+            input: null,
+            output: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  htmlRender: { attachmentId: renderId, title: "render", height: 300 },
+                }),
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const sql = Context.get(services, SqlClient.SqlClient);
+    const shared = new Set([thread.projectId]);
+    for (const id of [attachmentId, renderId]) {
+      expect(yield* ConnectProjectAccess.canReadAttachment(sql, shared, id)).toBe(true);
+      expect(yield* ConnectProjectAccess.canReadAttachment(sql, new Set(), id)).toBe(false);
+    }
+    expect(
+      yield* ConnectProjectAccess.canReadAttachment(sql, shared, createAttachmentId(thread.id)!),
+    ).toBe(false);
+    expect(
+      yield* ConnectProjectAccess.canReadAttachment(sql, new Set(), createPendingAttachmentId()),
+    ).toBe(true);
+    const authorize = (method: string, payload: unknown) =>
+      ConnectProjectAccess.authorizeRpc(
+        method,
+        payload,
+        shared,
+        () => Effect.succeed({ projectId: thread.projectId, deletedAt: null }),
+        () => Effect.succeed({ tasks: [] }),
+        {
+          onThreadAccess: () => {},
+          draftTerminalProject: () => Effect.undefined,
+          canReuseAttachment: (id) =>
+            ConnectProjectAccess.canReadAttachment(sql, shared, id).pipe(
+              Effect.orElseSucceed(() => false),
+            ),
+        },
+      );
+    const privateReference = [{ id: createAttachmentId("private-thread")! }];
+    for (const payload of [
+      { type: "message.dispatch", attachments: privateReference },
+      { type: "queued-run.edit", attachments: privateReference },
+      { type: "runtime-request.respond", attachmentsByQuestionId: { question: privateReference } },
+    ]) {
+      expect(
+        yield* authorize(ORCHESTRATION_V2_WS_METHODS.dispatchCommand, {
+          ...payload,
+          threadId: thread.id,
+        }).pipe(Effect.flip),
+      ).toMatchObject({ _tag: "EnvironmentAuthorizationError" });
+    }
+    expect(
+      yield* authorize(ORCHESTRATION_V2_WS_METHODS.launchThread, {
+        projectId: thread.projectId,
+        initialMessage: { attachments: privateReference },
+      }).pipe(Effect.flip),
+    ).toMatchObject({ _tag: "EnvironmentAuthorizationError" });
+    yield* authorize(ORCHESTRATION_V2_WS_METHODS.dispatchCommand, {
+      type: "queued-run.edit",
+      threadId: thread.id,
+      attachments: [{ id: attachmentId }],
+    });
+  }),
+);
 
 it.effect("exports full history with size, scope, and missing-thread checks", () =>
   Effect.gen(function* () {

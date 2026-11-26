@@ -7,6 +7,7 @@ import type {
   DevicePlatform,
   DevicePlatformAvailability,
   DeviceSummary,
+  ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -80,6 +81,7 @@ export type HostDevice = Omit<DeviceSummary, "hostId">;
 /** Where a device is being opened from, for hosts whose devices depend on the project. */
 export interface DeviceOpenContext {
   readonly workspaceRoot?: string | undefined;
+  readonly threadId?: ThreadId | undefined;
 }
 
 export type AgentDaemonEndpoint = Pick<AgentDeviceEndpoint, "baseUrl" | "token">;
@@ -100,6 +102,7 @@ export interface HubUpstream {
   readonly url: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly protocols: ReadonlyArray<string>;
+  readonly projectThreadId?: ThreadId | undefined;
 }
 
 /** Discovery and lifecycle for the devices a ready host can run. */
@@ -173,6 +176,8 @@ export interface DeviceHostReady {
     readonly serveSimAxSettings: string | null;
     readonly serveSimCli: string | null;
   };
+  /** Thread that opened a hosted session, independent of other viewers attaching later. */
+  readonly projectThreadId?: (deviceId: string) => ThreadId | undefined;
   /** Routes proxied hub requests itself; otherwise they go to `hub.origin`. */
   readonly upstream?: (
     hubPath: string,

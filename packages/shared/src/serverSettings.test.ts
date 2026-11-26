@@ -91,6 +91,19 @@ describe("fallbackTextGenerationModelSelection", () => {
 });
 
 describe("serverSettings helpers", () => {
+  it("defaults to private projects and merges Connect sharing changes per project", () => {
+    const first = ProjectId.make("first");
+    const second = ProjectId.make("second");
+    const initial = decodeServerSettings({});
+    expect(initial.connectSharedProjects).toEqual({});
+
+    const shared = applyServerSettingsPatch(initial, { connectSharedProjects: { [first]: true } });
+    const both = applyServerSettingsPatch(shared, { connectSharedProjects: { [second]: true } });
+    const revoked = applyServerSettingsPatch(both, { connectSharedProjects: { [first]: null } });
+
+    expect(revoked.connectSharedProjects).toEqual({ [second]: true });
+  });
+
   it("translates a shipped client's idle compaction switch into a mode", () => {
     const off = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, { idleCompaction: "off" });
     expect([off.idleCompaction, off.compactIdleThreads]).toEqual(["off", false]);

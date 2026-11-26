@@ -146,7 +146,12 @@ const layerTest = GuestShareService.layer.pipe(
     ),
   ),
   Layer.provide(layerProviders),
-  Layer.provideMerge(ServerSettings.layerTest({ guestSharingEnabled: true })),
+  Layer.provideMerge(
+    ServerSettings.layerTest({
+      guestSharingEnabled: true,
+      connectSharedProjects: { [ProjectId.make("project:guest-share-service")]: true },
+    }),
+  ),
   Layer.provide(layerConnect),
   Layer.provideMerge(layerAnalytics),
   Layer.provide(ServerSecretStore.layer),
@@ -396,6 +401,32 @@ it.effect("shows the guest the thread's new model", () =>
       event.type === "view" ? [event.view.model.name] : [],
     );
     assert.include(views, "gpt-5.2-codex");
+  }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect("ends the guest stream before sending a move into a private project", () =>
+  Effect.gen(function* () {
+    const { orchestrator, guestShares, credential } = yield* shareThread;
+    const { token: session } = yield* guestShares.redeem({ credential, name: "Sam" });
+    const events = yield* guestShares.stream(session);
+    const { thread } = yield* orchestrator.getThreadRecords(threadId, []);
+    const eventSink = yield* EventSink.EventSinkV2;
+    yield* eventSink.write({
+      events: [
+        {
+          id: EventId.make("move-guest-share-private"),
+          type: "thread.metadata-updated",
+          threadId,
+          occurredAt: yield* DateTime.now,
+          payload: { ...thread, projectId: ProjectId.make("private") },
+        },
+      ],
+    });
+    const received = yield* Stream.runCollect(events);
+    const kinds = received.map((event) => (event.type === "thread" ? event.item.kind : event.type));
+    assert.deepEqual(kinds.slice(0, 2), ["view", "snapshot"]);
+    assert.isTrue(kinds.slice(2).every((kind) => kind === "ended"));
+    assert.equal((yield* Effect.flip(guestShares.check(session))).reason, "inactive");
   }).pipe(Effect.provide(layerTest)),
 );
 

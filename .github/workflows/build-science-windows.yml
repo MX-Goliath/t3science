@@ -53,6 +53,8 @@ jobs:
           lfs: true
       - uses: ./.github/actions/setup-ci-deps
       - uses: dtolnay/rust-toolchain@stable
+      - name: Configure T3 Connect
+        run: cp .env.example .env
       - name: Build desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"

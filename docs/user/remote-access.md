@@ -38,6 +38,16 @@ connection. Pull request diffs and provider settings keep working after the
 previous credential expires. A failed renewal affects that request; it does not
 disconnect an otherwise healthy conversation.
 
+### Share projects in T3 Science
+
+Projects are private by default. On the host, open **Settings → Projects**, select a
+project, and turn on **Share project through T3 Connect**. The setting applies to the
+selected checkout on that machine. Turn it off to remove the project and its chats
+from T3 Connect. Local and directly paired clients keep their usual access.
+
+Agents and terminals still run with their usual permissions on the host. Share projects
+with devices you trust to use those permissions.
+
 ### Approve new devices
 
 By default, any device signed in to your T3 Connect account can open a linked

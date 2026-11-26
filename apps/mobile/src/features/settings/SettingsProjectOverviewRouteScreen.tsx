@@ -5,7 +5,7 @@ import { AppText as Text, AppTextInput } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import * as Dialog from "../../components/ui/Dialog";
-import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { AuthAccessWriteScope, AuthOrchestrationOperateScope } from "@t3tools/contracts";
 import { planProjectRemoval } from "@t3tools/client-runtime/state/projects";
 import {
   isAtomCommandInterrupted,
@@ -22,6 +22,7 @@ import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { projectEnvironment } from "../../state/projects";
+import { serverEnvironment } from "../../state/server";
 import { useThreadShells } from "../../state/entities";
 import { appAtomRegistry } from "../../state/atom-registry";
 import {
@@ -452,6 +453,15 @@ function ProjectOverviewContent(props: {
             }
           />
         ))}
+        {props.members.map((member) => (
+          <ProjectConnectSharingRow
+            key={`${member.environmentId}:${member.id}`}
+            member={member}
+            target={props.environments.find(
+              (entry) => entry.environmentId === member.environmentId,
+            )}
+          />
+        ))}
       </SettingsSection>
       {props.members.map((member) => {
         const environment = props.environments.find(
@@ -502,6 +512,41 @@ function ProjectOverviewContent(props: {
         />
       </SettingsSection>
     </>
+  );
+}
+
+function ProjectConnectSharingRow({
+  member,
+  target,
+}: {
+  member: EnvironmentProject;
+  target: SettingsTarget | undefined;
+}) {
+  const gt = useGT();
+  const canShare = useEnvironmentScope(member.environmentId, AuthAccessWriteScope);
+  const updateSettings = useAtomCommand(serverEnvironment.updateSettings, {
+    label: "project Connect sharing update",
+    reportFailure: true,
+  });
+  const [saving, setSaving] = useState(false);
+  if (!canShare || target?.serverConfig.environment.capabilities.projectConnectSharing !== true) {
+    return null;
+  }
+
+  return (
+    <SettingsSwitchRow
+      label={gt("Share project through T3 Connect")}
+      subtitle={member.workspaceRoot}
+      value={target.serverConfig.settings.connectSharedProjects[member.id] === true}
+      disabled={saving}
+      onValueChange={(checked) => {
+        setSaving(true);
+        void updateSettings({
+          environmentId: member.environmentId,
+          input: { patch: { connectSharedProjects: { [member.id]: checked ? true : null } } },
+        }).finally(() => setSaving(false));
+      }}
+    />
   );
 }
 
