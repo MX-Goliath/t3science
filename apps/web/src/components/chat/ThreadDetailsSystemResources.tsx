@@ -16,6 +16,7 @@ import {
 import { useState, type ReactNode } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
+import { systemResourceDiskName } from "../../lib/systemResourceDisks";
 import { cn } from "../../lib/utils";
 import { clientHostEnvironmentAtom } from "../../state/clientHostEnvironment";
 import { useEnvironment } from "../../state/environments";
@@ -117,7 +118,7 @@ function ResourceReadings({
           {gt("No selected resources are available.")}
         </p>
       ) : (
-        <div className="grid grid-cols-[minmax(0,5.25rem)_minmax(2rem,1fr)_2.75rem] gap-x-2 text-xs">
+        <div className="grid grid-cols-[minmax(0,7rem)_minmax(2rem,1fr)_2.75rem] gap-x-2 text-xs">
           {settings.cpu ? (
             <ResourceRow
               icon={<CpuIcon />}
@@ -215,7 +216,7 @@ function ResourceReadings({
                 <ResourceRow
                   key={disk.id}
                   icon={<HardDriveIcon />}
-                  label={disk.mountPath}
+                  label={systemResourceDiskName(disk.mountPath)}
                   value={percent(disk.totalBytes > 0 ? disk.usedBytes / disk.totalBytes : null)}
                   color="text-teal-400"
                   tooltip={`${disk.label} · ${disk.mountPath}\n${capacity(disk.usedBytes, disk.totalBytes)}`}

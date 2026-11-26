@@ -12643,5 +12643,5 @@
   "3b5dd572d8ce8f44": "Datenträgerbelegung",
   "fc8c37cf7b75c1cf": "Gilt für alle Clients dieser Umgebung. Wird alle 2 Sekunden aktualisiert, solange die Thread-Details geöffnet sind.",
   "d9e1540f55c08e6c": "Datenträger und GPUs erkennen",
-  "7bfd890976cac50d": "Keine lokalen Datenträger oder unterstützten GPUs erkannt."
+  "b5219976a648818f": "Keine Laufwerke erkannt."
 }

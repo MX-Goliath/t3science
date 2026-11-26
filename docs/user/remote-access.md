@@ -204,10 +204,15 @@ two seconds while the panel is open; closing it stops monitoring from that clien
 CPU and GPU graphs show the last minute. Network filesystems are excluded.
 
 In **Settings → Environments**, open the machine's menu and choose **Resource
-display** to select metrics and individual disks or GPUs. You can also configure
-them for the selected environment in **Settings → Sharing & access**. Preferences
-apply to every client of that environment. Temperatures and GPU readings depend
-on the host's drivers and available sensors; NVIDIA readings require `nvidia-smi`.
+display**. Under **Disk usage**, turn individual disks on or off. If you attach a
+drive while the settings are open, choose **Detect disks and GPUs** to update the
+list. Hover over a disk reading in **Thread details** to see its full mount path
+and capacity.
+
+You can also configure resource display for the selected environment in
+**Settings → Sharing & access**. Preferences apply to every client of that
+environment. Temperatures and GPU readings depend on the host's drivers and
+available sensors. NVIDIA readings require `nvidia-smi`.
 
 ### Tailscale HTTPS
 

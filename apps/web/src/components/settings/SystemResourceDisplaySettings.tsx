@@ -10,6 +10,7 @@ import { Atom } from "effect/reactivity";
 import { T, useGT } from "gt-react";
 import { useContext, useRef, useState } from "react";
 import { useUpdateEnvironmentSettings } from "../../hooks/useSettings";
+import { systemResourceDiskName } from "../../lib/systemResourceDisks";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentScope } from "../../state/session";
@@ -90,9 +91,8 @@ export function SystemResourceDisplaySettings({
   const gt = useGT();
   const { settings, update } = useDisplaySettings(environmentId);
   const canEdit = useEnvironmentScope(environmentId, AuthSettingsWriteScope) && connected;
-  const [detectDevices, setDetectDevices] = useState(false);
   const inventory = useEnvironmentQuery(
-    detectDevices && connected
+    settings.enabled && connected
       ? serverEnvironment.systemResources({ environmentId, input: {} })
       : null,
   );
@@ -123,11 +123,16 @@ export function SystemResourceDisplaySettings({
       />
     </label>
   );
-  const deviceToggle = (key: "hiddenDiskIds" | "hiddenGpuIds", id: string, label: string) => (
+  const deviceToggle = (
+    key: "hiddenDiskIds" | "hiddenGpuIds",
+    id: string,
+    label: string,
+    detail = label,
+  ) => (
     <label key={id} className="flex min-w-0 items-center justify-between gap-3 py-1 text-xs">
       <Tooltip>
         <TooltipTrigger render={<span className="min-w-0 truncate" />}>{label}</TooltipTrigger>
-        <TooltipPopup>{label}</TooltipPopup>
+        <TooltipPopup>{detail}</TooltipPopup>
       </Tooltip>
       <Switch
         size="sm"
@@ -161,39 +166,45 @@ export function SystemResourceDisplaySettings({
           {toggle("gpu", gt("GPU usage"))}
           {toggle("gpuTemperature", gt("GPU temperature"))}
           {toggle("gpuMemory", gt("VRAM usage"))}
+          {inventory.data?.gpus.map((gpu) =>
+            deviceToggle("hiddenGpuIds", gpu.id, `${gpu.name} (${gpu.id})`),
+          )}
           {toggle("disks", gt("Disk usage"))}
+          {settings.disks && inventory.data ? (
+            <div className="ms-2 border-s border-border/50 ps-2">
+              {inventory.data.disks.length > 0 ? (
+                inventory.data.disks.map((disk) =>
+                  deviceToggle(
+                    "hiddenDiskIds",
+                    disk.id,
+                    `${systemResourceDiskName(disk.mountPath)} · ${disk.label.split("/").at(-1)}`,
+                    `${disk.label} · ${disk.mountPath}`,
+                  ),
+                )
+              ) : (
+                <p className="py-1 text-xs text-muted-foreground">{gt("No disks detected.")}</p>
+              )}
+            </div>
+          ) : null}
           <div className="mt-2">
             <Button
               size="xs"
               variant="outline"
               disabled={!connected || inventory.isPending}
-              onClick={() => {
-                if (detectDevices) inventory.refresh();
-                else setDetectDevices(true);
-              }}
+              onClick={inventory.refresh}
             >
               <T>Detect disks and GPUs</T>
             </Button>
           </div>
+          {inventory.isPending && !inventory.data ? (
+            <p role="status" className="mt-2 text-xs text-muted-foreground">
+              {gt("Reading system resources…")}
+            </p>
+          ) : null}
           {inventory.error ? (
             <p role="alert" className="mt-2 text-xs text-destructive">
               {inventory.error}
             </p>
-          ) : null}
-          {inventory.data ? (
-            <div className="mt-2">
-              {inventory.data.disks.map((disk) =>
-                deviceToggle("hiddenDiskIds", disk.id, disk.mountPath),
-              )}
-              {inventory.data.gpus.map((gpu) =>
-                deviceToggle("hiddenGpuIds", gpu.id, `${gpu.name} (${gpu.id})`),
-              )}
-              {inventory.data.disks.length === 0 && inventory.data.gpus.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  <T>No local disks or supported GPUs detected.</T>
-                </p>
-              ) : null}
-            </div>
           ) : null}
         </>
       ) : null}

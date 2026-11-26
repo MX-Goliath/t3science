@@ -144,7 +144,7 @@ it("fits and scrolls remote resources and polls only while both the card and sec
   await expect.element(page.getByText("AMD Radeon RX 7900 XTX")).toBeVisible();
   await expect.element(page.getByText("NVIDIA GeForce RTX 4090")).toBeVisible();
   await expect
-    .element(page.getByText("/mnt/external-storage-with-a-long-name-11"))
+    .element(page.getByText("external-storage-with-a-long-name-11", { exact: true }))
     .toBeInTheDocument();
 
   await vi.waitFor(() => {

@@ -11265,7 +11265,7 @@
   "3b5dd572d8ce8f44": "Disk usage",
   "fc8c37cf7b75c1cf": "Shared by all clients of this environment. Updates every 2 seconds while Thread details is open.",
   "d9e1540f55c08e6c": "Detect disks and GPUs",
-  "7bfd890976cac50d": "No local disks or supported GPUs detected.",
+  "b5219976a648818f": "No disks detected.",
   "83729e5228731819": "Traces endpoint",
   "8739ffcda2007458": "Metrics endpoint",
   "5c90c5ba936fb908": "Logs endpoint",
