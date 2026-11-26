@@ -45,7 +45,7 @@ function setup() {
   };
 }
 
-it("polls once for multiple readers and stops with the last reader, including an in-flight read", () => {
+it("stops polling with the last reader and keeps recent samples separate per environment", () => {
   using fixture = setup();
   const { registry, history, query, flush } = fixture;
   let reads = 0;
@@ -56,9 +56,15 @@ it("polls once for multiple readers and stops with the last reader, including an
       get.addFinalizer(() => cancelled++);
       return AsyncResult.initial<SystemResourcesSnapshot, Error>();
     }
+    if (reads === 4) return AsyncResult.initial<SystemResourcesSnapshot, Error>();
     return AsyncResult.success(snapshot(reads * 2_000));
   }).pipe(Atom.setIdleTTL(0));
-  query.mockReturnValue(resourceQuery);
+  const otherEnvironment = EnvironmentId.make("other-resources-test");
+  const otherHistory = systemResourceHistoryAtom(otherEnvironment);
+  const otherQuery = Atom.make(AsyncResult.success(snapshot(16_000))).pipe(Atom.setIdleTTL(0));
+  query.mockImplementation(({ environmentId }) =>
+    environmentId === otherEnvironment ? otherQuery : resourceQuery,
+  );
 
   expect(reads).toBe(0);
   const releaseFirst = registry.mount(history);
@@ -76,8 +82,28 @@ it("polls once for multiple readers and stops with the last reader, including an
   releaseSecond();
   flush();
   expect(cancelled).toBe(1);
+  const releaseOther = registry.mount(otherHistory);
+  expect(registry.get(otherHistory).history.map((sample) => sample.sampledAt)).toEqual([16_000]);
   vi.advanceTimersByTime(10_000);
   expect(reads).toBe(3);
+  releaseOther();
+  flush();
+
+  const releaseReturning = registry.mount(history);
+  expect(reads).toBe(4);
+  expect(registry.get(history)).toMatchObject({ snapshot: snapshot(4_000), pending: true });
+  registry.refresh(resourceQuery);
+  expect(registry.get(history).history.map((sample) => sample.sampledAt)).toEqual([
+    2_000, 4_000, 10_000,
+  ]);
+  releaseReturning();
+  flush();
+  vi.advanceTimersByTime(62_000);
+  expect(reads).toBe(5);
+
+  const releaseAfterExpiry = registry.mount(history);
+  expect(registry.get(history).history.map((sample) => sample.sampledAt)).toEqual([12_000]);
+  releaseAfterExpiry();
 });
 
 it("keeps only the last minute and 31 unique samples and exposes failures without a stale snapshot", () => {
