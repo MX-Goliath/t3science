@@ -19,6 +19,8 @@ import {
 export interface ProcessRunInput {
   readonly command: string;
   readonly args: ReadonlyArray<string>;
+  /** Shell text to run through the executable in command. */
+  readonly shellCommand?: string | undefined;
   readonly cwd?: string | undefined;
   readonly spawnCwd?: string | undefined;
   readonly timeout?: Duration.Input | undefined;
@@ -274,11 +276,14 @@ const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
   const outputMode = input.outputMode ?? "error";
   const truncatedMarker = input.truncatedMarker ?? "";
   const extendEnv = input.env !== undefined;
-  const spawnCommand = yield* resolveSpawnCommand(
-    input.command,
-    input.args,
-    input.env === undefined ? {} : { env: input.env, extendEnv },
-  );
+  const spawnCommand =
+    input.shellCommand === undefined
+      ? yield* resolveSpawnCommand(
+          input.command,
+          input.args,
+          input.env === undefined ? {} : { env: input.env, extendEnv },
+        )
+      : { command: input.command, args: [], shell: input.command };
 
   const toSpawnError = (cause: unknown) =>
     new ProcessSpawnError({
@@ -288,13 +293,13 @@ const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
       spawnCwd: input.spawnCwd,
       resolvedCommand: spawnCommand.command,
       resolvedArgumentCount: spawnCommand.args.length,
-      shell: spawnCommand.shell,
+      shell: Boolean(spawnCommand.shell),
       cause,
     });
 
   const spawn = spawner
     .spawn(
-      ChildProcess.make(spawnCommand.command, spawnCommand.args, {
+      ChildProcess.make(input.shellCommand ?? spawnCommand.command, spawnCommand.args, {
         ...((input.spawnCwd ?? input.cwd) ? { cwd: input.spawnCwd ?? input.cwd } : {}),
         ...(input.env !== undefined
           ? {

@@ -480,7 +480,10 @@ const make = Effect.gen(function* () {
           .run({
             operation: "TaskFolders.worktreeLayout",
             command: onWindows ? windowsSystem32Path(hostEnvironment, "cmd.exe") : "sh",
-            args: onWindows ? ["/d", "/s", "/c", now.command.text] : ["-c", now.command.text],
+            // Passing shell text as a normal Windows argument escapes quotes for the wrong parser.
+            ...(onWindows
+              ? { args: [], shellCommand: now.command.text }
+              : { args: ["-c", now.command.text] }),
             cwd: taskFolder.projectRoot,
             env: {
               ...hostEnvironment,

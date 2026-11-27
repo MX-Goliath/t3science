@@ -29,6 +29,7 @@ export interface VcsProcessInput {
   readonly operation: string;
   readonly command: string;
   readonly args: ReadonlyArray<string>;
+  readonly shellCommand?: string | undefined;
   readonly cwd: string;
   readonly spawnCwd?: string;
   readonly stdin?: string;
@@ -251,6 +252,7 @@ export const make = Effect.gen(function* () {
       .run({
         command: input.command,
         args: input.args,
+        ...(input.shellCommand !== undefined ? { shellCommand: input.shellCommand } : {}),
         cwd: input.cwd,
         ...(input.spawnCwd !== undefined ? { spawnCwd: input.spawnCwd } : {}),
         ...(input.stdin !== undefined ? { stdin: input.stdin } : {}),

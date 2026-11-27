@@ -5,6 +5,7 @@ import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as ServerConfig from "../config.ts";
@@ -1456,10 +1457,11 @@ it.effect.each(["stable", "upstream/release"])(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const git = yield* GitVcsDriver.GitVcsDriver;
+      const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectoryScoped({ prefix: "launch-remote-base-" });
-      const cwd = `${directory}/repo`;
-      const remote = `${directory}/remote.git`;
-      const worktreePath = `${directory}/worktree`;
+      const cwd = path.join(directory, "repo");
+      const remote = path.join(directory, "remote.git");
+      const worktreePath = path.join(directory, "worktree");
       yield* fs.makeDirectory(cwd);
       const command = (at: string, args: string[]) =>
         git.execute({ operation: "launch-test", cwd: at, args });
@@ -3049,6 +3051,7 @@ const withLayoutProject = <A, E>(
     );
     const shop = path.join(tmp, "shop");
     const ran = path.join(tmp, "ran");
+    const onWindows = yield* HostProcess.isWindows;
     yield* fileSystem.makeDirectory(shop);
     for (const args of [
       ["init", "-b", "main"],
@@ -3062,7 +3065,9 @@ const withLayoutProject = <A, E>(
       path.join(shop, "t3.json"),
       JSON.stringify({
         worktreeLayout: {
-          create: `echo create >> "${ran}" && git worktree add -q -b "$T3_WORKTREE_BRANCH" "$T3_WORKTREE_PROJECT_PATH"`,
+          create: onWindows
+            ? `echo create>>"${ran}"&&git worktree add -q -b "%T3_WORKTREE_BRANCH%" "%T3_WORKTREE_PROJECT_PATH%"`
+            : `echo create >> "${ran}" && git worktree add -q -b "$T3_WORKTREE_BRANCH" "$T3_WORKTREE_PROJECT_PATH"`,
         },
       }),
     );
@@ -3075,7 +3080,10 @@ const withLayoutProject = <A, E>(
         taskFolders: Layer.succeed(TaskFolders.TaskFolders, yield* TaskFolders.TaskFolders),
       });
       return yield* test({
-        ran: fileSystem.readFileString(ran).pipe(Effect.orElseSucceed(() => "")),
+        ran: fileSystem.readFileString(ran).pipe(
+          Effect.map((text) => text.replaceAll("\r\n", "\n")),
+          Effect.orElseSucceed(() => ""),
+        ),
         harness,
       }).pipe(Effect.provide(harness.layer));
     }).pipe(Effect.provide(layerTaskFolders));
