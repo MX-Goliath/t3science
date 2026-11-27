@@ -67,6 +67,7 @@ function createWorkspaceTabsModel(selectedTab?: WorkspaceTab) {
     threads: 0,
     pullRequests: 0,
     issues: 0,
+    workflows: 0,
     usage: 0,
     images: 0,
     settings: 0,

@@ -5,6 +5,7 @@ import { DEFAULT_TERMINAL_ID } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
 
 import {
+  basename,
   nextOpenTerminalId,
   previousLiveTerminalId,
   resolveProjectScriptTerminalId,
@@ -98,5 +99,16 @@ describe("project action permissions", () => {
     { kind: undefined, canOperateThread: false, canOperateTerminal: true, allowed: true },
   ])("checks the destination capability for $kind actions", ({ kind, allowed, ...permissions }) => {
     expect(canRunProjectAction({ kind }, permissions)).toBe(allowed);
+  });
+});
+
+describe("basename", () => {
+  it.each([
+    ["C:\\wt\\repo\\", "repo"],
+    ["/home/u/repo/", "repo"],
+    ["/home/u/team\\repo", "team\\repo"],
+    ["/", "/"],
+  ])("names %s as %s", (input, expected) => {
+    expect(basename(input)).toBe(expected);
   });
 });

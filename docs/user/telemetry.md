@@ -10,4 +10,6 @@ report from **Settings > About T3 Code > Diagnostics** and share it manually aft
 External OpenTelemetry export and endpoint checks have been removed. Saved OTLP endpoints and
 telemetry environment variables cannot enable sending; endpoint checks are rejected locally.
 
+Agent feedback reports stay on the environment where they were created.
+
 Provider requests and remote connections still transfer the data needed for those features.

@@ -9,7 +9,8 @@ export class AnalyticsService extends Context.Service<
     readonly record: (
       event: string,
       properties?: Readonly<Record<string, unknown>>,
-    ) => Effect.Effect<void>;
+      options?: { readonly anonymous?: boolean },
+    ) => Effect.Effect<boolean>;
 
     readonly flush: Effect.Effect<void>;
 
@@ -22,7 +23,7 @@ export class AnalyticsService extends Context.Service<
 
 // Keep callers compatible without collecting identities, buffering events, or making requests.
 export const layer = Layer.succeed(AnalyticsService, {
-  record: Effect.fn("AnalyticsService.record")(() => Effect.void),
+  record: Effect.fn("AnalyticsService.record")(() => Effect.succeed(false)),
   flush: Effect.void,
   recordOwners: Effect.fn("AnalyticsService.recordOwners")(() => Effect.void),
 });

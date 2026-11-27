@@ -85,6 +85,7 @@ vi.mock("./environmentSections", () => ({
 vi.mock("./devAutoConnect", () => ({
   autoConnectReport: () => ({ connecting: false, error: null }),
   devAutoConnectAttemptAtom: {},
+  pairingLinksAllowed: () => __DEV__,
 }));
 vi.mock("../../state/use-remote-environment-registry", () => ({
   setPendingConnectionError: (message: string | null) => {
@@ -103,37 +104,40 @@ vi.mock("../../state/use-remote-environment-registry", () => ({
 
 import { ConnectionsNewRouteScreen } from "./ConnectionsNewRouteScreen";
 
-it("does not show another feature's error as a pairing failure", () => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  vi.stubGlobal("__DEV__", false);
-  harness.pendingConnectionError = "Could not send the message.";
-  harness.connectPress.mockClear();
-  const container = document.createElement("div");
-  const root = createRoot(container);
-  act(() =>
-    root.render(
-      <ConnectionsNewRouteScreen
-        route={{
-          params: { pairingUrl: "https://science.example.com/pair#token=review-this-token" },
-        }}
-      />,
-    ),
-  );
+it.each([false, true])(
+  "uses the pairing link only in enabled builds and ignores unrelated errors (enabled: %s)",
+  (enabled) => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.stubGlobal("__DEV__", enabled);
+    harness.pendingConnectionError = "Could not send the message.";
+    harness.connectPress.mockClear();
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    act(() =>
+      root.render(
+        <ConnectionsNewRouteScreen
+          route={{
+            params: { pairingUrl: "https://science.example.com/pair#token=review-this-token" },
+          }}
+        />,
+      ),
+    );
 
-  expect(container.textContent).not.toContain("Could not send the message.");
-  expect(container.textContent).toContain("For machines on your local network or tailnet.");
-  expect(container.querySelector<HTMLInputElement>('[aria-label="Address"]')?.value).toBe(
-    "https://science.example.com",
-  );
-  expect(container.querySelector<HTMLInputElement>('[aria-label="Code"]')?.value).toBe(
-    "review-this-token",
-  );
-  expect(harness.connectPress).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("Could not send the message.");
+    expect(container.textContent).toContain("For machines on your local network or tailnet.");
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Address"]')?.value).toBe(
+      enabled ? "https://science.example.com" : "",
+    );
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Code"]')?.value).toBe(
+      enabled ? "review-this-token" : "",
+    );
+    expect(harness.connectPress).not.toHaveBeenCalled();
 
-  act(() => root.unmount());
-  // Leaving the form must not wipe an error that belongs to another screen.
-  expect(harness.pendingConnectionError).toBe("Could not send the message.");
-});
+    act(() => root.unmount());
+    // Leaving the form must not wipe an error that belongs to another screen.
+    expect(harness.pendingConnectionError).toBe("Could not send the message.");
+  },
+);
 
 it("splits a pasted pairing link and preserves the code during address edits", () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
